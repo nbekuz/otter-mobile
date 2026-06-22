@@ -1,0 +1,25 @@
+Otter — Windows build (do'st PC uchun)
+=====================================
+
+1. Flutter o'rnatilgan bo'lsin: https://docs.flutter.dev/get-started/install/windows
+   flutter doctor
+
+2. Clone:
+   git clone https://github.com/nbekuz/otter-mobile.git
+   cd otter-mobile
+
+3. .env allaqachon repoda — qo'shimcha sozlash shart emas.
+
+4. Build:
+   powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
+
+   yoki:
+   flutter pub get
+   flutter build windows --release
+
+5. Natija:
+   build\windows\x64\runner\Release\otter_mobile.exe
+   (butun Release papkasini nusxalang)
+
+6. Ishga tushirish:
+   otter_mobile.exe
