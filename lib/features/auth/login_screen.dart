@@ -13,7 +13,6 @@ import '../../shared/widgets/input_field.dart';
 import '../../shared/widgets/legal_acceptance_text.dart';
 import '../../shared/widgets/otter_checkbox.dart';
 import '../../shared/widgets/primary_button.dart';
-import '../../shared/widgets/keyboard_dismisser.dart';
 import 'forgot_password_dialog.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -107,105 +106,102 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return ResponsivePage(
-      child: DismissKeyboardScrollView(
-        padding: EdgeInsets.zero,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                IconButton(
-                  onPressed: () => context.pop(),
-                  icon: const Icon(LucideIcons.chevronLeft),
-                  style: IconButton.styleFrom(
-                    backgroundColor: OtterColors.grayLight,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  'Войти',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Введите данные вашей учётной записи для входа в Otter',
-              style: TextStyle(color: OtterColors.sberGray, height: 1.5),
-            ),
-            const SizedBox(height: 24),
-            InputField(
-              controller: _email,
-              label: 'Email',
-              hint: 'example@mail.ru',
-              icon: LucideIcons.mail,
-              keyboardType: TextInputType.emailAddress,
-              error: _emailError,
-            ),
-            const SizedBox(height: 16),
-            InputField(
-              controller: _password,
-              label: 'Пароль',
-              hint: 'Введите пароль',
-              icon: LucideIcons.lock,
-              obscure: true,
-              obscureVisible: _showPassword,
-              onToggleObscure: () =>
-                  setState(() => _showPassword = !_showPassword),
-              error: _passwordError,
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OtterCheckbox(
-                    value: _remember,
-                    onChanged: (v) => setState(() => _remember = v ?? false),
-                    child: const Text('Запомнить'),
-                  ),
-                ),
-                TextButton(
-                  onPressed: _loading ? null : _openForgotPassword,
-                  child: const Text(
-                    'Забыли пароль?',
-                    style: TextStyle(
-                      color: OtterColors.sberGreen,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            PrimaryButton(
-              label: 'Войти',
-              loading: _loading,
-              onPressed: _login,
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: _loading ? null : _googleLogin,
-              icon: const Icon(LucideIcons.globe),
-              label: const Text('Войти через Google'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                onPressed: () => context.pop(),
+                icon: const Icon(LucideIcons.chevronLeft),
+                style: IconButton.styleFrom(
+                  backgroundColor: OtterColors.grayLight,
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: () => context.push('/register'),
-              child: const Text(
-                'Нет аккаунта? Зарегистрироваться',
-                style: TextStyle(color: OtterColors.sberGreen),
+              const SizedBox(width: 12),
+              const Text(
+                'Войти',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Введите данные вашей учётной записи для входа в Otter',
+            style: TextStyle(color: OtterColors.sberGray, height: 1.5),
+          ),
+          const SizedBox(height: 24),
+          InputField(
+            controller: _email,
+            label: 'Email',
+            hint: 'example@mail.ru',
+            icon: LucideIcons.mail,
+            keyboardType: TextInputType.emailAddress,
+            error: _emailError,
+          ),
+          const SizedBox(height: 16),
+          InputField(
+            controller: _password,
+            label: 'Пароль',
+            hint: 'Введите пароль',
+            icon: LucideIcons.lock,
+            obscure: true,
+            obscureVisible: _showPassword,
+            onToggleObscure: () =>
+                setState(() => _showPassword = !_showPassword),
+            error: _passwordError,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OtterCheckbox(
+                  value: _remember,
+                  onChanged: (v) => setState(() => _remember = v ?? false),
+                  child: const Text('Запомнить'),
+                ),
+              ),
+              TextButton(
+                onPressed: _loading ? null : _openForgotPassword,
+                child: const Text(
+                  'Забыли пароль?',
+                  style: TextStyle(
+                    color: OtterColors.sberGreen,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          PrimaryButton(
+            label: 'Войти',
+            loading: _loading,
+            onPressed: _login,
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: _loading ? null : _googleLogin,
+            icon: const Icon(LucideIcons.globe),
+            label: const Text('Войти через Google'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
             ),
-            const SizedBox(height: 16),
-            const LegalAcceptanceText(),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+          TextButton(
+            onPressed: () => context.push('/register'),
+            child: const Text(
+              'Нет аккаунта? Зарегистрироваться',
+              style: TextStyle(color: OtterColors.sberGreen),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const LegalAcceptanceText(),
+        ],
       ),
     );
   }

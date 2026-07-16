@@ -18,9 +18,7 @@ import 'task_time_sync.dart';
 Future<void> showTaskDetailSheet(BuildContext context, Task task) {
   return showAppBottomSheet<void>(
     context: context,
-    builder: (ctx) => GestureDetector(
-      onTap: KeyboardDismisser.dismiss,
-      behavior: HitTestBehavior.translucent,
+    builder: (ctx) => KeyboardDismissScope(
       child: TaskDetailSheet(task: task),
     ),
   );

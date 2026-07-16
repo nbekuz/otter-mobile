@@ -80,20 +80,6 @@ class SettingsService {
         .toList();
   }
 
-  Future<String> premiumCheckout(String tariff) async {
-    final data = await _client.post<Map<String, dynamic>>(
-      'premium/checkout/',
-      data: {'tariff': tariff},
-    );
-    return data['checkout_url'] as String? ?? '';
-  }
-
-  Future<AppSettings> activatePremium() async {
-    final data =
-        await _client.post<Map<String, dynamic>>('premium/activate/');
-    return _apiToUi(ApiAppSettings.fromJson(data));
-  }
-
   Future<List<ApiLegalDocument>> fetchLegalDocuments() async {
     final data = await _client.get<List<dynamic>>('legal/documents/');
     return data

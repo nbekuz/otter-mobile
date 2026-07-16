@@ -221,9 +221,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
             final selectedId =
                 ref.read(pomodoroStateProvider).selectedTaskId;
 
-            return GestureDetector(
-              onTap: KeyboardDismisser.dismiss,
-              behavior: HitTestBehavior.translucent,
+            return KeyboardDismissScope(
               child: Padding(
                 padding: EdgeInsets.only(
                   left: 16,

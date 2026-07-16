@@ -8,7 +8,6 @@ import '../../core/network/api_exception.dart';
 import '../../core/providers/providers.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../../shared/widgets/input_field.dart';
-import '../../shared/widgets/keyboard_dismisser.dart';
 import '../../shared/widgets/primary_button.dart';
 
 class ProfileFillScreen extends ConsumerStatefulWidget {
@@ -57,41 +56,38 @@ class _ProfileFillScreenState extends ConsumerState<ProfileFillScreen> {
   @override
   Widget build(BuildContext context) {
     return ResponsivePage(
-      child: GestureDetector(
-        onTap: KeyboardDismisser.dismiss,
-        behavior: HitTestBehavior.translucent,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Завершите профиль',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Укажите имя и фамилию для продолжения',
-              style: TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 24),
-            InputField(
-              controller: _firstName,
-              label: 'Имя',
-              icon: LucideIcons.user,
-            ),
-            const SizedBox(height: 16),
-            InputField(
-              controller: _lastName,
-              label: 'Фамилия',
-              icon: LucideIcons.user,
-            ),
-            const Spacer(),
-            PrimaryButton(
-              label: 'Продолжить',
-              loading: _loading,
-              onPressed: _save,
-            ),
-          ],
-        ),
+      fillHeight: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Завершите профиль',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Укажите имя и фамилию для продолжения',
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 24),
+          InputField(
+            controller: _firstName,
+            label: 'Имя',
+            icon: LucideIcons.user,
+          ),
+          const SizedBox(height: 16),
+          InputField(
+            controller: _lastName,
+            label: 'Фамилия',
+            icon: LucideIcons.user,
+          ),
+          const Spacer(),
+          PrimaryButton(
+            label: 'Продолжить',
+            loading: _loading,
+            onPressed: _save,
+          ),
+        ],
       ),
     );
   }

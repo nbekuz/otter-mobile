@@ -8,10 +8,11 @@ import '../../core/layout/responsive.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
-import '../../data/models/api/api_models.dart';
+import '../../core/utils/open_url.dart';
 import '../../data/models/ui/ui_models.dart';
 import '../../shared/widgets/bottom_nav.dart';
 import '../../shared/widgets/keyboard_dismisser.dart';
+import '../../shared/widgets/otter_checkbox.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({
@@ -31,8 +32,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _contactController = TextEditingController();
   bool _contactVisible = false;
   bool _premiumVisible = false;
-  List<ApiPremiumFeature> _premiumFeatures = [];
-  bool _premiumLoading = false;
+  bool _recurringConsent = false;
 
   @override
   void initState() {
@@ -41,7 +41,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _premiumVisible = widget.openPremium;
     Future.microtask(() async {
       await ref.read(appSettingsProvider.notifier).load();
-      if (widget.openPremium) await _loadPremiumFeatures();
+      if (widget.openPremium) {
+        await ref.read(premiumStateProvider.notifier).loadAll();
+      }
     });
   }
 
@@ -51,21 +53,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.dispose();
   }
 
-  Future<void> _loadPremiumFeatures() async {
-    setState(() => _premiumLoading = true);
-    try {
-      _premiumFeatures =
-          await ref.read(settingsServiceProvider).fetchPremiumFeatures();
-    } catch (_) {}
-    if (mounted) setState(() => _premiumLoading = false);
+  Future<void> _openPremium() async {
+    setState(() => _premiumVisible = true);
+    await ref.read(premiumStateProvider.notifier).loadAll();
   }
 
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(appSettingsProvider);
     final auth = ref.watch(authStateProvider);
+    final premium = ref.watch(premiumStateProvider);
     final isDark = settings.theme == 'dark';
     final wide = Responsive.isWide(context);
+    final isPremium = premium.isPremium || settings.isPremium;
 
     final content = ListView(
           padding: const EdgeInsets.all(16),
@@ -89,7 +89,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            _ProfileCard(auth: auth, isDark: isDark, isPremium: settings.isPremium),
+            _ProfileCard(auth: auth, isDark: isDark, isPremium: isPremium),
             const SizedBox(height: 16),
             _Section(
               title: 'Аккаунт',
@@ -104,24 +104,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   leading: const Icon(LucideIcons.crown, color: Colors.amber),
                   title: const Text('Premium'),
                   subtitle: Text(
-                    settings.isPremium ? 'Premium активен' : 'Подключить Premium',
+                    isPremium ? 'Premium активен' : 'Подключить Premium',
                   ),
                   trailing: const Icon(LucideIcons.chevronRight),
-                  onTap: () async {
-                    setState(() => _premiumVisible = true);
-                    await _loadPremiumFeatures();
-                  },
+                  onTap: _openPremium,
                 ),
               ],
             ),
-            if (_premiumVisible) _PremiumPanel(
-              features: _premiumFeatures,
-              loading: _premiumLoading,
-              isPremium: settings.isPremium,
-              onClose: () => setState(() => _premiumVisible = false),
-              onCheckout: _purchasePremium,
-              onActivate: _activatePremium,
-            ),
+            if (_premiumVisible)
+              _PremiumPanel(
+                state: premium,
+                recurringConsent: _recurringConsent,
+                onConsentChanged: (v) =>
+                    setState(() => _recurringConsent = v ?? false),
+                onClose: () => setState(() => _premiumVisible = false),
+                onSelectTariff: (code) =>
+                    ref.read(premiumStateProvider.notifier).selectTariff(code),
+                onTrial: _startTrial,
+                onCheckout: _purchasePremium,
+                onRefresh: _refreshPremium,
+                onCancel: _cancelPremium,
+              ),
             _Section(
               title: 'Нижнее меню',
               children: [
@@ -304,19 +307,68 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _purchasePremium() async {
-    try {
-      final url =
-          await ref.read(settingsServiceProvider).premiumCheckout('monthly');
-      if (!mounted || url.isEmpty) return;
-      await Clipboard.setData(ClipboardData(text: url));
+  Future<void> _startTrial() async {
+    final tariff = ref.read(premiumStateProvider).selectedTariff;
+    if (tariff?.isRecurring == true && !_recurringConsent) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
+          content: Text('Подтвердите согласие на автоматические списания'),
+        ),
+      );
+      return;
+    }
+    try {
+      await ref.read(premiumStateProvider.notifier).startTrial(
+            recurringConsent: _recurringConsent,
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Пробный период Premium активирован')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(getApiErrorMessage(e))),
+        );
+      }
+    }
+  }
+
+  Future<void> _purchasePremium() async {
+    final tariff = ref.read(premiumStateProvider).selectedTariff;
+    if (tariff?.isRecurring == true && !_recurringConsent) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Подтвердите согласие на автоматические списания'),
+        ),
+      );
+      return;
+    }
+    try {
+      final url = await ref.read(premiumStateProvider.notifier).checkout(
+            recurringConsent: _recurringConsent,
+          );
+      if (!mounted || url.isEmpty) return;
+      final opened = await openExternalUrl(url);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
           content: Text(
-            'Ссылка на оплату скопирована. После оплаты нажмите «Я оплатил».',
+            opened
+                ? 'Откройте оплату. После оплаты нажмите «Обновить статус».'
+                : 'Не удалось открыть ссылку. Скопируйте её вручную.',
           ),
-          duration: Duration(seconds: 5),
+          duration: const Duration(seconds: 5),
+          action: opened
+              ? null
+              : SnackBarAction(
+                  label: 'Копировать',
+                  onPressed: () =>
+                      Clipboard.setData(ClipboardData(text: url)),
+                ),
         ),
       );
     } catch (e) {
@@ -328,16 +380,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _activatePremium() async {
+  Future<void> _refreshPremium() async {
     try {
-      final next =
-          await ref.read(settingsServiceProvider).activatePremium();
-      ref.read(appSettingsProvider.notifier).update(next);
+      final sub =
+          await ref.read(premiumStateProvider.notifier).refreshSubscription();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            sub.isPremium
+                ? 'Premium активен'
+                : 'Оплата ещё не подтверждена. Подождите и обновите снова.',
+          ),
+        ),
+      );
+      if (sub.isPremium) {
+        setState(() => _premiumVisible = false);
+      }
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Premium активирован')),
+          SnackBar(content: Text(getApiErrorMessage(e))),
         );
-        setState(() => _premiumVisible = false);
+      }
+    }
+  }
+
+  Future<void> _cancelPremium() async {
+    try {
+      await ref.read(premiumStateProvider.notifier).cancel();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Автопродление отключено. Доступ сохранится до конца периода.',
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -474,23 +553,43 @@ class _ProfileCard extends StatelessWidget {
 
 class _PremiumPanel extends StatelessWidget {
   const _PremiumPanel({
-    required this.features,
-    required this.loading,
-    required this.isPremium,
+    required this.state,
+    required this.recurringConsent,
+    required this.onConsentChanged,
     required this.onClose,
+    required this.onSelectTariff,
+    required this.onTrial,
     required this.onCheckout,
-    required this.onActivate,
+    required this.onRefresh,
+    required this.onCancel,
   });
 
-  final List<ApiPremiumFeature> features;
-  final bool loading;
-  final bool isPremium;
+  final PremiumState state;
+  final bool recurringConsent;
+  final ValueChanged<bool?> onConsentChanged;
   final VoidCallback onClose;
+  final ValueChanged<String> onSelectTariff;
+  final VoidCallback onTrial;
   final VoidCallback onCheckout;
-  final VoidCallback onActivate;
+  final VoidCallback onRefresh;
+  final VoidCallback onCancel;
+
+  String? _formatExpires(String? value) {
+    if (value == null || value.isEmpty) return null;
+    final date = DateTime.tryParse(value);
+    if (date == null) return null;
+    return '${date.day.toString().padLeft(2, '0')}.'
+        '${date.month.toString().padLeft(2, '0')}.'
+        '${date.year}';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final selected = state.selectedTariff;
+    final isPremium = state.isPremium;
+    final expires = _formatExpires(state.subscription?.expiresAt);
+    final needsConsent = selected?.isRecurring == true;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: Padding(
@@ -504,10 +603,10 @@ class _PremiumPanel extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
-            if (loading)
+            if (state.loading)
               const Center(child: CircularProgressIndicator())
-            else
-              ...features.map(
+            else ...[
+              ...state.features.map(
                 (f) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
@@ -519,31 +618,157 @@ class _PremiumPanel extends StatelessWidget {
                   ),
                 ),
               ),
-            if (!isPremium) ...[
-              const SizedBox(height: 8),
-              FilledButton(
-                onPressed: onCheckout,
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.amber.shade600,
-                ),
-                child: const Text('Оплатить 299 ₽/месяц'),
-              ),
-              TextButton(
-                onPressed: onActivate,
-                child: const Text('Я оплатил — активировать'),
-              ),
-            ] else
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  'Premium уже активен',
+              if (isPremium) ...[
+                const SizedBox(height: 8),
+                Text(
+                  state.subscription?.status == 'trial'
+                      ? 'Пробный период активен'
+                      : 'Premium активен',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: OtterColors.sberGreen,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                if (expires != null)
+                  Text(
+                    'Срок до $expires',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: OtterColors.sberGray,
+                    ),
+                  ),
+                if (state.subscription?.recurringEnabled == true &&
+                    state.subscription?.cancelledAt == null) ...[
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: state.actionLoading ? null : onCancel,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                    ),
+                    child: Text(
+                      state.actionLoading
+                          ? 'Отмена…'
+                          : 'Отменить автопродление',
+                    ),
+                  ),
+                ],
+                TextButton(
+                  onPressed: state.actionLoading ? null : onRefresh,
+                  child: Text(
+                    state.actionLoading ? 'Обновление…' : 'Обновить статус',
+                  ),
+                ),
+              ] else ...[
+                if (state.tariffs.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  for (final tariff in state.tariffs)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Material(
+                        color: selected?.code == tariff.code
+                            ? Colors.amber.shade50
+                            : OtterColors.grayLight,
+                        borderRadius: BorderRadius.circular(16),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () => onSelectTariff(tariff.code),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        tariff.title,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      if (tariff.promoDays > 0)
+                                        Text(
+                                          '${tariff.promoDays} дней бесплатно',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: OtterColors.sberGreen,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  tariff.priceLabel,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+                if (needsConsent) ...[
+                  OtterCheckbox(
+                    value: recurringConsent,
+                    onChanged: onConsentChanged,
+                    child: const Text(
+                      'Я согласен на автоматические списания согласно условиям оферты',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if ((selected?.promoDays ?? 0) > 0)
+                  OutlinedButton(
+                    onPressed: state.actionLoading ? null : onTrial,
+                    child: Text(
+                      state.actionLoading
+                          ? 'Активация…'
+                          : 'Попробовать бесплатно (${selected!.promoDays} дн.)',
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                FilledButton(
+                  onPressed: state.actionLoading ? null : onCheckout,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.amber.shade600,
+                  ),
+                  child: Text(
+                    state.actionLoading
+                        ? 'Открываем оплату…'
+                        : 'Оплатить ${selected?.priceLabel ?? 'Premium'}',
+                  ),
+                ),
+                TextButton(
+                  onPressed: state.actionLoading ? null : onRefresh,
+                  child: Text(
+                    state.actionLoading
+                        ? 'Проверяем…'
+                        : 'Я оплатил — обновить статус',
+                  ),
+                ),
+                const Text(
+                  'После оплаты Premium включается автоматически. '
+                  'Если статус не обновился — нажмите «обновить статус».',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: OtterColors.sberGray),
+                ),
+              ],
+            ],
+            if (state.error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                state.error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
               ),
+            ],
             TextButton(onPressed: onClose, child: const Text('Закрыть')),
           ],
         ),

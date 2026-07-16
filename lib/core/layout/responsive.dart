@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../shared/widgets/keyboard_dismisser.dart';
+
 /// Shared breakpoints for phone, tablet, and desktop (Windows / wide web).
 abstract final class Responsive {
   static const compactBreakpoint = 600.0;
@@ -32,6 +34,9 @@ abstract final class Responsive {
 }
 
 /// Centers public/auth page content with a readable max width on desktop.
+///
+/// Provides a single scroll surface and dismisses keyboard via [Listener]
+/// (safe for Windows mouse clicks on buttons).
 class ResponsivePage extends StatelessWidget {
   const ResponsivePage({
     super.key,
@@ -39,6 +44,7 @@ class ResponsivePage extends StatelessWidget {
     this.backgroundColor = Colors.white,
     this.maxWidth,
     this.padding = const EdgeInsets.all(24),
+    this.fillHeight = false,
   });
 
   final Widget child;
@@ -46,30 +52,48 @@ class ResponsivePage extends StatelessWidget {
   final double? maxWidth;
   final EdgeInsetsGeometry padding;
 
+  /// When true, content is given a tight viewport height so [Spacer]/[Expanded]
+  /// work on desktop (e.g. profile-fill).
+  final bool fillHeight;
+
   @override
   Widget build(BuildContext context) {
     final wide = Responsive.isWide(context);
+    final paddingValue = padding.resolve(Directionality.of(context));
+    final viewportHeight = MediaQuery.sizeOf(context).height -
+        MediaQuery.paddingOf(context).vertical -
+        paddingValue.vertical;
 
     return Scaffold(
       backgroundColor: backgroundColor,
       body: SafeArea(
-        child: Align(
-          alignment: wide ? Alignment.center : Alignment.topCenter,
-          child: SingleChildScrollView(
-            padding: padding,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: maxWidth ?? Responsive.formMaxWidth(context),
-                minHeight: wide
-                    ? MediaQuery.sizeOf(context).height -
-                        MediaQuery.paddingOf(context).vertical -
-                        padding.vertical
-                    : 0,
-              ),
-              child: wide
-                  ? Center(child: child)
-                  : child,
-            ),
+        child: KeyboardDismissScope(
+          child: Align(
+            alignment: wide ? Alignment.center : Alignment.topCenter,
+            child: fillHeight && wide
+                ? Padding(
+                    padding: padding,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: maxWidth ?? Responsive.formMaxWidth(context),
+                        minHeight: viewportHeight,
+                        maxHeight: viewportHeight,
+                      ),
+                      child: child,
+                    ),
+                  )
+                : SingleChildScrollView(
+                    padding: padding,
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: maxWidth ?? Responsive.formMaxWidth(context),
+                        minHeight: wide ? viewportHeight : 0,
+                      ),
+                      child: child,
+                    ),
+                  ),
           ),
         ),
       ),

@@ -25,7 +25,7 @@ class AppShell extends ConsumerWidget {
     final bg = isDark ? OtterColors.darkBg : OtterColors.grayLight;
 
     return Theme(
-      data: isDark ? Theme.of(context) : Theme.of(context),
+      data: Theme.of(context),
       child: Scaffold(
         backgroundColor: bg,
         body: wide
@@ -40,11 +40,7 @@ class AppShell extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(24),
                         child: Material(
                           color: isDark ? OtterColors.darkBg : Colors.white,
-                          child: Stack(
-                            children: [
-                              Positioned.fill(child: child),
-                            ],
-                          ),
+                          child: child,
                         ),
                       ),
                     ),
@@ -52,8 +48,9 @@ class AppShell extends ConsumerWidget {
                 ),
               )
             : Stack(
+                fit: StackFit.expand,
                 children: [
-                  Positioned.fill(child: child),
+                  child,
                   if (!_hideFab(path))
                     Positioned(
                       right: 16,

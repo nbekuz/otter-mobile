@@ -43,6 +43,7 @@ class PrimaryButton extends StatelessWidget {
         style: FilledButton.styleFrom(
           backgroundColor: OtterColors.sberGreen,
           disabledBackgroundColor: OtterColors.grayMid,
+          foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(OtterColors.radiusMd),

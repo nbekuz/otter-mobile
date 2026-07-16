@@ -8,6 +8,7 @@ import '../../data/services/calendar_service.dart';
 import '../../data/services/matrix_service.dart';
 import '../../data/services/pomodoro_service.dart';
 import '../../data/services/settings_service.dart';
+import '../../data/services/premium_service.dart';
 import '../../data/services/sounds_service.dart';
 import '../../data/services/tasks_service.dart';
 import '../../features/matrix/matrix_block_setting.dart';
@@ -42,6 +43,170 @@ final soundsServiceProvider = Provider<SoundsService>(
     (ref) => SoundsService(ref.watch(apiClientProvider)));
 final settingsServiceProvider = Provider<SettingsService>(
     (ref) => SettingsService(ref.watch(apiClientProvider)));
+final premiumServiceProvider = Provider<PremiumService>(
+    (ref) => PremiumService(ref.watch(apiClientProvider)));
+
+final premiumStateProvider =
+    StateNotifierProvider<PremiumNotifier, PremiumState>((ref) {
+  return PremiumNotifier(ref);
+});
+
+class PremiumState {
+  const PremiumState({
+    this.tariffs = const [],
+    this.features = const [],
+    this.subscription,
+    this.selectedTariffCode = 'monthly',
+    this.loading = false,
+    this.actionLoading = false,
+    this.error,
+  });
+
+  final List<ApiTariff> tariffs;
+  final List<ApiPremiumFeature> features;
+  final ApiSubscription? subscription;
+  final String selectedTariffCode;
+  final bool loading;
+  final bool actionLoading;
+  final String? error;
+
+  ApiTariff? get selectedTariff {
+    for (final t in tariffs) {
+      if (t.code == selectedTariffCode) return t;
+    }
+    return tariffs.isEmpty ? null : tariffs.first;
+  }
+
+  bool get isPremium =>
+      subscription?.isPremium ?? false;
+
+  PremiumState copyWith({
+    List<ApiTariff>? tariffs,
+    List<ApiPremiumFeature>? features,
+    ApiSubscription? subscription,
+    String? selectedTariffCode,
+    bool? loading,
+    bool? actionLoading,
+    String? error,
+    bool clearError = false,
+  }) =>
+      PremiumState(
+        tariffs: tariffs ?? this.tariffs,
+        features: features ?? this.features,
+        subscription: subscription ?? this.subscription,
+        selectedTariffCode: selectedTariffCode ?? this.selectedTariffCode,
+        loading: loading ?? this.loading,
+        actionLoading: actionLoading ?? this.actionLoading,
+        error: clearError ? null : (error ?? this.error),
+      );
+}
+
+class PremiumNotifier extends StateNotifier<PremiumState> {
+  PremiumNotifier(this._ref) : super(const PremiumState());
+
+  final Ref _ref;
+
+  void _syncPremiumToSettings(ApiSubscription sub) {
+    final settings = _ref.read(appSettingsProvider);
+    _ref.read(appSettingsProvider.notifier).applyLocal(
+          settings.copyWith(isPremium: sub.isPremium),
+        );
+  }
+
+  Future<void> loadAll() async {
+    state = state.copyWith(loading: true, clearError: true);
+    try {
+      final service = _ref.read(premiumServiceProvider);
+      final results = await Future.wait([
+        service.fetchTariffs(),
+        service.fetchSubscription(),
+        service.fetchFeatures(),
+      ]);
+      final tariffs = results[0] as List<ApiTariff>;
+      final subscription = results[1] as ApiSubscription;
+      final features = results[2] as List<ApiPremiumFeature>;
+      var selected = state.selectedTariffCode;
+      if (!tariffs.any((t) => t.code == selected) && tariffs.isNotEmpty) {
+        selected = tariffs.first.code;
+      }
+      state = state.copyWith(
+        tariffs: tariffs,
+        subscription: subscription,
+        features: features,
+        selectedTariffCode: selected,
+        loading: false,
+      );
+      _syncPremiumToSettings(subscription);
+    } catch (e) {
+      state = state.copyWith(
+        loading: false,
+        error: getApiErrorMessage(e),
+      );
+    }
+  }
+
+  void selectTariff(String code) {
+    state = state.copyWith(selectedTariffCode: code);
+  }
+
+  Future<ApiSubscription> startTrial({bool recurringConsent = false}) async {
+    state = state.copyWith(actionLoading: true, clearError: true);
+    try {
+      final sub = await _ref.read(premiumServiceProvider).startTrial(
+            tariff: state.selectedTariff?.code ?? state.selectedTariffCode,
+            recurringConsent: recurringConsent,
+          );
+      state = state.copyWith(subscription: sub, actionLoading: false);
+      _syncPremiumToSettings(sub);
+      return sub;
+    } catch (e) {
+      state = state.copyWith(actionLoading: false, error: getApiErrorMessage(e));
+      rethrow;
+    }
+  }
+
+  Future<String> checkout({bool recurringConsent = false}) async {
+    state = state.copyWith(actionLoading: true, clearError: true);
+    try {
+      final response = await _ref.read(premiumServiceProvider).checkout(
+            tariff: state.selectedTariff?.code ?? state.selectedTariffCode,
+            recurringConsent: recurringConsent,
+          );
+      state = state.copyWith(actionLoading: false);
+      return response.checkoutUrl;
+    } catch (e) {
+      state = state.copyWith(actionLoading: false, error: getApiErrorMessage(e));
+      rethrow;
+    }
+  }
+
+  Future<ApiSubscription> refreshSubscription() async {
+    state = state.copyWith(actionLoading: true, clearError: true);
+    try {
+      final sub =
+          await _ref.read(premiumServiceProvider).fetchSubscription();
+      state = state.copyWith(subscription: sub, actionLoading: false);
+      _syncPremiumToSettings(sub);
+      return sub;
+    } catch (e) {
+      state = state.copyWith(actionLoading: false, error: getApiErrorMessage(e));
+      rethrow;
+    }
+  }
+
+  Future<ApiSubscription> cancel() async {
+    state = state.copyWith(actionLoading: true, clearError: true);
+    try {
+      final sub = await _ref.read(premiumServiceProvider).cancel();
+      state = state.copyWith(subscription: sub, actionLoading: false);
+      _syncPremiumToSettings(sub);
+      return sub;
+    } catch (e) {
+      state = state.copyWith(actionLoading: false, error: getApiErrorMessage(e));
+      rethrow;
+    }
+  }
+}
 
 final themeModeProvider =
     StateProvider<String>((ref) => 'light');
@@ -79,6 +244,10 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
     }
   }
 
+  void applyLocal(AppSettings next) {
+    state = next;
+  }
+
   void setTheme(String theme) {
     state = state.copyWith(theme: theme);
     _ref.read(themeModeProvider.notifier).state = theme;
@@ -107,13 +276,14 @@ class AuthState {
 
   AuthState copyWith({
     OtterUser? user,
+    bool clearUser = false,
     bool? isLoading,
     bool? isAuthenticated,
     bool? requiresProfileFill,
     bool? isBootstrapping,
   }) =>
       AuthState(
-        user: user ?? this.user,
+        user: clearUser ? null : (user ?? this.user),
         isLoading: isLoading ?? this.isLoading,
         isAuthenticated: isAuthenticated ?? this.isAuthenticated,
         requiresProfileFill:
@@ -171,6 +341,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       user: user,
       isAuthenticated: true,
       requiresProfileFill: first.trim().isEmpty || last.trim().isEmpty,
+      isBootstrapping: false,
     );
   }
 
@@ -191,6 +362,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       ),
       requiresProfileFill:
           names.first.trim().isEmpty || names.last.trim().isEmpty,
+      isBootstrapping: false,
     );
   }
 
@@ -242,6 +414,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       isAuthenticated: true,
       requiresProfileFill: backendUser.firstName.trim().isEmpty ||
           backendUser.lastName.trim().isEmpty,
+      isBootstrapping: false,
     );
   }
 

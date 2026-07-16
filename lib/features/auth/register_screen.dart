@@ -10,7 +10,6 @@ import '../../core/theme/otter_colors.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../../shared/widgets/input_field.dart';
 import '../../shared/widgets/legal_acceptance_text.dart';
-import '../../shared/widgets/keyboard_dismisser.dart';
 import '../../shared/widgets/primary_button.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -63,67 +62,64 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return ResponsivePage(
-      child: DismissKeyboardScrollView(
-        padding: EdgeInsets.zero,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                IconButton(
-                  onPressed: () => context.pop(),
-                  icon: const Icon(LucideIcons.chevronLeft),
-                  style: IconButton.styleFrom(
-                    backgroundColor: OtterColors.grayLight,
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                onPressed: () => context.pop(),
+                icon: const Icon(LucideIcons.chevronLeft),
+                style: IconButton.styleFrom(
+                  backgroundColor: OtterColors.grayLight,
                 ),
-                const SizedBox(width: 12),
-                const Text(
-                  'Регистрация',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            InputField(
-              controller: _firstName,
-              label: 'Имя',
-              hint: 'Иван',
-              icon: LucideIcons.user,
-            ),
-            const SizedBox(height: 16),
-            InputField(
-              controller: _lastName,
-              label: 'Фамилия',
-              hint: 'Иванов',
-              icon: LucideIcons.user,
-            ),
-            const SizedBox(height: 16),
-            InputField(
-              controller: _email,
-              label: 'Email',
-              hint: 'example@mail.ru',
-              icon: LucideIcons.mail,
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 16),
-            InputField(
-              controller: _password,
-              label: 'Пароль',
-              hint: 'Минимум 8 символов',
-              icon: LucideIcons.lock,
-              obscure: true,
-            ),
-            const SizedBox(height: 24),
-            PrimaryButton(
-              label: 'Создать аккаунт',
-              loading: _loading,
-              onPressed: _register,
-            ),
-            const SizedBox(height: 16),
-            const LegalAcceptanceText(),
-          ],
-        ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Регистрация',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          InputField(
+            controller: _firstName,
+            label: 'Имя',
+            hint: 'Иван',
+            icon: LucideIcons.user,
+          ),
+          const SizedBox(height: 16),
+          InputField(
+            controller: _lastName,
+            label: 'Фамилия',
+            hint: 'Иванов',
+            icon: LucideIcons.user,
+          ),
+          const SizedBox(height: 16),
+          InputField(
+            controller: _email,
+            label: 'Email',
+            hint: 'example@mail.ru',
+            icon: LucideIcons.mail,
+            keyboardType: TextInputType.emailAddress,
+          ),
+          const SizedBox(height: 16),
+          InputField(
+            controller: _password,
+            label: 'Пароль',
+            hint: 'Минимум 8 символов',
+            icon: LucideIcons.lock,
+            obscure: true,
+          ),
+          const SizedBox(height: 24),
+          PrimaryButton(
+            label: 'Создать аккаунт',
+            loading: _loading,
+            onPressed: _register,
+          ),
+          const SizedBox(height: 16),
+          const LegalAcceptanceText(),
+        ],
       ),
     );
   }

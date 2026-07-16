@@ -244,6 +244,7 @@ class ApiAppSettings {
     required this.vibrationEnabled,
     required this.isPremium,
     this.premiumActivatedAt,
+    this.premiumUntil,
   });
 
   final String language;
@@ -259,6 +260,7 @@ class ApiAppSettings {
   final bool vibrationEnabled;
   final bool isPremium;
   final String? premiumActivatedAt;
+  final String? premiumUntil;
 
   factory ApiAppSettings.fromJson(Map<String, dynamic> json) => ApiAppSettings(
         language: json['language'] as String? ?? 'ru',
@@ -277,6 +279,7 @@ class ApiAppSettings {
         vibrationEnabled: json['vibration_enabled'] as bool? ?? true,
         isPremium: json['is_premium'] as bool? ?? false,
         premiumActivatedAt: json['premium_activated_at'] as String?,
+        premiumUntil: json['premium_until'] as String?,
       );
 }
 
@@ -338,6 +341,106 @@ class ApiPremiumFeature {
         title: json['title'] as String,
         isPremium: json['is_premium'] as bool? ?? false,
         isEnabled: json['is_enabled'] as bool? ?? false,
+      );
+}
+
+class ApiTariff {
+  ApiTariff({
+    required this.code,
+    required this.title,
+    required this.description,
+    required this.price,
+    required this.currency,
+    required this.durationDays,
+    required this.promoDays,
+    required this.isRecurring,
+    required this.sortOrder,
+  });
+
+  final String code;
+  final String title;
+  final String description;
+  final String price;
+  final String currency;
+  final int durationDays;
+  final int promoDays;
+  final bool isRecurring;
+  final int sortOrder;
+
+  factory ApiTariff.fromJson(Map<String, dynamic> json) => ApiTariff(
+        code: json['code'] as String? ?? '',
+        title: json['title'] as String? ?? '',
+        description: json['description'] as String? ?? '',
+        price: json['price']?.toString() ?? '0',
+        currency: json['currency'] as String? ?? 'RUB',
+        durationDays: json['duration_days'] as int? ?? 0,
+        promoDays: json['promo_days'] as int? ?? 0,
+        isRecurring: json['is_recurring'] as bool? ?? false,
+        sortOrder: json['sort_order'] as int? ?? 0,
+      );
+
+  String get priceLabel {
+    final amount = double.tryParse(price);
+    final formatted = amount == null
+        ? price
+        : amount.toStringAsFixed(amount.truncateToDouble() == amount ? 0 : 2);
+    if (durationDays == 0) return '$formatted ₽';
+    if (durationDays >= 365) return '$formatted ₽/год';
+    return '$formatted ₽/мес';
+  }
+}
+
+class ApiSubscription {
+  ApiSubscription({
+    required this.status,
+    this.tariff,
+    this.promoUntil,
+    this.premiumUntil,
+    required this.recurringEnabled,
+    this.cancelledAt,
+    required this.isPremium,
+    required this.updatedAt,
+  });
+
+  final String status;
+  final ApiTariff? tariff;
+  final String? promoUntil;
+  final String? premiumUntil;
+  final bool recurringEnabled;
+  final String? cancelledAt;
+  final bool isPremium;
+  final String updatedAt;
+
+  factory ApiSubscription.fromJson(Map<String, dynamic> json) =>
+      ApiSubscription(
+        status: json['status'] as String? ?? 'none',
+        tariff: json['tariff'] is Map<String, dynamic>
+            ? ApiTariff.fromJson(json['tariff'] as Map<String, dynamic>)
+            : null,
+        promoUntil: json['promo_until'] as String?,
+        premiumUntil: json['premium_until'] as String?,
+        recurringEnabled: json['recurring_enabled'] as bool? ?? false,
+        cancelledAt: json['cancelled_at'] as String?,
+        isPremium: json['is_premium'] as bool? ?? false,
+        updatedAt: json['updated_at'] as String? ?? '',
+      );
+
+  String? get expiresAt => premiumUntil ?? promoUntil;
+}
+
+class ApiPremiumCheckoutResponse {
+  ApiPremiumCheckoutResponse({
+    required this.checkoutUrl,
+    required this.provider,
+  });
+
+  final String checkoutUrl;
+  final String provider;
+
+  factory ApiPremiumCheckoutResponse.fromJson(Map<String, dynamic> json) =>
+      ApiPremiumCheckoutResponse(
+        checkoutUrl: json['checkout_url'] as String? ?? '',
+        provider: json['provider'] as String? ?? 'robokassa',
       );
 }
 
