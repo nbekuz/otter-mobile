@@ -18,11 +18,11 @@ class FaqItem {
   bool isOpen;
 
   FaqItem copyWith({bool? isOpen}) => FaqItem(
-        id: id,
-        question: question,
-        answer: answer,
-        isOpen: isOpen ?? this.isOpen,
-      );
+    id: id,
+    question: question,
+    answer: answer,
+    isOpen: isOpen ?? this.isOpen,
+  );
 }
 
 class FaqState {
@@ -56,13 +56,12 @@ class FaqState {
     String? error,
     String? searchQuery,
     bool clearError = false,
-  }) =>
-      FaqState(
-        items: items ?? this.items,
-        loading: loading ?? this.loading,
-        error: clearError ? null : (error ?? this.error),
-        searchQuery: searchQuery ?? this.searchQuery,
-      );
+  }) => FaqState(
+    items: items ?? this.items,
+    loading: loading ?? this.loading,
+    error: clearError ? null : (error ?? this.error),
+    searchQuery: searchQuery ?? this.searchQuery,
+  );
 }
 
 class FaqNotifier extends StateNotifier<FaqState> {
@@ -100,7 +99,10 @@ class FaqNotifier extends StateNotifier<FaqState> {
   void toggle(String id) {
     state = FaqState(
       items: state.items
-          .map((item) => item.id == id ? item.copyWith(isOpen: !item.isOpen) : item)
+          .map(
+            (item) =>
+                item.id == id ? item.copyWith(isOpen: !item.isOpen) : item,
+          )
           .toList(),
       searchQuery: state.searchQuery,
       error: state.error,

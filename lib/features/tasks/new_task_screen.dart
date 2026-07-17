@@ -94,7 +94,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
     }
     _dueTime = _parseTime(widget.initialDueTime);
     _durationStart = _parseTime(widget.initialDurationStart) ?? _dueTime;
-    _durationEnd = _parseTime(widget.initialDurationEnd) ??
+    _durationEnd =
+        _parseTime(widget.initialDurationEnd) ??
         (_dueTime != null
             ? _parseTime(addMinutesToTime(_formatTime(_dueTime)!, 60))
             : null);
@@ -105,10 +106,10 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       _activeTab = _TaskFormTab.matrix;
     }
 
-    if (widget.initialPriority != null &&
-        widget.initialPriority!.isNotEmpty) {
-      _priority =
-          MatrixBlockUiSetting.priorityFromFilter(widget.initialPriority!);
+    if (widget.initialPriority != null && widget.initialPriority!.isNotEmpty) {
+      _priority = MatrixBlockUiSetting.priorityFromFilter(
+        widget.initialPriority!,
+      );
     }
 
     if (widget.initialDueDate != null) {
@@ -120,16 +121,15 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       Future.microtask(_loadTask);
     }
 
-    Future.microtask(
-      () => ref.read(matrixSettingsProvider.notifier).load(),
-    );
+    Future.microtask(() => ref.read(matrixSettingsProvider.notifier).load());
   }
 
   Future<void> _loadTask() async {
     setState(() => _loading = true);
     try {
-      final task =
-          await ref.read(tasksServiceProvider).fetchTask(widget.taskId!);
+      final task = await ref
+          .read(tasksServiceProvider)
+          .fetchTask(widget.taskId!);
       _title.text = task.title;
       _description.text = task.description ?? '';
       _priority = task.priority;
@@ -315,10 +315,9 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
         duration: duration,
         priority: _priority,
         matrixBlock: _matrix,
-        notification:
-            (_notification == null || _notification!.isEmpty)
-                ? null
-                : _notification,
+        notification: (_notification == null || _notification!.isEmpty)
+            ? null
+            : _notification,
         repeat: _repeat,
       );
 
@@ -340,9 +339,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading && widget.isEditMode && _title.text.isEmpty) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -358,32 +355,32 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildTitleSection(),
-                      _buildTabBar(),
-                      Expanded(child: _buildTabContent()),
-                      _buildFooter(),
-                    ],
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildTitleSection(),
+                        _buildTabBar(),
+                        Expanded(child: _buildTabContent()),
+                        _buildFooter(),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
       ),
     );
@@ -441,17 +438,16 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
           const SizedBox(height: 6),
           TextField(
             controller: _title,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
             onTapOutside: dismissKeyboardOnTapOutside,
             decoration: InputDecoration(
               hintText: 'Например: отчёт, созвон, встреча…',
               filled: true,
               fillColor: OtterColors.grayLight,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
@@ -471,16 +467,27 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
           ),
           if (!widget.isEditMode) ...[
             const SizedBox(height: 6),
-            GestureDetector(
-              onTap: () => setState(() => _descOpen = !_descOpen),
-              child: Text(
-                _descOpen
-                    ? '− Скрыть описание'
-                    : '+ Описание (необязательно)',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: OtterColors.sberGreen,
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () => setState(() => _descOpen = !_descOpen),
+                style: TextButton.styleFrom(
+                  foregroundColor: OtterColors.sberGreen,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 6,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                child: Text(
+                  _descOpen
+                      ? '− Скрыть описание'
+                      : '+ Описание (необязательно)',
                 ),
               ),
             ),
@@ -495,8 +502,10 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                 hintText: 'Детали, ссылки…',
                 filled: true,
                 fillColor: OtterColors.grayLight,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -516,7 +525,9 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             style: OutlinedButton.styleFrom(
               foregroundColor: OtterColors.sberGreen,
               backgroundColor: OtterColors.sberGreenLight,
-              side: BorderSide(color: OtterColors.sberGreen.withValues(alpha: 0.4)),
+              side: BorderSide(
+                color: OtterColors.sberGreen.withValues(alpha: 0.4),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               minimumSize: Size.zero,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -666,10 +677,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                   label: 'Время срока',
                   value: _formatTime(_dueTime) ?? 'ЧЧ:ММ',
                   icon: LucideIcons.clock,
-                  onTap: () => _pickTime(
-                    initial: _dueTime,
-                    onPicked: _applyDueTimeSync,
-                  ),
+                  onTap: () =>
+                      _pickTime(initial: _dueTime, onPicked: _applyDueTimeSync),
                 ),
               ),
             ],
@@ -729,7 +738,9 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
         ...Priority.values.map((p) {
           final selected = _priority == p;
           final color = priorityColor(p);
-          final label = p == Priority.none ? 'Без приоритета' : priorityLabel(p);
+          final label = p == Priority.none
+              ? 'Без приоритета'
+              : priorityLabel(p);
           return Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: _SelectCard(
@@ -801,8 +812,9 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                       n.label,
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight:
-                            selected ? FontWeight.w600 : FontWeight.w500,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
                         color: selected
                             ? OtterColors.sberGreen
                             : OtterColors.sberBlack,
@@ -853,8 +865,9 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                       r.label,
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight:
-                            selected ? FontWeight.w600 : FontWeight.w500,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
                         color: selected
                             ? OtterColors.sberGreen
                             : OtterColors.sberBlack,
@@ -893,8 +906,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
           childAspectRatio: 2.2,
           children: kMatrixBlockThemes.map((theme) {
             final selected = _matrix == theme.block;
-            final title =
-                settings[theme.block]?.title ?? theme.defaultTitle;
+            final title = settings[theme.block]?.title ?? theme.defaultTitle;
             return Material(
               color: selected
                   ? theme.accent.withValues(alpha: 0.08)
@@ -908,9 +920,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: selected
-                          ? theme.accent
-                          : OtterColors.grayLight,
+                      color: selected ? theme.accent : OtterColors.grayLight,
                       width: selected ? 2 : 1,
                     ),
                   ),
@@ -1154,9 +1164,7 @@ class _SelectCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected
-          ? selectedColor.withValues(alpha: 0.08)
-          : Colors.white,
+      color: selected ? selectedColor.withValues(alpha: 0.08) : Colors.white,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,

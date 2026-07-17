@@ -36,24 +36,23 @@ class ApiTask {
   final String updatedAt;
 
   factory ApiTask.fromJson(Map<String, dynamic> json) => ApiTask(
-        id: json['id'] as int,
-        title: json['title'] as String,
-        description: json['description'] as String?,
-        dueAt: json['due_at'] as String?,
-        startAt: json['start_at'] as String?,
-        endAt: json['end_at'] as String?,
-        reminderAt: json['reminder_at'] as String?,
-        repeatUnit: json['repeat_unit'] as String? ?? 'none',
-        repeatInterval: json['repeat_interval'] as int? ?? 1,
-        priority: json['priority'] as String? ?? 'medium',
-        matrixBlock:
-            json['matrix_block'] as String? ?? 'not_urgent_not_important',
-        image: json['image'] as String?,
-        isCompleted: json['is_completed'] as bool? ?? false,
-        completedAt: json['completed_at'] as String?,
-        createdAt: json['created_at'] as String,
-        updatedAt: json['updated_at'] as String,
-      );
+    id: json['id'] as int,
+    title: json['title'] as String,
+    description: json['description'] as String?,
+    dueAt: json['due_at'] as String?,
+    startAt: json['start_at'] as String?,
+    endAt: json['end_at'] as String?,
+    reminderAt: json['reminder_at'] as String?,
+    repeatUnit: json['repeat_unit'] as String? ?? 'none',
+    repeatInterval: json['repeat_interval'] as int? ?? 1,
+    priority: json['priority'] as String? ?? 'medium',
+    matrixBlock: json['matrix_block'] as String? ?? 'not_urgent_not_important',
+    image: json['image'] as String?,
+    isCompleted: json['is_completed'] as bool? ?? false,
+    completedAt: json['completed_at'] as String?,
+    createdAt: json['created_at'] as String,
+    updatedAt: json['updated_at'] as String,
+  );
 }
 
 class ApiTaskGroup {
@@ -70,13 +69,13 @@ class ApiTaskGroup {
   final List<ApiTask> tasks;
 
   factory ApiTaskGroup.fromJson(Map<String, dynamic> json) => ApiTaskGroup(
-        key: json['key'] as String,
-        title: json['title'] as String,
-        count: json['count'] as int? ?? 0,
-        tasks: (json['tasks'] as List<dynamic>? ?? [])
-            .map((e) => ApiTask.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+    key: json['key'] as String,
+    title: json['title'] as String,
+    count: json['count'] as int? ?? 0,
+    tasks: (json['tasks'] as List<dynamic>? ?? [])
+        .map((e) => ApiTask.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
 }
 
 class ApiCalendarResponse {
@@ -142,13 +141,13 @@ class ApiSound {
   final int sortOrder;
 
   factory ApiSound.fromJson(Map<String, dynamic> json) => ApiSound(
-        key: json['key'] as String? ?? '',
-        category: json['category'] as String? ?? '',
-        title: json['title'] as String? ?? '',
-        emoji: json['emoji'] as String? ?? '',
-        audioUrl: json['audio_url'] as String?,
-        sortOrder: json['sort_order'] as int? ?? 0,
-      );
+    key: json['key'] as String? ?? '',
+    category: json['category'] as String? ?? '',
+    title: json['title'] as String? ?? '',
+    emoji: json['emoji'] as String? ?? '',
+    audioUrl: json['audio_url'] as String?,
+    sortOrder: json['sort_order'] as int? ?? 0,
+  );
 }
 
 class ApiPomodoroSettings {
@@ -190,12 +189,12 @@ class ApiPomodoroSettings {
       );
 
   Map<String, dynamic> toJson() => {
-        'duration_minutes': durationMinutes,
-        'short_break_minutes': shortBreakMinutes,
-        'show_on_lock_screen': showOnLockScreen,
-        'timer_end_sound': timerEndSound,
-        'work_sound': workSound,
-      };
+    'duration_minutes': durationMinutes,
+    'short_break_minutes': shortBreakMinutes,
+    'show_on_lock_screen': showOnLockScreen,
+    'timer_end_sound': timerEndSound,
+    'work_sound': workSound,
+  };
 }
 
 class ApiPomodoroSession {
@@ -263,24 +262,23 @@ class ApiAppSettings {
   final String? premiumUntil;
 
   factory ApiAppSettings.fromJson(Map<String, dynamic> json) => ApiAppSettings(
-        language: json['language'] as String? ?? 'ru',
-        showOverdue: json['show_overdue'] as bool? ?? true,
-        showToday: json['show_today'] as bool? ?? true,
-        showTomorrow: json['show_tomorrow'] as bool? ?? true,
-        showLater: json['show_later'] as bool? ?? true,
-        showNoDeadline: json['show_no_deadline'] as bool? ?? true,
-        showCompleted: json['show_completed'] as bool? ?? false,
-        bottomTabs: (json['bottom_tabs'] as List<dynamic>? ?? [])
-            .map((e) => e.toString())
-            .toList(),
-        notificationSound:
-            json['notification_sound'] as String? ?? 'default',
-        completionSound: json['completion_sound'] as String? ?? 'default',
-        vibrationEnabled: json['vibration_enabled'] as bool? ?? true,
-        isPremium: json['is_premium'] as bool? ?? false,
-        premiumActivatedAt: json['premium_activated_at'] as String?,
-        premiumUntil: json['premium_until'] as String?,
-      );
+    language: json['language'] as String? ?? 'ru',
+    showOverdue: json['show_overdue'] as bool? ?? true,
+    showToday: json['show_today'] as bool? ?? true,
+    showTomorrow: json['show_tomorrow'] as bool? ?? true,
+    showLater: json['show_later'] as bool? ?? true,
+    showNoDeadline: json['show_no_deadline'] as bool? ?? true,
+    showCompleted: json['show_completed'] as bool? ?? false,
+    bottomTabs: (json['bottom_tabs'] as List<dynamic>? ?? [])
+        .map((e) => e.toString())
+        .toList(),
+    notificationSound: json['notification_sound'] as String? ?? 'default',
+    completionSound: json['completion_sound'] as String? ?? 'default',
+    vibrationEnabled: json['vibration_enabled'] as bool? ?? true,
+    isPremium: json['is_premium'] as bool? ?? false,
+    premiumActivatedAt: json['premium_activated_at'] as String?,
+    premiumUntil: json['premium_until'] as String?,
+  );
 }
 
 class ApiMatrixSetting {
@@ -303,10 +301,9 @@ class ApiMatrixSetting {
         id: json['id'] as int,
         block: json['block'] as String,
         title: json['title'] as String? ?? '',
-        allowedPriorities:
-            (json['allowed_priorities'] as List<dynamic>? ?? [])
-                .map((e) => e.toString())
-                .toList(),
+        allowedPriorities: (json['allowed_priorities'] as List<dynamic>? ?? [])
+            .map((e) => e.toString())
+            .toList(),
         dateFilter: json['date_filter'] as String? ?? 'all',
       );
 }
@@ -317,9 +314,9 @@ class ApiHelpItem {
   final String answer;
 
   factory ApiHelpItem.fromJson(Map<String, dynamic> json) => ApiHelpItem(
-        question: json['question'] as String,
-        answer: json['answer'] as String,
-      );
+    question: json['question'] as String,
+    answer: json['answer'] as String,
+  );
 }
 
 class ApiPremiumFeature {
@@ -368,16 +365,16 @@ class ApiTariff {
   final int sortOrder;
 
   factory ApiTariff.fromJson(Map<String, dynamic> json) => ApiTariff(
-        code: json['code'] as String? ?? '',
-        title: json['title'] as String? ?? '',
-        description: json['description'] as String? ?? '',
-        price: json['price']?.toString() ?? '0',
-        currency: json['currency'] as String? ?? 'RUB',
-        durationDays: json['duration_days'] as int? ?? 0,
-        promoDays: json['promo_days'] as int? ?? 0,
-        isRecurring: json['is_recurring'] as bool? ?? false,
-        sortOrder: json['sort_order'] as int? ?? 0,
-      );
+    code: json['code'] as String? ?? '',
+    title: json['title'] as String? ?? '',
+    description: json['description'] as String? ?? '',
+    price: json['price']?.toString() ?? '0',
+    currency: json['currency'] as String? ?? 'RUB',
+    durationDays: json['duration_days'] as int? ?? 0,
+    promoDays: json['promo_days'] as int? ?? 0,
+    isRecurring: json['is_recurring'] as bool? ?? false,
+    sortOrder: json['sort_order'] as int? ?? 0,
+  );
 
   String get priceLabel {
     final amount = double.tryParse(price);
@@ -482,10 +479,10 @@ class BackendUser {
   final String? avatar;
 
   factory BackendUser.fromJson(Map<String, dynamic> json) => BackendUser(
-        id: json['id'] as int,
-        email: json['email'] as String,
-        firstName: json['first_name'] as String? ?? '',
-        lastName: json['last_name'] as String? ?? '',
-        avatar: json['avatar'] as String?,
-      );
+    id: json['id'] as int,
+    email: json['email'] as String,
+    firstName: json['first_name'] as String? ?? '',
+    lastName: json['last_name'] as String? ?? '',
+    avatar: json['avatar'] as String?,
+  );
 }

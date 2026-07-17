@@ -48,8 +48,9 @@ abstract final class FirebaseBootstrap {
       idToken: auth.idToken,
     );
 
-    final userCredential =
-        await FirebaseAuth.instance.signInWithCredential(credential);
+    final userCredential = await FirebaseAuth.instance.signInWithCredential(
+      credential,
+    );
     return userCredential.user?.getIdToken();
   }
 

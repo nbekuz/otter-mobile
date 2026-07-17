@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -63,7 +64,8 @@ class _MatrixScreenState extends ConsumerState<MatrixScreen> {
                             children: [
                               Expanded(
                                 child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
                                     Expanded(
                                       child: _buildQuadrant(
@@ -90,7 +92,8 @@ class _MatrixScreenState extends ConsumerState<MatrixScreen> {
                               const SizedBox(height: 12),
                               Expanded(
                                 child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
                                     Expanded(
                                       child: _buildQuadrant(
@@ -130,11 +133,11 @@ class _MatrixScreenState extends ConsumerState<MatrixScreen> {
   }
 
   String _priorityQuery(Priority priority) => switch (priority) {
-        Priority.high => 'high',
-        Priority.medium => 'medium',
-        Priority.low => 'low',
-        Priority.none => 'none',
-      };
+    Priority.high => 'high',
+    Priority.medium => 'medium',
+    Priority.low => 'low',
+    Priority.none => 'none',
+  };
 
   Widget _buildQuadrant(
     BuildContext context,
@@ -146,8 +149,10 @@ class _MatrixScreenState extends ConsumerState<MatrixScreen> {
     final block = theme.block;
     final blockSetting = settings.blocks[block];
     final title = blockSetting?.title ?? theme.defaultTitle;
-    final defaultPriority =
-        MatrixBlockUiSetting.defaultPriorityFor(block, blockSetting);
+    final defaultPriority = MatrixBlockUiSetting.defaultPriorityFor(
+      block,
+      blockSetting,
+    );
     final tasks = matrix[block.id] ?? [];
 
     return _MatrixQuadrant(
@@ -178,10 +183,7 @@ class _MatrixScreenState extends ConsumerState<MatrixScreen> {
 }
 
 class _MatrixHeader extends StatelessWidget {
-  const _MatrixHeader({
-    required this.isDark,
-    required this.onSettingsTap,
-  });
+  const _MatrixHeader({required this.isDark, required this.onSettingsTap});
 
   final bool isDark;
   final VoidCallback onSettingsTap;
@@ -279,8 +281,9 @@ class _MatrixQuadrantState extends State<_MatrixQuadrant> {
     final containerColor = widget.isDark
         ? widget.accent.withValues(alpha: 0.07)
         : widget.bgColor;
-    final borderColor =
-        widget.accent.withValues(alpha: widget.isDark ? 0.25 : 0.15);
+    final borderColor = widget.accent.withValues(
+      alpha: widget.isDark ? 0.25 : 0.15,
+    );
 
     return DragTarget<Task>(
       onWillAcceptWithDetails: (d) => d.data.matrixBlock != widget.block,
@@ -370,10 +373,7 @@ class _QuadrantHeader extends StatelessWidget {
           Container(
             width: 8,
             height: 8,
-            decoration: BoxDecoration(
-              color: accent,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
           Expanded(
@@ -441,13 +441,12 @@ class _DropZone extends StatelessWidget {
             children: [
               Container(
                 width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 decoration: BoxDecoration(
                   color: isActive
                       ? (isDark
-                          ? OtterColors.darkSurfaceAlt
-                          : Colors.white.withValues(alpha: 0.9))
+                            ? OtterColors.darkSurfaceAlt
+                            : Colors.white.withValues(alpha: 0.9))
                       : bgColor,
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -521,27 +520,28 @@ class _MatrixTaskCard extends StatelessWidget {
       onComplete: onComplete,
     );
 
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      return Draggable<Task>(
+        data: task,
+        feedback: _dragFeedback(card),
+        childWhenDragging: Opacity(opacity: 0.35, child: card),
+        child: MouseRegion(cursor: SystemMouseCursors.grab, child: card),
+      );
+    }
+
     return LongPressDraggable<Task>(
       data: task,
-      feedback: Material(
-        elevation: 4,
-        borderRadius: BorderRadius.circular(12),
-        child: SizedBox(
-          width: 180,
-          child: Opacity(
-            opacity: 0.95,
-            child: _MatrixTaskCardBody(
-              task: task,
-              accent: accent,
-              isDark: isDark,
-              onTap: () {},
-              onComplete: () {},
-            ),
-          ),
-        ),
-      ),
+      feedback: _dragFeedback(card),
       childWhenDragging: Opacity(opacity: 0.35, child: card),
       child: card,
+    );
+  }
+
+  Widget _dragFeedback(Widget card) {
+    return Material(
+      elevation: 4,
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(width: 180, child: Opacity(opacity: 0.95, child: card)),
     );
   }
 }
@@ -581,20 +581,23 @@ class _MatrixTaskCardBody extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              GestureDetector(
-                onTap: onComplete,
-                child: Container(
-                  width: 16,
-                  height: 16,
-                  margin: const EdgeInsets.only(top: 1),
-                  decoration: BoxDecoration(
-                    color: task.completed ? accent : Colors.transparent,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: accent, width: 1.5),
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: onComplete,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    margin: const EdgeInsets.only(top: 1),
+                    decoration: BoxDecoration(
+                      color: task.completed ? accent : Colors.transparent,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: accent, width: 1.5),
+                    ),
+                    child: task.completed
+                        ? const Icon(Icons.check, size: 10, color: Colors.white)
+                        : null,
                   ),
-                  child: task.completed
-                      ? const Icon(Icons.check, size: 10, color: Colors.white)
-                      : null,
                 ),
               ),
               const SizedBox(width: 8),
@@ -608,13 +611,14 @@ class _MatrixTaskCardBody extends StatelessWidget {
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                         height: 1.3,
-                        decoration:
-                            task.completed ? TextDecoration.lineThrough : null,
+                        decoration: task.completed
+                            ? TextDecoration.lineThrough
+                            : null,
                         color: task.completed
                             ? OtterColors.sberGray
                             : (isDark
-                                ? OtterColors.darkText
-                                : OtterColors.sberBlack),
+                                  ? OtterColors.darkText
+                                  : OtterColors.sberBlack),
                       ),
                     ),
                     if (_formatTaskMeta(task) != null) ...[

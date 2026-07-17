@@ -67,9 +67,10 @@ class TasksService {
     );
     final results = data['results'] as List<dynamic>? ?? [];
     return results
-        .map((e) => TaskMapper.apiToUi(
-              ApiTask.fromJson(e as Map<String, dynamic>),
-            ))
+        .map(
+          (e) =>
+              TaskMapper.apiToUi(ApiTask.fromJson(e as Map<String, dynamic>)),
+        )
         .toList();
   }
 }

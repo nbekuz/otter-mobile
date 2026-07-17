@@ -45,8 +45,10 @@ class _LegalScreenState extends ConsumerState<LegalScreen> {
                     onPressed: () {
                       if (selected != null) {
                         ref.read(legalProvider.notifier).clearSelection();
-                      } else {
+                      } else if (context.canPop()) {
                         context.pop();
+                      } else {
+                        context.go('/app');
                       }
                     },
                     icon: const Icon(LucideIcons.chevronLeft),
@@ -120,12 +122,18 @@ class _DocumentsHub extends StatelessWidget {
             color: surface,
             margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
-              leading: const Icon(LucideIcons.fileText, color: OtterColors.sberGray),
+              leading: const Icon(
+                LucideIcons.fileText,
+                color: OtterColors.sberGray,
+              ),
               title: Text(
                 doc.title,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              subtitle: const Text('17.06.2026', style: TextStyle(fontSize: 12)),
+              subtitle: const Text(
+                '17.06.2026',
+                style: TextStyle(fontSize: 12),
+              ),
               trailing: const Icon(
                 LucideIcons.chevronRight,
                 color: OtterColors.sberGray,
@@ -144,8 +152,15 @@ class _DocumentsHub extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Column(
               children: [
-                Text(apiError!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
-                TextButton(onPressed: onRetryApi, child: const Text('Повторить')),
+                Text(
+                  apiError!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red),
+                ),
+                TextButton(
+                  onPressed: onRetryApi,
+                  child: const Text('Повторить'),
+                ),
               ],
             ),
           ),
@@ -168,7 +183,10 @@ class _DocumentsHub extends StatelessWidget {
               color: surface,
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
-                leading: const Icon(LucideIcons.fileText, color: OtterColors.sberGray),
+                leading: const Icon(
+                  LucideIcons.fileText,
+                  color: OtterColors.sberGray,
+                ),
                 title: Text(
                   doc.title,
                   style: const TextStyle(fontWeight: FontWeight.w600),

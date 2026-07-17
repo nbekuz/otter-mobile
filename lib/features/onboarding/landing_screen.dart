@@ -48,7 +48,9 @@ class LandingScreen extends StatelessWidget {
 
     return ResponsivePage(
       maxWidth: wide ? 960 : null,
-      child: wide ? _WideLayout(features: _features) : _MobileLayout(features: _features),
+      child: wide
+          ? _WideLayout(features: _features)
+          : _MobileLayout(features: _features),
     );
   }
 }
@@ -94,10 +96,7 @@ class _MobileLayout extends StatelessWidget {
           style: TextStyle(color: OtterColors.sberGray, fontSize: 12),
         ),
         const SizedBox(height: 16),
-        PrimaryButton(
-          label: 'Войти',
-          onPressed: () => context.push('/login'),
-        ),
+        PrimaryButton(label: 'Войти', onPressed: () => context.push('/login')),
         const SizedBox(height: 12),
         PrimaryButton(
           label: 'Регистрация',

@@ -7,11 +7,7 @@ import 'api_exception.dart';
 typedef OnUnauthorized = Future<void> Function();
 
 class ApiClient {
-  ApiClient({
-    required TokenStorage tokenStorage,
-    OnUnauthorized? onUnauthorized,
-  })  : _tokenStorage = tokenStorage,
-        _onUnauthorized = onUnauthorized {
+  ApiClient(this._tokenStorage, this._onUnauthorized) {
     _dio = Dio(
       BaseOptions(
         baseUrl: Env.apiBaseUrl,
@@ -75,14 +71,10 @@ class ApiClient {
     await _onUnauthorized?.call();
   }
 
-  Future<T> get<T>(
-    String path, {
-    Map<String, dynamic>? queryParameters,
-  }) async {
-    final response = await _request(() => _dio.get<T>(
-          path,
-          queryParameters: queryParameters,
-        ));
+  Future<T> get<T>(String path, {Map<String, dynamic>? queryParameters}) async {
+    final response = await _request(
+      () => _dio.get<T>(path, queryParameters: queryParameters),
+    );
     return response.data as T;
   }
 
@@ -106,9 +98,7 @@ class ApiClient {
     return response.data as T;
   }
 
-  Future<Response<T>> _request<T>(
-    Future<Response<T>> Function() call,
-  ) async {
+  Future<Response<T>> _request<T>(Future<Response<T>> Function() call) async {
     try {
       return await call();
     } on DioException catch (e) {
@@ -140,10 +130,7 @@ class ApiClient {
         );
       }
     }
-    return ApiException(
-      e.message ?? 'Ошибка запроса',
-      statusCode: status,
-    );
+    return ApiException(e.message ?? 'Ошибка запроса', statusCode: status);
   }
 }
 
@@ -172,7 +159,8 @@ class _AuthInterceptor extends Interceptor {
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     final status = err.response?.statusCode;
     final path = err.requestOptions.path;
-    final isAuthPath = path.contains('auth/token/refresh/') ||
+    final isAuthPath =
+        path.contains('auth/token/refresh/') ||
         path.contains('auth/login/') ||
         path.contains('auth/register/') ||
         path.contains('auth/forgot-password');

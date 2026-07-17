@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/layout/responsive.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
 import '../../data/models/ui/ui_models.dart';
 import '../../shared/widgets/app_bottom_sheet.dart';
+import '../../shared/widgets/keyboard_dismisser.dart';
 import '../../shared/widgets/primary_button.dart';
 import 'matrix_block_setting.dart';
 import 'matrix_constants.dart';
 
-Future<void> showMatrixSettingsSheet(BuildContext context, WidgetRef ref) async {
+Future<void> showMatrixSettingsSheet(
+  BuildContext context,
+  WidgetRef ref,
+) async {
   await ref.read(matrixSettingsProvider.notifier).load();
   if (!context.mounted) return;
 
@@ -48,8 +53,9 @@ class _MatrixSettingsSheetState extends ConsumerState<_MatrixSettingsSheet> {
     super.initState();
     _blocks = Map<MatrixBlock, MatrixBlockUiSetting>.from(widget.initialBlocks);
     for (final block in MatrixBlock.values) {
-      _titleControllers[block] =
-          TextEditingController(text: _blocks[block]?.title ?? '');
+      _titleControllers[block] = TextEditingController(
+        text: _blocks[block]?.title ?? '',
+      );
     }
   }
 
@@ -119,25 +125,27 @@ class _MatrixSettingsSheetState extends ConsumerState<_MatrixSettingsSheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: 8),
-        Center(
-          child: Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: OtterColors.grayMid,
-              borderRadius: BorderRadius.circular(2),
+        if (!Responsive.isWide(context)) ...[
+          const SizedBox(height: 8),
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: OtterColors.grayMid,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
-        ),
+        ],
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
           child: Text(
             'Настройки блоков',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: OtterColors.sberBlack,
-                ),
+              fontWeight: FontWeight.bold,
+              color: OtterColors.sberBlack,
+            ),
           ),
         ),
         ConstrainedBox(
@@ -242,11 +250,15 @@ class _BlockSection extends StatelessWidget {
         TextField(
           controller: titleController,
           style: const TextStyle(fontSize: 14),
+          onTapOutside: dismissKeyboardOnTapOutside,
+          onEditingComplete: KeyboardDismisser.dismiss,
           decoration: InputDecoration(
             filled: true,
             fillColor: OtterColors.grayLight,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,

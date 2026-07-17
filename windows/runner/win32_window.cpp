@@ -207,6 +207,18 @@ Win32Window::MessageHandler(HWND hwnd,
       return 0;
     }
 
+    case WM_GETMINMAXINFO: {
+      // Keep the Flutter layout usable when a desktop user resizes the
+      // native window. The values are logical pixels and are scaled for the
+      // active monitor's DPI.
+      auto* min_max_info = reinterpret_cast<MINMAXINFO*>(lparam);
+      const UINT dpi = GetDpiForWindow(hwnd);
+      const double scale_factor = dpi / 96.0;
+      min_max_info->ptMinTrackSize.x = Scale(720, scale_factor);
+      min_max_info->ptMinTrackSize.y = Scale(560, scale_factor);
+      return 0;
+    }
+
     case WM_ACTIVATE:
       if (child_content_ != nullptr) {
         SetFocus(child_content_);

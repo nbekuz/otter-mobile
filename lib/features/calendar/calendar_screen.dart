@@ -27,9 +27,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(
-      () => ref.read(calendarStateProvider.notifier).load(),
-    );
+    Future.microtask(() => ref.read(calendarStateProvider.notifier).load());
   }
 
   @override
@@ -48,8 +46,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               state: state,
               date: date,
               onToday: () => ref.read(calendarStateProvider.notifier).goToday(),
-              onPrev: () => ref.read(calendarStateProvider.notifier).navigate(-1),
-              onNext: () => ref.read(calendarStateProvider.notifier).navigate(1),
+              onPrev: () =>
+                  ref.read(calendarStateProvider.notifier).navigate(-1),
+              onNext: () =>
+                  ref.read(calendarStateProvider.notifier).navigate(1),
               onSetView: (v) =>
                   ref.read(calendarStateProvider.notifier).setView(v),
               onPickDate: (d) =>
@@ -59,38 +59,42 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               child: state.loading
                   ? const Center(child: CircularProgressIndicator())
                   : state.view == CalendarView.day
-                      ? _DayView(
-                          date: date,
-                          tasks: state.tasks,
-                          onTaskTap: (t) => showTaskDetailSheet(context, t),
-                          onHourTap: (hour) => _openNewTaskAtHour(context, date, hour),
-                          onToggleComplete: (id) async {
-                            final task = state.tasks.firstWhere((t) => t.id == id);
-                            await ref
-                                .read(tasksStateProvider.notifier)
-                                .completeTask(task);
-                            await ref.read(calendarStateProvider.notifier).load();
-                          },
-                          onReschedule: (task, start, end) async {
-                            try {
-                              await ref
-                                  .read(calendarStateProvider.notifier)
-                                  .rescheduleTask(task, start, end);
-                            } catch (e) {
-                              if (context.mounted) {
-                                showAppToast(
-                                  context,
-                                  getApiErrorMessage(e, 'Не удалось сохранить время'),
-                                );
-                              }
-                              rethrow;
-                            }
-                          },
-                        )
-                      : _SimpleListView(
-                          tasks: state.tasks,
-                          onTaskTap: (t) => showTaskDetailSheet(context, t),
-                        ),
+                  ? _DayView(
+                      date: date,
+                      tasks: state.tasks,
+                      onTaskTap: (t) => showTaskDetailSheet(context, t),
+                      onHourTap: (hour) =>
+                          _openNewTaskAtHour(context, date, hour),
+                      onToggleComplete: (id) async {
+                        final task = state.tasks.firstWhere((t) => t.id == id);
+                        await ref
+                            .read(tasksStateProvider.notifier)
+                            .completeTask(task);
+                        await ref.read(calendarStateProvider.notifier).load();
+                      },
+                      onReschedule: (task, start, end) async {
+                        try {
+                          await ref
+                              .read(calendarStateProvider.notifier)
+                              .rescheduleTask(task, start, end);
+                        } catch (e) {
+                          if (context.mounted) {
+                            showAppToast(
+                              context,
+                              getApiErrorMessage(
+                                e,
+                                'Не удалось сохранить время',
+                              ),
+                            );
+                          }
+                          rethrow;
+                        }
+                      },
+                    )
+                  : _SimpleListView(
+                      tasks: state.tasks,
+                      onTaskTap: (t) => showTaskDetailSheet(context, t),
+                    ),
             ),
           ],
         ),
@@ -154,10 +158,8 @@ class _Header extends StatelessWidget {
                 onSelected: onSetView,
                 itemBuilder: (context) => CalendarView.values
                     .map(
-                      (v) => PopupMenuItem(
-                        value: v,
-                        child: Text(_viewLabel(v)),
-                      ),
+                      (v) =>
+                          PopupMenuItem(value: v, child: Text(_viewLabel(v))),
                     )
                     .toList(),
               ),
@@ -199,11 +201,11 @@ class _Header extends StatelessWidget {
   }
 
   String _viewLabel(CalendarView v) => switch (v) {
-        CalendarView.day => 'День',
-        CalendarView.week => 'Неделя',
-        CalendarView.month => 'Месяц',
-        CalendarView.year => 'Год',
-      };
+    CalendarView.day => 'День',
+    CalendarView.week => 'Неделя',
+    CalendarView.month => 'Месяц',
+    CalendarView.year => 'Год',
+  };
 }
 
 class _WeekStrip extends StatelessWidget {
@@ -225,7 +227,8 @@ class _WeekStrip extends StatelessWidget {
             final d = start.add(Duration(days: i));
             final key = DateFormat('yyyy-MM-dd').format(d);
             final isSelected = key == selectedKey;
-            final isToday = d.year == today.year &&
+            final isToday =
+                d.year == today.year &&
                 d.month == today.month &&
                 d.day == today.day;
 
@@ -242,8 +245,8 @@ class _WeekStrip extends StatelessWidget {
                       color: isSelected
                           ? OtterColors.sberGreen
                           : isToday
-                              ? OtterColors.sberGreenLight
-                              : Colors.transparent,
+                          ? OtterColors.sberGreenLight
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -256,8 +259,8 @@ class _WeekStrip extends StatelessWidget {
                             color: isSelected
                                 ? Colors.white
                                 : isToday
-                                    ? OtterColors.sberGreen
-                                    : OtterColors.sberGray,
+                                ? OtterColors.sberGreen
+                                : OtterColors.sberGray,
                           ),
                         ),
                         Text(
@@ -268,8 +271,8 @@ class _WeekStrip extends StatelessWidget {
                             color: isSelected
                                 ? Colors.white
                                 : isToday
-                                    ? OtterColors.sberGreen
-                                    : OtterColors.sberBlack,
+                                ? OtterColors.sberGreen
+                                : OtterColors.sberBlack,
                           ),
                         ),
                       ],
@@ -440,8 +443,7 @@ class _DayViewState extends State<_DayView> {
       widget.tasks,
       dragPreview: _dragPreview,
     );
-    final timelineHeight =
-        (mainEndMinutes - mainStartMinutes) * minuteHeightPx;
+    final timelineHeight = (mainEndMinutes - mainStartMinutes) * minuteHeightPx;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -505,7 +507,10 @@ class _DayViewState extends State<_DayView> {
                             SizedBox(
                               width: 56,
                               child: Padding(
-                                padding: const EdgeInsets.only(top: 4, right: 8),
+                                padding: const EdgeInsets.only(
+                                  top: 4,
+                                  right: 8,
+                                ),
                                 child: Text(
                                   '${h.toString().padLeft(2, '0')}:00',
                                   textAlign: TextAlign.right,
@@ -517,12 +522,17 @@ class _DayViewState extends State<_DayView> {
                               ),
                             ),
                             Expanded(
-                              child: GestureDetector(
-                                onTap: () => widget.onHourTap(h),
-                                child: Container(
-                                  decoration: const BoxDecoration(
-                                    border: Border(
-                                      top: BorderSide(color: Color(0xFFE5E5EA)),
+                              child: MouseRegion(
+                                cursor: SystemMouseCursors.click,
+                                child: GestureDetector(
+                                  onTap: () => widget.onHourTap(h),
+                                  child: Container(
+                                    decoration: const BoxDecoration(
+                                      border: Border(
+                                        top: BorderSide(
+                                          color: Color(0xFFE5E5EA),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -540,8 +550,7 @@ class _DayViewState extends State<_DayView> {
                     height: timelineHeight,
                     child: Stack(
                       children: timeline.map((item) {
-                        final dragging =
-                            _dragPreview?.taskId == item.task.id;
+                        final dragging = _dragPreview?.taskId == item.task.id;
                         return CalendarTaskBlock(
                           item: item,
                           timelineWidth: timelineWidth,
@@ -567,10 +576,7 @@ class _DayViewState extends State<_DayView> {
 }
 
 class _SimpleListView extends StatelessWidget {
-  const _SimpleListView({
-    required this.tasks,
-    required this.onTaskTap,
-  });
+  const _SimpleListView({required this.tasks, required this.onTaskTap});
 
   final List<Task> tasks;
   final void Function(Task task) onTaskTap;

@@ -19,9 +19,7 @@ Widget appBottomSheetConstraints(BuildContext context, Widget child) {
 /// Wraps sheet content so it stays anchored to the bottom (not stretched upward).
 Widget appBottomSheetWrap(BuildContext context, Widget child) {
   return Padding(
-    padding: EdgeInsets.only(
-      bottom: MediaQuery.viewInsetsOf(context).bottom,
-    ),
+    padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
     child: Align(
       alignment: Alignment.bottomCenter,
       child: appBottomSheetConstraints(context, child),
@@ -63,7 +61,8 @@ Future<T?> showAppBottomSheet<T>({
     isScrollControlled: true,
     useSafeArea: useSafeArea,
     backgroundColor: backgroundColor ?? Colors.transparent,
-    shape: shape ??
+    shape:
+        shape ??
         const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),

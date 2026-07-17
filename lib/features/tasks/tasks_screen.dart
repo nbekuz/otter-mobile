@@ -102,9 +102,22 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                             : Colors.white,
                       ),
                     ),
+                  if (wide)
+                    IconButton(
+                      tooltip: 'Обновить',
+                      onPressed: () =>
+                          ref.read(tasksStateProvider.notifier).loadGrouped(),
+                      icon: const Icon(LucideIcons.refreshCw, size: 20),
+                      style: IconButton.styleFrom(
+                        backgroundColor: isDark
+                            ? OtterColors.darkSurface
+                            : Colors.white,
+                      ),
+                    ),
                   IconButton(
                     tooltip: 'Поиск',
-                    onPressed: () => setState(() => _searchVisible = !_searchVisible),
+                    onPressed: () =>
+                        setState(() => _searchVisible = !_searchVisible),
                     icon: const Icon(LucideIcons.search),
                     style: IconButton.styleFrom(
                       backgroundColor: isDark
@@ -120,7 +133,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                 child: TextField(
                   controller: _search,
-                  autofocus: true,
+                  autofocus: !wide,
                   onChanged: (q) =>
                       ref.read(tasksStateProvider.notifier).search(q),
                   onTapOutside: dismissKeyboardOnTapOutside,
@@ -236,10 +249,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
           padding: const EdgeInsets.only(bottom: 12),
           child: Column(
             children: [
-              Text(
-                state.error!,
-                style: const TextStyle(color: Colors.red),
-              ),
+              Text(state.error!, style: const TextStyle(color: Colors.red)),
               TextButton(
                 onPressed: () =>
                     ref.read(tasksStateProvider.notifier).loadGrouped(),

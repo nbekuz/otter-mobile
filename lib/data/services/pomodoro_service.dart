@@ -14,7 +14,8 @@ class PomodoroSettingsData {
   final ApiSound? workSoundDetail;
 }
 
-PomodoroSettingsData _mapSettings(ApiPomodoroSettings api) => PomodoroSettingsData(
+PomodoroSettingsData _mapSettings(ApiPomodoroSettings api) =>
+    PomodoroSettingsData(
       settings: PomodoroSettings(
         duration: api.durationMinutes,
         shortBreak: api.shortBreakMinutes,
@@ -33,12 +34,13 @@ class PomodoroService {
   final ApiClient _client;
 
   Future<PomodoroSettingsData> fetchSettings() async {
-    final data =
-        await _client.get<Map<String, dynamic>>('pomodoro/settings/');
+    final data = await _client.get<Map<String, dynamic>>('pomodoro/settings/');
     return _mapSettings(ApiPomodoroSettings.fromJson(data));
   }
 
-  Future<PomodoroSettingsData> updateSettings(Map<String, dynamic> patch) async {
+  Future<PomodoroSettingsData> updateSettings(
+    Map<String, dynamic> patch,
+  ) async {
     final data = await _client.patch<Map<String, dynamic>>(
       'pomodoro/settings/',
       data: patch,
@@ -59,10 +61,7 @@ class PomodoroService {
   }) async {
     final data = await _client.post<Map<String, dynamic>>(
       'pomodoro/sessions/',
-      data: {
-        if (taskId != null) 'task': taskId,
-        'duration_minutes': durationMinutes,
-      },
+      data: {'task': ?taskId, 'duration_minutes': durationMinutes},
     );
     return ApiPomodoroSession.fromJson(data);
   }

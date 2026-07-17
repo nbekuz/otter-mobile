@@ -68,198 +68,208 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final isPremium = premium.isPremium || settings.isPremium;
 
     final content = ListView(
-          padding: const EdgeInsets.all(16),
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.all(16),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Настройки',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => _confirmLogout(context),
-                  child: const Text(
-                    'Выйти',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            _ProfileCard(auth: auth, isDark: isDark, isPremium: isPremium),
-            const SizedBox(height: 16),
-            _Section(
-              title: 'Аккаунт',
-              children: [
-                ListTile(
-                  leading: const Icon(LucideIcons.user),
-                  title: const Text('Мой профиль'),
-                  trailing: const Icon(LucideIcons.chevronRight),
-                  onTap: () => context.go('/app/profile'),
-                ),
-                ListTile(
-                  leading: const Icon(LucideIcons.crown, color: Colors.amber),
-                  title: const Text('Premium'),
-                  subtitle: Text(
-                    isPremium ? 'Premium активен' : 'Подключить Premium',
-                  ),
-                  trailing: const Icon(LucideIcons.chevronRight),
-                  onTap: _openPremium,
-                ),
-              ],
-            ),
-            if (_premiumVisible)
-              _PremiumPanel(
-                state: premium,
-                recurringConsent: _recurringConsent,
-                onConsentChanged: (v) =>
-                    setState(() => _recurringConsent = v ?? false),
-                onClose: () => setState(() => _premiumVisible = false),
-                onSelectTariff: (code) =>
-                    ref.read(premiumStateProvider.notifier).selectTariff(code),
-                onTrial: _startTrial,
-                onCheckout: _purchasePremium,
-                onRefresh: _refreshPremium,
-                onCancel: _cancelPremium,
+            const Expanded(
+              child: Text(
+                'Настройки',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
-            _Section(
-              title: 'Нижнее меню',
-              children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Text(
-                    'Включайте вкладки для нижней панели.',
-                    style: TextStyle(fontSize: 12, color: OtterColors.sberGray),
-                  ),
-                ),
-                for (final item in kAllNavItems)
-                  SwitchListTile(
-                    title: Text(item.label),
-                    subtitle: item.id == 'settings'
-                        ? const Text('Всегда включено')
-                        : null,
-                    value: settings.bottomNavItems.contains(item.id),
-                    activeThumbColor: OtterColors.sberGreen,
-                    onChanged: item.id == 'settings'
-                        ? null
-                        : (v) => _toggleNavItem(item.id, v, settings),
-                  ),
-              ],
             ),
-            _Section(
-              title: 'Приложение',
-              children: [
-                SwitchListTile(
-                  title: const Text('Тёмная тема'),
-                  value: isDark,
-                  activeThumbColor: OtterColors.sberGreen,
-                  onChanged: (v) {
-                    final theme = v ? 'dark' : 'light';
-                    ref.read(appSettingsProvider.notifier).setTheme(theme);
-                    ref.read(themeModeProvider.notifier).state = theme;
-                  },
-                ),
-              ],
+            TextButton(
+              onPressed: () => _confirmLogout(context),
+              child: const Text('Выйти', style: TextStyle(color: Colors.red)),
             ),
-            _Section(
-              title: 'Звуки и уведомления',
-              children: [
-                SwitchListTile(
-                  title: const Text('Уведомления'),
-                  value: settings.notifications,
-                  activeThumbColor: OtterColors.sberGreen,
-                  onChanged: (v) => ref.read(appSettingsProvider.notifier).update(
-                        settings.copyWith(notifications: v),
-                      ),
-                ),
-                SwitchListTile(
-                  title: const Text('Вибрация'),
-                  value: settings.vibration,
-                  activeThumbColor: OtterColors.sberGreen,
-                  onChanged: (v) => ref.read(appSettingsProvider.notifier).update(
-                        settings.copyWith(vibration: v),
-                      ),
-                ),
-              ],
-            ),
-            _Section(
-              title: 'Разделы списка задач',
-              children: [
-                _GroupToggle(label: 'Просрочено', group: 'overdue', settings: settings),
-                _GroupToggle(label: 'Сегодня', group: 'today', settings: settings),
-                _GroupToggle(label: 'Завтра', group: 'tomorrow', settings: settings),
-                _GroupToggle(label: 'Позже', group: 'later', settings: settings),
-                _GroupToggle(label: 'Без срока', group: 'nodate', settings: settings),
-                _GroupToggle(label: 'Готово', group: 'completed', settings: settings),
-              ],
-            ),
-            _Section(
-              title: 'Помощь и информация',
-              children: [
-                ListTile(
-                  leading: const Icon(LucideIcons.helpCircle),
-                  title: const Text('Частые вопросы (FAQ)'),
-                  trailing: const Icon(LucideIcons.chevronRight),
-                  onTap: () => context.push('/app/faq'),
-                ),
-                ListTile(
-                  leading: const Icon(LucideIcons.fileText),
-                  title: const Text('Юридические документы'),
-                  trailing: const Icon(LucideIcons.chevronRight),
-                  onTap: () => context.push('/app/legal'),
-                ),
-                ListTile(
-                  leading: const Icon(LucideIcons.messageSquare),
-                  title: const Text('Написать нам'),
-                  trailing: Icon(
-                    _contactVisible
-                        ? LucideIcons.chevronUp
-                        : LucideIcons.chevronDown,
-                  ),
-                  onTap: () => setState(() => _contactVisible = !_contactVisible),
-                ),
-                if (_contactVisible) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: TextField(
-                      controller: _contactController,
-                      maxLines: 4,
-                      onTapOutside: dismissKeyboardOnTapOutside,
-                      onEditingComplete: KeyboardDismisser.dismiss,
-                      decoration: const InputDecoration(
-                        hintText: 'Ваше сообщение...',
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: FilledButton(
-                      onPressed: _sendContact,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: OtterColors.sberGreen,
-                      ),
-                      child: const Text('Отправить'),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            SizedBox(height: wide ? 24 : 80),
           ],
-        );
+        ),
+        const SizedBox(height: 8),
+        _ProfileCard(auth: auth, isDark: isDark, isPremium: isPremium),
+        const SizedBox(height: 16),
+        _Section(
+          title: 'Аккаунт',
+          children: [
+            ListTile(
+              leading: const Icon(LucideIcons.user),
+              title: const Text('Мой профиль'),
+              trailing: const Icon(LucideIcons.chevronRight),
+              onTap: () => context.go('/app/profile'),
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.crown, color: Colors.amber),
+              title: const Text('Premium'),
+              subtitle: Text(
+                isPremium ? 'Premium активен' : 'Подключить Premium',
+              ),
+              trailing: const Icon(LucideIcons.chevronRight),
+              onTap: _openPremium,
+            ),
+          ],
+        ),
+        if (_premiumVisible)
+          _PremiumPanel(
+            state: premium,
+            recurringConsent: _recurringConsent,
+            onConsentChanged: (v) =>
+                setState(() => _recurringConsent = v ?? false),
+            onClose: () => setState(() => _premiumVisible = false),
+            onSelectTariff: (code) =>
+                ref.read(premiumStateProvider.notifier).selectTariff(code),
+            onTrial: _startTrial,
+            onCheckout: _purchasePremium,
+            onRefresh: _refreshPremium,
+            onCancel: _cancelPremium,
+          ),
+        _Section(
+          title: 'Нижнее меню',
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                'Включайте вкладки для нижней панели.',
+                style: TextStyle(fontSize: 12, color: OtterColors.sberGray),
+              ),
+            ),
+            for (final item in kAllNavItems)
+              SwitchListTile(
+                title: Text(item.label),
+                subtitle: item.id == 'settings'
+                    ? const Text('Всегда включено')
+                    : null,
+                value: settings.bottomNavItems.contains(item.id),
+                activeThumbColor: OtterColors.sberGreen,
+                onChanged: item.id == 'settings'
+                    ? null
+                    : (v) => _toggleNavItem(item.id, v, settings),
+              ),
+          ],
+        ),
+        _Section(
+          title: 'Приложение',
+          children: [
+            SwitchListTile(
+              title: const Text('Тёмная тема'),
+              value: isDark,
+              activeThumbColor: OtterColors.sberGreen,
+              onChanged: (v) {
+                final theme = v ? 'dark' : 'light';
+                ref.read(appSettingsProvider.notifier).setTheme(theme);
+                ref.read(themeModeProvider.notifier).state = theme;
+              },
+            ),
+          ],
+        ),
+        _Section(
+          title: 'Звуки и уведомления',
+          children: [
+            SwitchListTile(
+              title: const Text('Уведомления'),
+              value: settings.notifications,
+              activeThumbColor: OtterColors.sberGreen,
+              onChanged: (v) => ref
+                  .read(appSettingsProvider.notifier)
+                  .update(settings.copyWith(notifications: v)),
+            ),
+            SwitchListTile(
+              title: const Text('Вибрация'),
+              value: settings.vibration,
+              activeThumbColor: OtterColors.sberGreen,
+              onChanged: (v) => ref
+                  .read(appSettingsProvider.notifier)
+                  .update(settings.copyWith(vibration: v)),
+            ),
+          ],
+        ),
+        _Section(
+          title: 'Разделы списка задач',
+          children: [
+            _GroupToggle(
+              label: 'Просрочено',
+              group: 'overdue',
+              settings: settings,
+            ),
+            _GroupToggle(label: 'Сегодня', group: 'today', settings: settings),
+            _GroupToggle(
+              label: 'Завтра',
+              group: 'tomorrow',
+              settings: settings,
+            ),
+            _GroupToggle(label: 'Позже', group: 'later', settings: settings),
+            _GroupToggle(
+              label: 'Без срока',
+              group: 'nodate',
+              settings: settings,
+            ),
+            _GroupToggle(
+              label: 'Готово',
+              group: 'completed',
+              settings: settings,
+            ),
+          ],
+        ),
+        _Section(
+          title: 'Помощь и информация',
+          children: [
+            ListTile(
+              leading: const Icon(LucideIcons.helpCircle),
+              title: const Text('Частые вопросы (FAQ)'),
+              trailing: const Icon(LucideIcons.chevronRight),
+              onTap: () => context.push('/app/faq'),
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.fileText),
+              title: const Text('Юридические документы'),
+              trailing: const Icon(LucideIcons.chevronRight),
+              onTap: () => context.push('/app/legal'),
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.messageSquare),
+              title: const Text('Написать нам'),
+              trailing: Icon(
+                _contactVisible
+                    ? LucideIcons.chevronUp
+                    : LucideIcons.chevronDown,
+              ),
+              onTap: () => setState(() => _contactVisible = !_contactVisible),
+            ),
+            if (_contactVisible) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: TextField(
+                  controller: _contactController,
+                  maxLines: 4,
+                  onTapOutside: dismissKeyboardOnTapOutside,
+                  onEditingComplete: KeyboardDismisser.dismiss,
+                  decoration: const InputDecoration(
+                    hintText: 'Ваше сообщение...',
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: FilledButton(
+                  onPressed: _sendContact,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: OtterColors.sberGreen,
+                  ),
+                  child: const Text('Отправить'),
+                ),
+              ),
+            ],
+          ],
+        ),
+        SizedBox(height: wide ? 24 : 80),
+      ],
+    );
 
     return Scaffold(
       backgroundColor: isDark ? OtterColors.darkBg : OtterColors.grayLight,
       body: SafeArea(
         bottom: false,
         child: wide
-            ? ResponsiveContent(
-                maxWidth: 960,
-                child: content,
-              )
+            ? ResponsiveContent(maxWidth: 960, child: content)
             : content,
       ),
     );
@@ -272,18 +282,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } else {
       if (items.length <= 2) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Нужно оставить минимум 2 вкладки'),
-          ),
+          const SnackBar(content: Text('Нужно оставить минимум 2 вкладки')),
         );
         return;
       }
       items.remove(id);
     }
     if (!items.contains('settings')) items.add('settings');
-    ref.read(appSettingsProvider.notifier).update(
-          settings.copyWith(bottomNavItems: items),
-        );
+    ref
+        .read(appSettingsProvider.notifier)
+        .update(settings.copyWith(bottomNavItems: items));
   }
 
   Future<void> _sendContact() async {
@@ -293,16 +301,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await ref.read(settingsServiceProvider).sendHelpMessage(message);
       _contactController.clear();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Сообщение отправлено')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Сообщение отправлено')));
         setState(() => _contactVisible = false);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(getApiErrorMessage(e))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(getApiErrorMessage(e))));
       }
     }
   }
@@ -319,9 +327,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return;
     }
     try {
-      await ref.read(premiumStateProvider.notifier).startTrial(
-            recurringConsent: _recurringConsent,
-          );
+      await ref
+          .read(premiumStateProvider.notifier)
+          .startTrial(recurringConsent: _recurringConsent);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Пробный период Premium активирован')),
@@ -329,9 +337,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(getApiErrorMessage(e))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(getApiErrorMessage(e))));
       }
     }
   }
@@ -348,9 +356,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return;
     }
     try {
-      final url = await ref.read(premiumStateProvider.notifier).checkout(
-            recurringConsent: _recurringConsent,
-          );
+      final url = await ref
+          .read(premiumStateProvider.notifier)
+          .checkout(recurringConsent: _recurringConsent);
       if (!mounted || url.isEmpty) return;
       final opened = await openExternalUrl(url);
       if (!mounted) return;
@@ -366,24 +374,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ? null
               : SnackBarAction(
                   label: 'Копировать',
-                  onPressed: () =>
-                      Clipboard.setData(ClipboardData(text: url)),
+                  onPressed: () => Clipboard.setData(ClipboardData(text: url)),
                 ),
         ),
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(getApiErrorMessage(e))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(getApiErrorMessage(e))));
       }
     }
   }
 
   Future<void> _refreshPremium() async {
     try {
-      final sub =
-          await ref.read(premiumStateProvider.notifier).refreshSubscription();
+      final sub = await ref
+          .read(premiumStateProvider.notifier)
+          .refreshSubscription();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -399,9 +407,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(getApiErrorMessage(e))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(getApiErrorMessage(e))));
       }
     }
   }
@@ -420,9 +428,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(getApiErrorMessage(e))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(getApiErrorMessage(e))));
       }
     }
   }
@@ -478,13 +486,12 @@ class _ProfileCard extends StatelessWidget {
               CircleAvatar(
                 radius: 32,
                 backgroundColor: OtterColors.sberGreen,
-                backgroundImage:
-                    user?.avatar != null ? NetworkImage(user!.avatar!) : null,
+                backgroundImage: user?.avatar != null
+                    ? NetworkImage(user!.avatar!)
+                    : null,
                 child: user?.avatar == null
                     ? Text(
-                        (user?.name.isNotEmpty == true
-                                ? user!.name[0]
-                                : 'A')
+                        (user?.name.isNotEmpty == true ? user!.name[0] : 'A')
                             .toUpperCase(),
                         style: const TextStyle(
                           color: Colors.white,
@@ -831,9 +838,9 @@ class _GroupToggle extends ConsumerWidget {
         } else {
           groups.remove(group);
         }
-        ref.read(appSettingsProvider.notifier).update(
-              settings.copyWith(visibleGroups: groups),
-            );
+        ref
+            .read(appSettingsProvider.notifier)
+            .update(settings.copyWith(visibleGroups: groups));
       },
     );
   }

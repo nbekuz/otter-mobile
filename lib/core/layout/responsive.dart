@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../shared/widgets/keyboard_dismisser.dart';
-
 /// Shared breakpoints for phone, tablet, and desktop (Windows / wide web).
 abstract final class Responsive {
   static const compactBreakpoint = 600.0;
@@ -60,41 +58,40 @@ class ResponsivePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final wide = Responsive.isWide(context);
     final paddingValue = padding.resolve(Directionality.of(context));
-    final viewportHeight = MediaQuery.sizeOf(context).height -
+    final viewportHeight =
+        MediaQuery.sizeOf(context).height -
         MediaQuery.paddingOf(context).vertical -
         paddingValue.vertical;
 
     return Scaffold(
       backgroundColor: backgroundColor,
       body: SafeArea(
-        child: KeyboardDismissScope(
-          child: Align(
-            alignment: wide ? Alignment.center : Alignment.topCenter,
-            child: fillHeight && wide
-                ? Padding(
-                    padding: padding,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: maxWidth ?? Responsive.formMaxWidth(context),
-                        minHeight: viewportHeight,
-                        maxHeight: viewportHeight,
-                      ),
-                      child: child,
+        child: Align(
+          alignment: wide ? Alignment.center : Alignment.topCenter,
+          child: fillHeight && wide
+              ? Padding(
+                  padding: padding,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: maxWidth ?? Responsive.formMaxWidth(context),
+                      minHeight: viewportHeight,
+                      maxHeight: viewportHeight,
                     ),
-                  )
-                : SingleChildScrollView(
-                    padding: padding,
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: maxWidth ?? Responsive.formMaxWidth(context),
-                        minHeight: wide ? viewportHeight : 0,
-                      ),
-                      child: child,
-                    ),
+                    child: child,
                   ),
-          ),
+                )
+              : SingleChildScrollView(
+                  padding: padding,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: maxWidth ?? Responsive.formMaxWidth(context),
+                      minHeight: wide ? viewportHeight : 0,
+                    ),
+                    child: child,
+                  ),
+                ),
         ),
       ),
     );

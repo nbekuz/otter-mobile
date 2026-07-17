@@ -35,10 +35,9 @@ class MatrixService {
       'matrix/settings/',
       data: {
         'block': block,
-        if (title != null) 'title': title,
-        if (allowedPriorities != null)
-          'allowed_priorities': allowedPriorities,
-        if (dateFilter != null) 'date_filter': dateFilter,
+        'title': ?title,
+        'allowed_priorities': ?allowedPriorities,
+        'date_filter': ?dateFilter,
       },
     );
   }

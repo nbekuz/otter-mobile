@@ -47,14 +47,12 @@ class LegalState {
     int? selectedIndex,
     bool clearSelected = false,
     bool clearError = false,
-  }) =>
-      LegalState(
-        documents: documents ?? this.documents,
-        loading: loading ?? this.loading,
-        error: clearError ? null : (error ?? this.error),
-        selectedIndex:
-            clearSelected ? null : (selectedIndex ?? this.selectedIndex),
-      );
+  }) => LegalState(
+    documents: documents ?? this.documents,
+    loading: loading ?? this.loading,
+    error: clearError ? null : (error ?? this.error),
+    selectedIndex: clearSelected ? null : (selectedIndex ?? this.selectedIndex),
+  );
 }
 
 class LegalNotifier extends StateNotifier<LegalState> {

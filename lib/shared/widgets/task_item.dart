@@ -3,8 +3,11 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../core/layout/responsive.dart';
 import '../../core/theme/otter_colors.dart';
 import '../../data/models/ui/ui_models.dart';
+
+enum _TaskAction { complete, delete }
 
 class TaskItem extends StatelessWidget {
   const TaskItem({
@@ -75,6 +78,33 @@ class TaskItem extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(child: _Content(task: task)),
                   const SizedBox(width: 8),
+                  if (Responsive.isWide(context))
+                    PopupMenuButton<_TaskAction>(
+                      tooltip: 'Действия с задачей',
+                      icon: const Icon(
+                        LucideIcons.ellipsis,
+                        size: 18,
+                        color: OtterColors.sberGray,
+                      ),
+                      onSelected: (action) {
+                        switch (action) {
+                          case _TaskAction.complete:
+                            onComplete();
+                          case _TaskAction.delete:
+                            onDelete();
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        PopupMenuItem(
+                          value: _TaskAction.complete,
+                          child: Text(task.completed ? 'Вернуть' : 'Готово'),
+                        ),
+                        const PopupMenuItem(
+                          value: _TaskAction.delete,
+                          child: Text('Удалить'),
+                        ),
+                      ],
+                    ),
                   _PriorityDot(priority: task.priority),
                 ],
               ),
@@ -111,19 +141,22 @@ class _Checkbox extends StatelessWidget {
       };
     }
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 24,
-        height: 24,
-        decoration: BoxDecoration(
-          color: completed ? OtterColors.sberGreen : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: border, width: 2),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: completed ? OtterColors.sberGreen : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: border, width: 2),
+          ),
+          child: completed
+              ? const Icon(Icons.check, size: 16, color: Colors.white)
+              : null,
         ),
-        child: completed
-            ? const Icon(Icons.check, size: 16, color: Colors.white)
-            : null,
       ),
     );
   }
@@ -136,15 +169,16 @@ class _Content extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor =
-        isDark ? OtterColors.darkText : OtterColors.sberBlack;
+    final textColor = isDark ? OtterColors.darkText : OtterColors.sberBlack;
 
     String? dateTimeLabel;
     if (task.dueDate != null) {
       final d = DateTime.tryParse(task.dueDate!);
       if (d != null) {
         dateTimeLabel = DateFormat('d MMM', 'ru').format(d);
-        if (task.dueTime != null) dateTimeLabel = '$dateTimeLabel, ${task.dueTime}';
+        if (task.dueTime != null) {
+          dateTimeLabel = '$dateTimeLabel, ${task.dueTime}';
+        }
       }
     }
 
@@ -183,9 +217,17 @@ class _Content extends StatelessWidget {
                   ),
                 ),
               if (task.notification != null)
-                const Icon(LucideIcons.bell, size: 14, color: OtterColors.sberGray),
+                const Icon(
+                  LucideIcons.bell,
+                  size: 14,
+                  color: OtterColors.sberGray,
+                ),
               if (task.repeat != RepeatType.none)
-                const Icon(LucideIcons.refreshCw, size: 14, color: OtterColors.sberGray),
+                const Icon(
+                  LucideIcons.refreshCw,
+                  size: 14,
+                  color: OtterColors.sberGray,
+                ),
             ],
           ),
         ],
@@ -206,7 +248,10 @@ class _Meta extends StatelessWidget {
       children: [
         Icon(icon, size: 12, color: OtterColors.sberGray),
         const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 12, color: OtterColors.sberGray)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: OtterColors.sberGray),
+        ),
       ],
     );
   }

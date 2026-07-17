@@ -61,6 +61,7 @@ int taskDurationMinutes({String? durationStart, String? durationEnd}) {
   return 60;
 }
 
-int snapMinutes(int minutes) => ((minutes / 5).round() * 5).clamp(0, 23 * 60 + 59);
+int snapMinutes(int minutes) =>
+    ((minutes / 5).round() * 5).clamp(0, 23 * 60 + 59);
 
 const calendarMinDurationMinutes = 10;

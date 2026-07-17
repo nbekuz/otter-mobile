@@ -70,10 +70,7 @@ class AppShell extends ConsumerWidget {
               ),
         bottomNavigationBar: wide
             ? null
-            : OtterBottomNav(
-                order: settings.bottomNavItems,
-                currentPath: path,
-              ),
+            : OtterBottomNav(order: settings.bottomNavItems, currentPath: path),
       ),
     );
   }
@@ -118,17 +115,12 @@ class _Sidebar extends ConsumerWidget {
                   offset: const Offset(0, 2),
                 ),
               ],
-        border: isDark
-            ? Border.all(color: OtterColors.darkBorder)
-            : null,
+        border: isDark ? Border.all(color: OtterColors.darkBorder) : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          BrandLogo(
-            showName: true,
-            lightText: isDark,
-          ),
+          BrandLogo(showName: true, lightText: isDark),
           const SizedBox(height: 24),
           _ProfileCard(auth: auth, isDark: isDark),
           const SizedBox(height: 16),
@@ -141,9 +133,7 @@ class _Sidebar extends ConsumerWidget {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Material(
-                    color: active
-                        ? OtterColors.sberGreen
-                        : Colors.transparent,
+                    color: active ? OtterColors.sberGreen : Colors.transparent,
                     borderRadius: BorderRadius.circular(16),
                     child: ListTile(
                       leading: Icon(
@@ -151,8 +141,8 @@ class _Sidebar extends ConsumerWidget {
                         color: active
                             ? Colors.white
                             : (isDark
-                                ? OtterColors.darkText
-                                : OtterColors.sberGray),
+                                  ? OtterColors.darkText
+                                  : OtterColors.sberGray),
                       ),
                       title: Text(
                         item.label,
@@ -160,8 +150,8 @@ class _Sidebar extends ConsumerWidget {
                           color: active
                               ? Colors.white
                               : (isDark
-                                  ? OtterColors.darkText
-                                  : OtterColors.sberGray),
+                                    ? OtterColors.darkText
+                                    : OtterColors.sberGray),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -179,7 +169,9 @@ class _Sidebar extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: isDark ? OtterColors.darkSurfaceAlt : OtterColors.grayLight,
+              color: isDark
+                  ? OtterColors.darkSurfaceAlt
+                  : OtterColors.grayLight,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
@@ -208,7 +200,10 @@ class _Sidebar extends ConsumerWidget {
             icon: const Icon(LucideIcons.plus, color: Colors.white),
             label: const Text(
               'Новая задача',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             style: FilledButton.styleFrom(
               backgroundColor: OtterColors.sberGreen,
@@ -291,13 +286,12 @@ class _ProfileCard extends StatelessWidget {
               CircleAvatar(
                 radius: 24,
                 backgroundColor: OtterColors.sberGreen,
-                backgroundImage:
-                    user?.avatar != null ? NetworkImage(user!.avatar!) : null,
+                backgroundImage: user?.avatar != null
+                    ? NetworkImage(user!.avatar!)
+                    : null,
                 child: user?.avatar == null
                     ? Text(
-                        (user?.name.isNotEmpty == true
-                                ? user!.name[0]
-                                : 'A')
+                        (user?.name.isNotEmpty == true ? user!.name[0] : 'A')
                             .toUpperCase(),
                         style: const TextStyle(
                           color: Colors.white,
@@ -317,7 +311,9 @@ class _ProfileCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
-                        color: isDark ? OtterColors.darkText : OtterColors.sberBlack,
+                        color: isDark
+                            ? OtterColors.darkText
+                            : OtterColors.sberBlack,
                       ),
                     ),
                     if (user?.email != null)

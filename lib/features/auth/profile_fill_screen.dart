@@ -36,14 +36,15 @@ class _ProfileFillScreenState extends ConsumerState<ProfileFillScreen> {
     }
     setState(() => _loading = true);
     try {
-      await ref.read(authServiceProvider).updateProfile(
+      await ref
+          .read(authServiceProvider)
+          .updateProfile(
             firstName: _firstName.text.trim(),
             lastName: _lastName.text.trim(),
           );
-      await ref.read(tokenStorageProvider).saveProfileNames(
-            _firstName.text.trim(),
-            _lastName.text.trim(),
-          );
+      await ref
+          .read(tokenStorageProvider)
+          .saveProfileNames(_firstName.text.trim(), _lastName.text.trim());
       await ref.read(authStateProvider.notifier).refreshProfile();
       if (mounted) context.go('/app');
     } catch (e) {
@@ -81,7 +82,7 @@ class _ProfileFillScreenState extends ConsumerState<ProfileFillScreen> {
             label: 'Фамилия',
             icon: LucideIcons.user,
           ),
-          const Spacer(),
+          const SizedBox(height: 32),
           PrimaryButton(
             label: 'Продолжить',
             loading: _loading,

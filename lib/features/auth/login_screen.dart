@@ -54,10 +54,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     setState(() => _loading = true);
     try {
-      await ref.read(authStateProvider.notifier).login(
-            _email.text.trim(),
-            _password.text,
-          );
+      await ref
+          .read(authStateProvider.notifier)
+          .login(_email.text.trim(), _password.text);
       await ref.read(appSettingsProvider.notifier).load();
       if (mounted) context.go('/app');
     } catch (e) {
@@ -174,11 +173,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ],
           ),
           const SizedBox(height: 24),
-          PrimaryButton(
-            label: 'Войти',
-            loading: _loading,
-            onPressed: _login,
-          ),
+          PrimaryButton(label: 'Войти', loading: _loading, onPressed: _login),
           const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: _loading ? null : _googleLogin,

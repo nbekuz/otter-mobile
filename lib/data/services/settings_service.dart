@@ -33,18 +33,18 @@ class SettingsService {
   }
 
   Map<String, dynamic> _uiToPatch(AppSettings settings) => {
-        'language': settings.language,
-        'vibration_enabled': settings.vibration,
-        'notification_sound': settings.notificationSound,
-        'completion_sound': settings.completionSound,
-        'bottom_tabs': settings.bottomNavItems,
-        'show_overdue': settings.visibleGroups.contains('overdue'),
-        'show_today': settings.visibleGroups.contains('today'),
-        'show_tomorrow': settings.visibleGroups.contains('tomorrow'),
-        'show_later': settings.visibleGroups.contains('later'),
-        'show_no_deadline': settings.visibleGroups.contains('nodate'),
-        'show_completed': settings.visibleGroups.contains('completed'),
-      };
+    'language': settings.language,
+    'vibration_enabled': settings.vibration,
+    'notification_sound': settings.notificationSound,
+    'completion_sound': settings.completionSound,
+    'bottom_tabs': settings.bottomNavItems,
+    'show_overdue': settings.visibleGroups.contains('overdue'),
+    'show_today': settings.visibleGroups.contains('today'),
+    'show_tomorrow': settings.visibleGroups.contains('tomorrow'),
+    'show_later': settings.visibleGroups.contains('later'),
+    'show_no_deadline': settings.visibleGroups.contains('nodate'),
+    'show_completed': settings.visibleGroups.contains('completed'),
+  };
 
   Future<AppSettings> fetchSettings() async {
     final data = await _client.get<Map<String, dynamic>>('settings/');

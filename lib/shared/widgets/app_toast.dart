@@ -99,12 +99,15 @@ class _TopToastState extends State<_TopToast>
     final topInset = MediaQuery.paddingOf(context).top;
     final maxWidth = MediaQuery.sizeOf(context).width - 32;
 
-    final borderColor =
-        _isSuccess ? OtterColors.sberGreen : const Color(0xFFFCA5A5);
-    final backgroundColor =
-        _isSuccess ? OtterColors.sberGreenLight : const Color(0xFFFEF2F2);
-    final foregroundColor =
-        _isSuccess ? OtterColors.sberGreen : const Color(0xFFDC2626);
+    final borderColor = _isSuccess
+        ? OtterColors.sberGreen
+        : const Color(0xFFFCA5A5);
+    final backgroundColor = _isSuccess
+        ? OtterColors.sberGreenLight
+        : const Color(0xFFFEF2F2);
+    final foregroundColor = _isSuccess
+        ? OtterColors.sberGreen
+        : const Color(0xFFDC2626);
 
     return Positioned(
       top: topInset + 16,

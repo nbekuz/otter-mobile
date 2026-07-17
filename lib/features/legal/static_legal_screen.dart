@@ -42,8 +42,12 @@ class _StaticLegalScreenState extends State<StaticLegalScreen> {
   @override
   Widget build(BuildContext context) {
     final doc = staticLegalDocumentById(widget.slug);
-    final updated = doc == null ? null : formatStaticLegalUpdatedAt(doc.updatedAt);
-    final blocks = _content == null ? const <LegalContentBlock>[] : parseLegalMarkdown(_content!);
+    final updated = doc == null
+        ? null
+        : formatStaticLegalUpdatedAt(doc.updatedAt);
+    final blocks = _content == null
+        ? const <LegalContentBlock>[]
+        : parseLegalMarkdown(_content!);
 
     return Scaffold(
       backgroundColor: OtterColors.grayLight,
@@ -56,7 +60,13 @@ class _StaticLegalScreenState extends State<StaticLegalScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    onPressed: () => context.pop(),
+                    onPressed: () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/');
+                      }
+                    },
                     icon: const Icon(LucideIcons.chevronLeft),
                     style: IconButton.styleFrom(
                       backgroundColor: OtterColors.grayLight,
@@ -86,53 +96,59 @@ class _StaticLegalScreenState extends State<StaticLegalScreen> {
                         ),
                       )
                     : _content == null
-                        ? const Center(child: CircularProgressIndicator())
-                        : ListView(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                          children: [
-                            if (updated != null)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: Text(
-                                  'Обновлено: $updated',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: OtterColors.sberGray,
-                                  ),
-                                ),
-                              ),
-                            Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: blocks.map((block) {
-                                    return Padding(
-                                      padding: const EdgeInsets.only(bottom: 10),
-                                      child: Text(
-                                        block.text,
-                                        style: TextStyle(
-                                          fontSize: block.kind == LegalBlockKind.heading
-                                              ? 18
-                                              : block.kind == LegalBlockKind.subheading
-                                                  ? 16
-                                                  : 14,
-                                          height: 1.55,
-                                          fontWeight: block.kind == LegalBlockKind.paragraph
-                                              ? FontWeight.normal
-                                              : FontWeight.w600,
-                                          color: block.kind == LegalBlockKind.paragraph
-                                              ? OtterColors.sberGray
-                                              : OtterColors.sberBlack,
-                                        ),
-                                      ),
-                                    );
-                                  }).toList(),
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        children: [
+                          if (updated != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Text(
+                                'Обновлено: $updated',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: OtterColors.sberGray,
                                 ),
                               ),
                             ),
-                          ],
-                        ),
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: blocks.map((block) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: Text(
+                                      block.text,
+                                      style: TextStyle(
+                                        fontSize:
+                                            block.kind == LegalBlockKind.heading
+                                            ? 18
+                                            : block.kind ==
+                                                  LegalBlockKind.subheading
+                                            ? 16
+                                            : 14,
+                                        height: 1.55,
+                                        fontWeight:
+                                            block.kind ==
+                                                LegalBlockKind.paragraph
+                                            ? FontWeight.normal
+                                            : FontWeight.w600,
+                                        color:
+                                            block.kind ==
+                                                LegalBlockKind.paragraph
+                                            ? OtterColors.sberGray
+                                            : OtterColors.sberBlack,
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
               ),
             ),
           ],

@@ -17,7 +17,7 @@ class SoundsService {
   }
 
   Future<({List<ApiSound> workBackground, List<ApiSound> timerEnd})>
-      fetchAll() async {
+  fetchAll() async {
     final results = await Future.wait([
       fetchByCategory('work_background'),
       fetchByCategory('timer_end'),

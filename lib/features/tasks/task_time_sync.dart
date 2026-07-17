@@ -23,7 +23,8 @@ class TaskTimeSync {
     if (_syncing) return;
     _syncing = true;
     if (start != null && start.isNotEmpty) {
-      final end = (currentEnd == null ||
+      final end =
+          (currentEnd == null ||
               currentEnd.isEmpty ||
               currentEnd == currentDueTime)
           ? addMinutesToTime(start, 60)

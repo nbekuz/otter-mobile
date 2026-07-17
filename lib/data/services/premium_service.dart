@@ -7,16 +7,16 @@ class PremiumService {
 
   Future<List<ApiTariff>> fetchTariffs() async {
     final data = await _client.get<List<dynamic>>('premium/tariffs/');
-    final list = data
-        .map((e) => ApiTariff.fromJson(e as Map<String, dynamic>))
-        .toList()
-      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    final list =
+        data.map((e) => ApiTariff.fromJson(e as Map<String, dynamic>)).toList()
+          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
     return list;
   }
 
   Future<ApiSubscription> fetchSubscription() async {
-    final data =
-        await _client.get<Map<String, dynamic>>('premium/subscription/');
+    final data = await _client.get<Map<String, dynamic>>(
+      'premium/subscription/',
+    );
     return ApiSubscription.fromJson(data);
   }
 

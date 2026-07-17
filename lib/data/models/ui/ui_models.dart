@@ -11,32 +11,32 @@ enum MatrixBlock {
 
 extension MatrixBlockX on MatrixBlock {
   String get apiValue => switch (this) {
-        MatrixBlock.urgentImportant => 'urgent_important',
-        MatrixBlock.notUrgentImportant => 'not_urgent_important',
-        MatrixBlock.urgentNotImportant => 'urgent_not_important',
-        MatrixBlock.notUrgentNotImportant => 'not_urgent_not_important',
-      };
+    MatrixBlock.urgentImportant => 'urgent_important',
+    MatrixBlock.notUrgentImportant => 'not_urgent_important',
+    MatrixBlock.urgentNotImportant => 'urgent_not_important',
+    MatrixBlock.notUrgentNotImportant => 'not_urgent_not_important',
+  };
 
   String get id => switch (this) {
-        MatrixBlock.urgentImportant => 'urgent-important',
-        MatrixBlock.notUrgentImportant => 'not-urgent-important',
-        MatrixBlock.urgentNotImportant => 'urgent-not-important',
-        MatrixBlock.notUrgentNotImportant => 'not-urgent-not-important',
-      };
+    MatrixBlock.urgentImportant => 'urgent-important',
+    MatrixBlock.notUrgentImportant => 'not-urgent-important',
+    MatrixBlock.urgentNotImportant => 'urgent-not-important',
+    MatrixBlock.notUrgentNotImportant => 'not-urgent-not-important',
+  };
 
   static MatrixBlock fromApi(String block) => switch (block) {
-        'urgent_important' => MatrixBlock.urgentImportant,
-        'not_urgent_important' => MatrixBlock.notUrgentImportant,
-        'urgent_not_important' => MatrixBlock.urgentNotImportant,
-        _ => MatrixBlock.notUrgentNotImportant,
-      };
+    'urgent_important' => MatrixBlock.urgentImportant,
+    'not_urgent_important' => MatrixBlock.notUrgentImportant,
+    'urgent_not_important' => MatrixBlock.urgentNotImportant,
+    _ => MatrixBlock.notUrgentNotImportant,
+  };
 
   static MatrixBlock fromId(String id) => switch (id) {
-        'urgent-important' => MatrixBlock.urgentImportant,
-        'not-urgent-important' => MatrixBlock.notUrgentImportant,
-        'urgent-not-important' => MatrixBlock.urgentNotImportant,
-        _ => MatrixBlock.notUrgentNotImportant,
-      };
+    'urgent-important' => MatrixBlock.urgentImportant,
+    'not-urgent-important' => MatrixBlock.notUrgentImportant,
+    'urgent-not-important' => MatrixBlock.urgentNotImportant,
+    _ => MatrixBlock.notUrgentNotImportant,
+  };
 }
 
 class TaskDuration {
@@ -93,23 +93,22 @@ class Task {
     String? imageUrl,
     MatrixBlock? matrixBlock,
     String? createdAt,
-  }) =>
-      Task(
-        id: id ?? this.id,
-        title: title ?? this.title,
-        description: description ?? this.description,
-        dueDate: dueDate ?? this.dueDate,
-        dueTime: dueTime ?? this.dueTime,
-        duration: duration ?? this.duration,
-        priority: priority ?? this.priority,
-        completed: completed ?? this.completed,
-        completedAt: completedAt ?? this.completedAt,
-        notification: notification ?? this.notification,
-        repeat: repeat ?? this.repeat,
-        imageUrl: imageUrl ?? this.imageUrl,
-        matrixBlock: matrixBlock ?? this.matrixBlock,
-        createdAt: createdAt ?? this.createdAt,
-      );
+  }) => Task(
+    id: id ?? this.id,
+    title: title ?? this.title,
+    description: description ?? this.description,
+    dueDate: dueDate ?? this.dueDate,
+    dueTime: dueTime ?? this.dueTime,
+    duration: duration ?? this.duration,
+    priority: priority ?? this.priority,
+    completed: completed ?? this.completed,
+    completedAt: completedAt ?? this.completedAt,
+    notification: notification ?? this.notification,
+    repeat: repeat ?? this.repeat,
+    imageUrl: imageUrl ?? this.imageUrl,
+    matrixBlock: matrixBlock ?? this.matrixBlock,
+    createdAt: createdAt ?? this.createdAt,
+  );
 }
 
 class OtterUser {
@@ -152,27 +151,15 @@ class AppSettings {
   final bool isPremium;
 
   static AppSettings defaults() => AppSettings(
-        language: 'ru',
-        theme: 'light',
-        visibleGroups: [
-          'overdue',
-          'today',
-          'tomorrow',
-          'later',
-          'nodate',
-        ],
-        notifications: true,
-        vibration: true,
-        notificationSound: 'default',
-        completionSound: 'default',
-        bottomNavItems: [
-          'tasks',
-          'calendar',
-          'matrix',
-          'pomodoro',
-          'settings',
-        ],
-      );
+    language: 'ru',
+    theme: 'light',
+    visibleGroups: ['overdue', 'today', 'tomorrow', 'later', 'nodate'],
+    notifications: true,
+    vibration: true,
+    notificationSound: 'default',
+    completionSound: 'default',
+    bottomNavItems: ['tasks', 'calendar', 'matrix', 'pomodoro', 'settings'],
+  );
 
   AppSettings copyWith({
     String? language,
@@ -184,18 +171,17 @@ class AppSettings {
     String? completionSound,
     List<String>? bottomNavItems,
     bool? isPremium,
-  }) =>
-      AppSettings(
-        language: language ?? this.language,
-        theme: theme ?? this.theme,
-        visibleGroups: visibleGroups ?? this.visibleGroups,
-        notifications: notifications ?? this.notifications,
-        vibration: vibration ?? this.vibration,
-        notificationSound: notificationSound ?? this.notificationSound,
-        completionSound: completionSound ?? this.completionSound,
-        bottomNavItems: bottomNavItems ?? this.bottomNavItems,
-        isPremium: isPremium ?? this.isPremium,
-      );
+  }) => AppSettings(
+    language: language ?? this.language,
+    theme: theme ?? this.theme,
+    visibleGroups: visibleGroups ?? this.visibleGroups,
+    notifications: notifications ?? this.notifications,
+    vibration: vibration ?? this.vibration,
+    notificationSound: notificationSound ?? this.notificationSound,
+    completionSound: completionSound ?? this.completionSound,
+    bottomNavItems: bottomNavItems ?? this.bottomNavItems,
+    isPremium: isPremium ?? this.isPremium,
+  );
 }
 
 class PomodoroSettings {
@@ -218,40 +204,40 @@ class PomodoroSettings {
   final bool showOnLockScreen;
 
   static PomodoroSettings defaults() => PomodoroSettings(
-        duration: 25,
-        shortBreak: 5,
-        longBreak: 15,
-        sessionsUntilLong: 4,
-        sound: 'default',
-        workingSound: 'default',
-        showOnLockScreen: false,
-      );
+    duration: 25,
+    shortBreak: 5,
+    longBreak: 15,
+    sessionsUntilLong: 4,
+    sound: 'default',
+    workingSound: 'default',
+    showOnLockScreen: false,
+  );
 }
 
 enum TaskGroupKey { overdue, today, tomorrow, later, nodate, completed }
 
 extension TaskGroupKeyX on TaskGroupKey {
   String get apiKey => switch (this) {
-        TaskGroupKey.nodate => 'no_deadline',
-        _ => name,
-      };
+    TaskGroupKey.nodate => 'no_deadline',
+    _ => name,
+  };
 
   static TaskGroupKey fromApi(String key) => switch (key) {
-        'no_deadline' => TaskGroupKey.nodate,
-        'overdue' => TaskGroupKey.overdue,
-        'today' => TaskGroupKey.today,
-        'tomorrow' => TaskGroupKey.tomorrow,
-        'later' => TaskGroupKey.later,
-        'completed' => TaskGroupKey.completed,
-        _ => TaskGroupKey.nodate,
-      };
+    'no_deadline' => TaskGroupKey.nodate,
+    'overdue' => TaskGroupKey.overdue,
+    'today' => TaskGroupKey.today,
+    'tomorrow' => TaskGroupKey.tomorrow,
+    'later' => TaskGroupKey.later,
+    'completed' => TaskGroupKey.completed,
+    _ => TaskGroupKey.nodate,
+  };
 
   String get titleRu => switch (this) {
-        TaskGroupKey.overdue => 'Просрочено',
-        TaskGroupKey.today => 'Сегодня',
-        TaskGroupKey.tomorrow => 'Завтра',
-        TaskGroupKey.later => 'Позже',
-        TaskGroupKey.nodate => 'Без срока',
-        TaskGroupKey.completed => 'Выполнено',
-      };
+    TaskGroupKey.overdue => 'Просрочено',
+    TaskGroupKey.today => 'Сегодня',
+    TaskGroupKey.tomorrow => 'Завтра',
+    TaskGroupKey.later => 'Позже',
+    TaskGroupKey.nodate => 'Без срока',
+    TaskGroupKey.completed => 'Выполнено',
+  };
 }

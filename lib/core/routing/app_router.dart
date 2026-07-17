@@ -21,13 +21,20 @@ import '../../features/legal/static_legal_screen.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
 
-GoRouter createAppRouter(Ref ref, AuthState auth) {
+class _RouterRefresh extends ChangeNotifier {
+  void refresh() => notifyListeners();
+}
+
+GoRouter createAppRouter(Ref ref, Listenable refreshListenable) {
   return GoRouter(
     navigatorKey: _rootKey,
     initialLocation: '/',
+    refreshListenable: refreshListenable,
     redirect: (context, state) {
+      final auth = ref.read(authStateProvider);
       final loc = state.matchedLocation;
-      final isAuthRoute = loc == '/' ||
+      final isAuthRoute =
+          loc == '/' ||
           loc == '/login' ||
           loc == '/register' ||
           loc.startsWith('/profile-fill');
@@ -53,25 +60,24 @@ GoRouter createAppRouter(Ref ref, AuthState auth) {
       return null;
     },
     routes: [
-      GoRoute(path: '/', builder: (_, __) => const LandingScreen()),
-      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
-      GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
+      GoRoute(path: '/', builder: (_, _) => const LandingScreen()),
+      GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+      GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
       GoRoute(
         path: '/profile-fill',
-        builder: (_, __) => const ProfileFillScreen(),
+        builder: (_, _) => const ProfileFillScreen(),
       ),
       GoRoute(
         path: '/legal/:slug',
-        builder: (context, state) => StaticLegalScreen(
-          slug: state.pathParameters['slug']!,
-        ),
+        builder: (context, state) =>
+            StaticLegalScreen(slug: state.pathParameters['slug']!),
       ),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
           GoRoute(
             path: '/app',
-            builder: (_, __) => const TasksScreen(),
+            builder: (_, _) => const TasksScreen(),
             routes: [
               GoRoute(
                 path: 'new-task',
@@ -82,23 +88,19 @@ GoRouter createAppRouter(Ref ref, AuthState auth) {
                   initialDurationStart:
                       state.uri.queryParameters['durationStart'],
                   initialDurationEnd: state.uri.queryParameters['durationEnd'],
-                  initialMatrixBlock:
-                      state.uri.queryParameters['matrixBlock'],
+                  initialMatrixBlock: state.uri.queryParameters['matrixBlock'],
                   initialPriority: state.uri.queryParameters['priority'],
                   returnTo: state.uri.queryParameters['returnTo'],
                 ),
               ),
               GoRoute(
                 path: 'calendar',
-                builder: (_, __) => const CalendarScreen(),
+                builder: (_, _) => const CalendarScreen(),
               ),
-              GoRoute(
-                path: 'matrix',
-                builder: (_, __) => const MatrixScreen(),
-              ),
+              GoRoute(path: 'matrix', builder: (_, _) => const MatrixScreen()),
               GoRoute(
                 path: 'pomodoro',
-                builder: (_, __) => const PomodoroScreen(),
+                builder: (_, _) => const PomodoroScreen(),
               ),
               GoRoute(
                 path: 'settings',
@@ -113,17 +115,11 @@ GoRouter createAppRouter(Ref ref, AuthState auth) {
                   );
                 },
               ),
-              GoRoute(
-                path: 'faq',
-                builder: (_, __) => const FaqScreen(),
-              ),
-              GoRoute(
-                path: 'legal',
-                builder: (_, __) => const LegalScreen(),
-              ),
+              GoRoute(path: 'faq', builder: (_, _) => const FaqScreen()),
+              GoRoute(path: 'legal', builder: (_, _) => const LegalScreen()),
               GoRoute(
                 path: 'profile',
-                builder: (_, __) => const ProfileScreen(),
+                builder: (_, _) => const ProfileScreen(),
               ),
             ],
           ),
@@ -134,6 +130,17 @@ GoRouter createAppRouter(Ref ref, AuthState auth) {
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final auth = ref.watch(authStateProvider);
-  return createAppRouter(ref, auth);
+  final refresh = _RouterRefresh();
+  final router = createAppRouter(ref, refresh);
+
+  ref.listen<AuthState>(
+    authStateProvider,
+    (previous, next) => refresh.refresh(),
+  );
+  ref.onDispose(() {
+    router.dispose();
+    refresh.dispose();
+  });
+
+  return router;
 });

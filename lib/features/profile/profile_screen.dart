@@ -48,7 +48,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _saveProfile() async {
     setState(() => _loading = true);
     try {
-      await ref.read(authServiceProvider).updateProfile(
+      await ref
+          .read(authServiceProvider)
+          .updateProfile(
             firstName: _firstName.text.trim(),
             lastName: _lastName.text.trim(),
           );
@@ -69,7 +71,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (file == null) return;
     setState(() => _loading = true);
     try {
-      await ref.read(authServiceProvider).updateProfile(
+      await ref
+          .read(authServiceProvider)
+          .updateProfile(
             firstName: _firstName.text.trim(),
             lastName: _lastName.text.trim(),
             avatarPath: file.path,
@@ -111,65 +115,69 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           padding: const EdgeInsets.all(16),
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           children: [
-          Center(
-            child: GestureDetector(
-              onTap: _pickAvatar,
-              child: CircleAvatar(
-                radius: 48,
-                backgroundColor: OtterColors.sberGreen,
-                backgroundImage:
-                    user?.avatar != null ? NetworkImage(user!.avatar!) : null,
-                child: user?.avatar == null
-                    ? Text(
-                        (user?.name.isNotEmpty == true
-                                ? user!.name[0]
-                                : 'A')
-                            .toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 32,
-                          color: Colors.white,
-                        ),
-                      )
-                    : null,
+            Center(
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: _pickAvatar,
+                  child: CircleAvatar(
+                    radius: 48,
+                    backgroundColor: OtterColors.sberGreen,
+                    backgroundImage: user?.avatar != null
+                        ? NetworkImage(user!.avatar!)
+                        : null,
+                    child: user?.avatar == null
+                        ? Text(
+                            (user?.name.isNotEmpty == true
+                                    ? user!.name[0]
+                                    : 'A')
+                                .toUpperCase(),
+                            style: const TextStyle(
+                              fontSize: 32,
+                              color: Colors.white,
+                            ),
+                          )
+                        : null,
+                  ),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Center(
-            child: TextButton.icon(
-              onPressed: _pickAvatar,
-              icon: const Icon(LucideIcons.camera, size: 18),
-              label: const Text('Изменить фото'),
+            const SizedBox(height: 8),
+            Center(
+              child: TextButton.icon(
+                onPressed: _pickAvatar,
+                icon: const Icon(LucideIcons.camera, size: 18),
+                label: const Text('Изменить фото'),
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
-          InputField(controller: _firstName, label: 'Имя'),
-          const SizedBox(height: 16),
-          InputField(controller: _lastName, label: 'Фамилия'),
-          const SizedBox(height: 24),
-          PrimaryButton(
-            label: 'Сохранить',
-            loading: _loading,
-            onPressed: _saveProfile,
-          ),
-          const SizedBox(height: 32),
-          const Text(
-            'Новый пароль',
-            style: TextStyle(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          InputField(
-            controller: _newPassword,
-            label: 'Пароль',
-            obscure: true,
-          ),
-          const SizedBox(height: 12),
-          PrimaryButton(
-            label: 'Сменить пароль',
-            outline: true,
-            onPressed: _changePassword,
-          ),
-        ],
+            const SizedBox(height: 24),
+            InputField(controller: _firstName, label: 'Имя'),
+            const SizedBox(height: 16),
+            InputField(controller: _lastName, label: 'Фамилия'),
+            const SizedBox(height: 24),
+            PrimaryButton(
+              label: 'Сохранить',
+              loading: _loading,
+              onPressed: _saveProfile,
+            ),
+            const SizedBox(height: 32),
+            const Text(
+              'Новый пароль',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            InputField(
+              controller: _newPassword,
+              label: 'Пароль',
+              obscure: true,
+            ),
+            const SizedBox(height: 12),
+            PrimaryButton(
+              label: 'Сменить пароль',
+              outline: true,
+              onPressed: _changePassword,
+            ),
+          ],
         ),
       ),
     );

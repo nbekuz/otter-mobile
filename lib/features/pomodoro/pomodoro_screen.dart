@@ -1,6 +1,5 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -20,8 +19,6 @@ class PomodoroScreen extends ConsumerStatefulWidget {
 }
 
 class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
-  Timer? _timer;
-
   @override
   void initState() {
     super.initState();
@@ -31,23 +28,6 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
         await ref.read(tasksStateProvider.notifier).loadGrouped();
       }
     });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  void _ensureTicker(String timerState) {
-    if (timerState == 'running') {
-      _timer?.cancel();
-      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        ref.read(pomodoroStateProvider.notifier).tick();
-      });
-    } else {
-      _timer?.cancel();
-    }
   }
 
   String _formatTime(int seconds) {
@@ -73,30 +53,24 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
   }
 
   Color _priorityColor(Priority priority) => switch (priority) {
-        Priority.high => const Color(0xFFFF3B30),
-        Priority.medium => const Color(0xFFFF9500),
-        Priority.low => const Color(0xFF34C759),
-        Priority.none => const Color(0xFF8E8E93),
-      };
+    Priority.high => const Color(0xFFFF3B30),
+    Priority.medium => const Color(0xFFFF9500),
+    Priority.low => const Color(0xFF34C759),
+    Priority.none => const Color(0xFF8E8E93),
+  };
 
   Future<void> _toggleTimer() async {
     final notifier = ref.read(pomodoroStateProvider.notifier);
     final current = ref.read(pomodoroStateProvider);
     if (current.timerState == 'running') {
       await notifier.pause();
-      _ensureTicker('paused');
     } else {
       await notifier.start();
-      _ensureTicker('running');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(pomodoroStateProvider.select((s) => s.timerState), (prev, next) {
-      _ensureTicker(next);
-    });
-
     final state = ref.watch(pomodoroStateProvider);
     final selectedTask = _selectedTask(state);
     final progress = state.progress.clamp(0.0, 1.0);
@@ -147,7 +121,6 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                                 formatTime: _formatTime,
                                 onToggle: _toggleTimer,
                                 onStop: () async {
-                                  _timer?.cancel();
                                   await ref
                                       .read(pomodoroStateProvider.notifier)
                                       .stop();
@@ -186,7 +159,6 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                               formatTime: _formatTime,
                               onToggle: _toggleTimer,
                               onStop: () async {
-                                _timer?.cancel();
                                 await ref
                                     .read(pomodoroStateProvider.notifier)
                                     .stop();
@@ -213,102 +185,96 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
             final query = searchController.text.toLowerCase();
             final tasks = _activeTasks()
                 .where(
-                  (t) =>
-                      query.isEmpty ||
-                      t.title.toLowerCase().contains(query),
+                  (t) => query.isEmpty || t.title.toLowerCase().contains(query),
                 )
                 .toList();
-            final selectedId =
-                ref.read(pomodoroStateProvider).selectedTaskId;
+            final selectedId = ref.read(pomodoroStateProvider).selectedTaskId;
 
-            return KeyboardDismissScope(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: 16,
-                  right: 16,
-                  top: 16,
-                  bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text(
-                        'Выбрать задачу',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Выбрать задачу',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: searchController,
+                      onTapOutside: dismissKeyboardOnTapOutside,
+                      onEditingComplete: KeyboardDismisser.dismiss,
+                      decoration: InputDecoration(
+                        hintText: 'Поиск...',
+                        prefixIcon: const Icon(LucideIcons.search, size: 18),
+                        filled: true,
+                        fillColor: OtterColors.grayLight,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: searchController,
-                        onTapOutside: dismissKeyboardOnTapOutside,
-                        onEditingComplete: KeyboardDismisser.dismiss,
-                        decoration: InputDecoration(
-                          hintText: 'Поиск...',
-                          prefixIcon:
-                              const Icon(LucideIcons.search, size: 18),
-                          filled: true,
-                          fillColor: OtterColors.grayLight,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide.none,
+                      onChanged: (_) => setModalState(() {}),
+                    ),
+                    const SizedBox(height: 8),
+                    ListTile(
+                      leading: const Icon(LucideIcons.x, size: 18),
+                      title: const Text('Без задачи'),
+                      onTap: () {
+                        ref
+                            .read(pomodoroStateProvider.notifier)
+                            .selectTask(null);
+                        Navigator.pop(context);
+                      },
+                    ),
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: tasks.length,
+                      itemBuilder: (_, i) {
+                        final task = tasks[i];
+                        final selected = selectedId == task.id;
+                        return ListTile(
+                          leading: Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: _priorityColor(task.priority),
+                              shape: BoxShape.circle,
+                            ),
                           ),
-                        ),
-                        onChanged: (_) => setModalState(() {}),
-                      ),
-                      const SizedBox(height: 8),
-                      ListTile(
-                        leading: const Icon(LucideIcons.x, size: 18),
-                        title: const Text('Без задачи'),
-                        onTap: () {
-                          ref
-                              .read(pomodoroStateProvider.notifier)
-                              .selectTask(null);
-                          Navigator.pop(context);
-                        },
-                      ),
-                      ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: tasks.length,
-                        itemBuilder: (_, i) {
-                          final task = tasks[i];
-                          final selected = selectedId == task.id;
-                          return ListTile(
-                            leading: Container(
-                              width: 12,
-                              height: 12,
-                              decoration: BoxDecoration(
-                                color: _priorityColor(task.priority),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            title: Text(
-                              task.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: selected
-                                ? const Icon(
-                                    LucideIcons.check,
-                                    color: OtterColors.sberGreen,
-                                  )
-                                : null,
-                            selected: selected,
-                            onTap: () {
-                              ref
-                                  .read(pomodoroStateProvider.notifier)
-                                  .selectTask(task.id);
-                              Navigator.pop(context);
-                            },
-                          );
-                        },
-                      ),
-                    ],
-                  ),
+                          title: Text(
+                            task.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: selected
+                              ? const Icon(
+                                  LucideIcons.check,
+                                  color: OtterColors.sberGreen,
+                                )
+                              : null,
+                          selected: selected,
+                          onTap: () {
+                            ref
+                                .read(pomodoroStateProvider.notifier)
+                                .selectTask(task.id);
+                            Navigator.pop(context);
+                          },
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
             );
@@ -319,7 +285,10 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
     searchController.dispose();
   }
 
-  Future<void> _openSettings(BuildContext context, PomodoroUiState state) async {
+  Future<void> _openSettings(
+    BuildContext context,
+    PomodoroUiState state,
+  ) async {
     await showAppBottomSheet<void>(
       context: context,
       builder: (ctx) {
@@ -347,8 +316,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                     ),
                     const SizedBox(height: 20),
                     _SettingsSection(
-                      title:
-                          'Длительность: ${current.settings.duration} мин',
+                      title: 'Длительность: ${current.settings.duration} мин',
                       child: Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -389,22 +357,23 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                         }).toList(),
                       ),
                     ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Показывать при блокировке'),
-                      subtitle: const Text(
-                        'На экране блокировки смартфона',
-                        style: TextStyle(fontSize: 12),
+                    if (defaultTargetPlatform != TargetPlatform.windows)
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Показывать при блокировке'),
+                        subtitle: const Text(
+                          'На экране блокировки смартфона',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        value: current.settings.showOnLockScreen,
+                        activeThumbColor: OtterColors.sberGreen,
+                        onChanged: (v) async {
+                          await ref
+                              .read(pomodoroStateProvider.notifier)
+                              .updateSettings(showOnLockScreen: v);
+                          setModalState(() {});
+                        },
                       ),
-                      value: current.settings.showOnLockScreen,
-                      activeThumbColor: OtterColors.sberGreen,
-                      onChanged: (v) async {
-                        await ref
-                            .read(pomodoroStateProvider.notifier)
-                            .updateSettings(showOnLockScreen: v);
-                        setModalState(() {});
-                      },
-                    ),
                     const SizedBox(height: 8),
                     const Text(
                       'Звук завершения',
@@ -487,28 +456,28 @@ class _PomodoroTimerCard extends StatelessWidget {
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              state.settings.sessionsUntilLong,
-              (i) {
-                final filled = state.sessionCount > 0 &&
-                    i < state.sessionCount % state.settings.sessionsUntilLong;
-                return Container(
-                  width: 32,
-                  height: 8,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    color: filled ? OtterColors.sberGreen : OtterColors.grayMid,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                );
-              },
-            ),
+            children: List.generate(state.settings.sessionsUntilLong, (i) {
+              final filled =
+                  state.sessionCount > 0 &&
+                  i < state.sessionCount % state.settings.sessionsUntilLong;
+              return Container(
+                width: 32,
+                height: 8,
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: filled ? OtterColors.sberGreen : OtterColors.grayMid,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              );
+            }),
           ),
           const SizedBox(height: 24),
           LayoutBuilder(
             builder: (context, constraints) {
-              final timerSize =
-                  (constraints.maxWidth * 0.65).clamp(180.0, 280.0);
+              final timerSize = (constraints.maxWidth * 0.65).clamp(
+                180.0,
+                280.0,
+              );
               return SizedBox(
                 width: timerSize,
                 height: timerSize,
@@ -540,8 +509,8 @@ class _PomodoroTimerCard extends StatelessWidget {
                           state.timerState == 'paused'
                               ? 'На паузе'
                               : state.timerState == 'running'
-                                  ? 'Фокус'
-                                  : 'Готов',
+                              ? 'Фокус'
+                              : 'Готов',
                           style: const TextStyle(
                             fontSize: 14,
                             color: OtterColors.sberGray,
@@ -632,9 +601,7 @@ class _TaskSoundRow extends StatelessWidget {
                           selectedTaskTitle ?? 'Выбрать задачу...',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: const TextStyle(fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
@@ -699,8 +666,9 @@ class _TaskSoundRow extends StatelessWidget {
                             sound.emoji,
                             style: TextStyle(
                               fontSize: 16,
-                              color:
-                                  selected ? Colors.white : OtterColors.sberGray,
+                              color: selected
+                                  ? Colors.white
+                                  : OtterColors.sberGray,
                             ),
                           ),
                         ),
@@ -806,10 +774,7 @@ class _CircleControl extends StatelessWidget {
 }
 
 class _MainControl extends StatelessWidget {
-  const _MainControl({
-    required this.isRunning,
-    required this.onPressed,
-  });
+  const _MainControl({required this.isRunning, required this.onPressed});
 
   final bool isRunning;
   final VoidCallback onPressed;
@@ -820,8 +785,9 @@ class _MainControl extends StatelessWidget {
       onPressed: onPressed,
       icon: Icon(isRunning ? LucideIcons.pause : LucideIcons.play),
       style: IconButton.styleFrom(
-        backgroundColor:
-            isRunning ? OtterColors.sberBlue : OtterColors.sberGreen,
+        backgroundColor: isRunning
+            ? OtterColors.sberBlue
+            : OtterColors.sberGreen,
         foregroundColor: Colors.white,
         minimumSize: const Size(80, 80),
         iconSize: 32,

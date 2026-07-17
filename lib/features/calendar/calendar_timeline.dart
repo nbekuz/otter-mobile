@@ -95,7 +95,8 @@ Map<String, ({int col, int cols})> _assignOverlapLayout(
     }
     final cols = maxConc < 1 ? 1 : maxConc;
 
-    final sortedIdx = [...comp]..sort((ai, bi) {
+    final sortedIdx = [...comp]
+      ..sort((ai, bi) {
         final a = segments[ai];
         final b = segments[bi];
         if (a.rawStart != b.rawStart) {
@@ -125,14 +126,17 @@ List<CalendarTimelineTask> buildDayTimelineTasks(
   List<Task> tasks, {
   CalendarDragPreview? dragPreview,
 }) {
-  final base = <({
-    Task task,
-    int rawStart,
-    int rawEnd,
-    double topPx,
-    double heightPx,
-    String labelTime,
-  })>[];
+  final base =
+      <
+        ({
+          Task task,
+          int rawStart,
+          int rawEnd,
+          double topPx,
+          double heightPx,
+          String labelTime,
+        })
+      >[];
 
   for (final task in tasks) {
     final scheduleStart = taskScheduleStart(
@@ -149,10 +153,13 @@ List<CalendarTimelineTask> buildDayTimelineTasks(
             durationStart: task.duration?.start,
             durationEnd: task.duration?.end,
           );
-    final endMinutes =
-        (startMinutes + durationMinutes).clamp(0, mainEndMinutes);
-    final clippedStart =
-        startMinutes < mainStartMinutes ? mainStartMinutes : startMinutes;
+    final endMinutes = (startMinutes + durationMinutes).clamp(
+      0,
+      mainEndMinutes,
+    );
+    final clippedStart = startMinutes < mainStartMinutes
+        ? mainStartMinutes
+        : startMinutes;
     final clippedDuration = (endMinutes - clippedStart).clamp(15, 24 * 60);
 
     if (clippedStart >= mainEndMinutes) continue;
@@ -160,8 +167,8 @@ List<CalendarTimelineTask> buildDayTimelineTasks(
     final labelTime = preview != null
         ? '${formatMinutesToTime(preview.start)} – ${formatMinutesToTime(preview.end)}'
         : task.duration != null
-            ? '${task.duration!.start} – ${task.duration!.end}'
-            : scheduleStart;
+        ? '${task.duration!.start} – ${task.duration!.end}'
+        : scheduleStart;
 
     base.add((
       task: task,

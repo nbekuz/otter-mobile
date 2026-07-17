@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/theme/otter_colors.dart';
+import 'keyboard_dismisser.dart';
 
 class OtpCodeInput extends StatefulWidget {
   const OtpCodeInput({
@@ -93,51 +94,57 @@ class OtpCodeInputState extends State<OtpCodeInput> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        GestureDetector(
-          onTap: widget.enabled ? () => _focusNode.requestFocus() : null,
-          behavior: HitTestBehavior.opaque,
-          child: Row(
-            children: List.generate(widget.length, (index) {
-              final filled = index < code.length;
-              final active = _focusNode.hasFocus && index == _activeIndex;
-              final char = filled ? code[index] : '';
+        MouseRegion(
+          cursor: widget.enabled
+              ? SystemMouseCursors.text
+              : SystemMouseCursors.forbidden,
+          child: GestureDetector(
+            onTap: widget.enabled ? () => _focusNode.requestFocus() : null,
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: List.generate(widget.length, (index) {
+                final filled = index < code.length;
+                final active = _focusNode.hasFocus && index == _activeIndex;
+                final char = filled ? code[index] : '';
 
-              return Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    left: index == 0 ? 0 : 4,
-                    right: index == widget.length - 1 ? 0 : 4,
-                  ),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    height: 52,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: OtterColors.grayLight,
-                      borderRadius:
-                          BorderRadius.circular(OtterColors.radiusMd),
-                      border: Border.all(
-                        color: hasError
-                            ? Colors.red.shade300
-                            : active
-                                ? OtterColors.sberGreen
-                                : OtterColors.grayMid,
-                        width: active ? 2 : 1,
-                      ),
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      left: index == 0 ? 0 : 4,
+                      right: index == widget.length - 1 ? 0 : 4,
                     ),
-                    child: active && !filled
-                        ? _BlinkingCursor(color: OtterColors.sberGreen)
-                        : Text(
-                            char,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w600,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      height: 52,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: OtterColors.grayLight,
+                        borderRadius: BorderRadius.circular(
+                          OtterColors.radiusMd,
+                        ),
+                        border: Border.all(
+                          color: hasError
+                              ? Colors.red.shade300
+                              : active
+                              ? OtterColors.sberGreen
+                              : OtterColors.grayMid,
+                          width: active ? 2 : 1,
+                        ),
+                      ),
+                      child: active && !filled
+                          ? _BlinkingCursor(color: OtterColors.sberGreen)
+                          : Text(
+                              char,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
+                    ),
                   ),
-                ),
-              );
-            }),
+                );
+              }),
+            ),
           ),
         ),
         SizedBox(
@@ -145,19 +152,21 @@ class OtpCodeInputState extends State<OtpCodeInput> {
           child: Opacity(
             opacity: 0,
             child: TextField(
-            controller: _controller,
-            focusNode: _focusNode,
-            enabled: widget.enabled,
-            keyboardType: TextInputType.number,
-            textInputAction: TextInputAction.done,
-            autofillHints: const [AutofillHints.oneTimeCode],
-            enableSuggestions: false,
-            autocorrect: false,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(widget.length),
-            ],
-            onChanged: _onChanged,
+              controller: _controller,
+              focusNode: _focusNode,
+              enabled: widget.enabled,
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
+              onTapOutside: dismissKeyboardOnTapOutside,
+              onEditingComplete: KeyboardDismisser.dismiss,
+              autofillHints: const [AutofillHints.oneTimeCode],
+              enableSuggestions: false,
+              autocorrect: false,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(widget.length),
+              ],
+              onChanged: _onChanged,
             ),
           ),
         ),
@@ -205,11 +214,7 @@ class _BlinkingCursorState extends State<_BlinkingCursor>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _controller,
-      child: Container(
-        width: 2,
-        height: 24,
-        color: widget.color,
-      ),
+      child: Container(width: 2, height: 24, color: widget.color),
     );
   }
 }

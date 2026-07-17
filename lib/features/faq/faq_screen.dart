@@ -49,7 +49,13 @@ class _FaqScreenState extends ConsumerState<FaqScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    onPressed: () => context.pop(),
+                    onPressed: () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/app');
+                      }
+                    },
                     icon: const Icon(LucideIcons.chevronLeft),
                     style: IconButton.styleFrom(
                       backgroundColor: isDark
@@ -63,7 +69,9 @@ class _FaqScreenState extends ConsumerState<FaqScreen> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: isDark ? OtterColors.darkText : OtterColors.sberBlack,
+                      color: isDark
+                          ? OtterColors.darkText
+                          : OtterColors.sberBlack,
                     ),
                   ),
                 ],
@@ -96,71 +104,71 @@ class _FaqScreenState extends ConsumerState<FaqScreen> {
               child: faq.loading
                   ? const Center(child: CircularProgressIndicator())
                   : faq.error != null
-                      ? _ErrorState(
-                          message: faq.error!,
-                          onRetry: () => ref.read(faqProvider.notifier).load(),
-                        )
-                      : faq.filteredItems.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'Вопросы не найдены',
-                                style: TextStyle(color: OtterColors.sberGray),
-                              ),
-                            )
-                          : ListView.builder(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                              itemCount: faq.filteredItems.length,
-                              itemBuilder: (context, index) {
-                                final item = faq.filteredItems[index];
-                                return Card(
-                                  color: surface,
-                                  margin: const EdgeInsets.only(bottom: 8),
-                                  child: Column(
-                                    children: [
-                                      ListTile(
-                                        title: Text(
-                                          item.question,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                        trailing: Icon(
-                                          item.isOpen
-                                              ? LucideIcons.chevronUp
-                                              : LucideIcons.chevronDown,
-                                          size: 20,
-                                          color: OtterColors.sberGray,
-                                        ),
-                                        onTap: () => ref
-                                            .read(faqProvider.notifier)
-                                            .toggle(item.id),
-                                      ),
-                                      if (item.isOpen)
-                                        Padding(
-                                          padding: const EdgeInsets.fromLTRB(
-                                            16,
-                                            0,
-                                            16,
-                                            16,
-                                          ),
-                                          child: Align(
-                                            alignment: Alignment.centerLeft,
-                                            child: Text(
-                                              item.answer,
-                                              style: const TextStyle(
-                                                fontSize: 14,
-                                                height: 1.5,
-                                                color: OtterColors.sberGray,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                    ],
+                  ? _ErrorState(
+                      message: faq.error!,
+                      onRetry: () => ref.read(faqProvider.notifier).load(),
+                    )
+                  : faq.filteredItems.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'Вопросы не найдены',
+                        style: TextStyle(color: OtterColors.sberGray),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      itemCount: faq.filteredItems.length,
+                      itemBuilder: (context, index) {
+                        final item = faq.filteredItems[index];
+                        return Card(
+                          color: surface,
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: Column(
+                            children: [
+                              ListTile(
+                                title: Text(
+                                  item.question,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
                                   ),
-                                );
-                              },
-                            ),
+                                ),
+                                trailing: Icon(
+                                  item.isOpen
+                                      ? LucideIcons.chevronUp
+                                      : LucideIcons.chevronDown,
+                                  size: 20,
+                                  color: OtterColors.sberGray,
+                                ),
+                                onTap: () => ref
+                                    .read(faqProvider.notifier)
+                                    .toggle(item.id),
+                              ),
+                              if (item.isOpen)
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    0,
+                                    16,
+                                    16,
+                                  ),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      item.answer,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        height: 1.5,
+                                        color: OtterColors.sberGray,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -196,10 +204,7 @@ class _ErrorState extends StatelessWidget {
               style: const TextStyle(color: Colors.red),
             ),
             const SizedBox(height: 16),
-            OutlinedButton(
-              onPressed: onRetry,
-              child: const Text('Повторить'),
-            ),
+            OutlinedButton(onPressed: onRetry, child: const Text('Повторить')),
           ],
         ),
       ),

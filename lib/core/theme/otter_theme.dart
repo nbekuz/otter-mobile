@@ -42,8 +42,10 @@ abstract final class OtterTheme {
           borderRadius: BorderRadius.circular(OtterColors.radiusMd),
           borderSide: const BorderSide(color: OtterColors.sberGreen, width: 2),
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
       ),
       cardTheme: CardThemeData(
         color: Colors.white,
@@ -92,8 +94,10 @@ abstract final class OtterTheme {
           borderRadius: BorderRadius.circular(OtterColors.radiusMd),
           borderSide: const BorderSide(color: OtterColors.sberGreen, width: 2),
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
       ),
       cardTheme: CardThemeData(
         color: OtterColors.darkSurface,

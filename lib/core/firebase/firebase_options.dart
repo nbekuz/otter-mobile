@@ -27,30 +27,30 @@ class DefaultFirebaseOptions {
       Env.firebaseApiKey.isNotEmpty && Env.firebaseAppId.isNotEmpty;
 
   static FirebaseOptions get web => FirebaseOptions(
-        apiKey: Env.firebaseApiKey,
-        appId: Env.firebaseAppId,
-        messagingSenderId: Env.firebaseMessagingSenderId,
-        projectId: Env.firebaseProjectId,
-        authDomain: Env.firebaseAuthDomain,
-        storageBucket: Env.firebaseStorageBucket,
-        measurementId: Env.firebaseMeasurementId,
-      );
+    apiKey: Env.firebaseApiKey,
+    appId: Env.firebaseAppId,
+    messagingSenderId: Env.firebaseMessagingSenderId,
+    projectId: Env.firebaseProjectId,
+    authDomain: Env.firebaseAuthDomain,
+    storageBucket: Env.firebaseStorageBucket,
+    measurementId: Env.firebaseMeasurementId,
+  );
 
   static FirebaseOptions get android => FirebaseOptions(
-        apiKey: Env.firebaseAndroidApiKey,
-        appId: Env.firebaseAndroidAppId,
-        messagingSenderId: Env.firebaseMessagingSenderId,
-        projectId: Env.firebaseProjectId,
-        storageBucket: Env.firebaseStorageBucket,
-      );
+    apiKey: Env.firebaseAndroidApiKey,
+    appId: Env.firebaseAndroidAppId,
+    messagingSenderId: Env.firebaseMessagingSenderId,
+    projectId: Env.firebaseProjectId,
+    storageBucket: Env.firebaseStorageBucket,
+  );
 
   /// Windows desktop — Firebase Web app configuration.
   static FirebaseOptions get windows => FirebaseOptions(
-        apiKey: Env.firebaseApiKey,
-        appId: Env.firebaseAppId,
-        messagingSenderId: Env.firebaseMessagingSenderId,
-        projectId: Env.firebaseProjectId,
-        authDomain: Env.firebaseAuthDomain,
-        storageBucket: Env.firebaseStorageBucket,
-      );
+    apiKey: Env.firebaseApiKey,
+    appId: Env.firebaseAppId,
+    messagingSenderId: Env.firebaseMessagingSenderId,
+    projectId: Env.firebaseProjectId,
+    authDomain: Env.firebaseAuthDomain,
+    storageBucket: Env.firebaseStorageBucket,
+  );
 }

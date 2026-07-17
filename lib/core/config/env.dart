@@ -10,14 +10,13 @@ abstract final class Env {
   }
 
   static String get apiBaseUrl {
-    final raw = dotenv.env['API_BASE_URL'] ??
-        'https://admin.skkamni.ru/api/v1/';
+    final raw =
+        dotenv.env['API_BASE_URL'] ?? 'https://admin.skkamni.ru/api/v1/';
     return raw.endsWith('/') ? raw : '$raw/';
   }
 
   /// Web / Windows (Firebase Console web app).
-  static String get firebaseApiKey =>
-      dotenv.env['FIREBASE_API_KEY'] ?? '';
+  static String get firebaseApiKey => dotenv.env['FIREBASE_API_KEY'] ?? '';
 
   /// Android — from `google-services.json` → `api_key.current_key`.
   static String get firebaseAndroidApiKey =>

@@ -8,17 +8,21 @@ const _profileLastNameKey = 'otter.auth.last-name';
 
 class TokenStorage {
   TokenStorage({FlutterSecureStorage? secure})
-      : _secure = secure ??
-            const FlutterSecureStorage(
-              aOptions: AndroidOptions(encryptedSharedPreferences: true),
-            );
+    : _secure =
+          secure ??
+          const FlutterSecureStorage(
+            aOptions: AndroidOptions(encryptedSharedPreferences: true),
+          );
 
   final FlutterSecureStorage _secure;
 
   Future<String?> getAccessToken() => _secure.read(key: _accessKey);
   Future<String?> getRefreshToken() => _secure.read(key: _refreshKey);
 
-  Future<void> setTokens({required String access, required String refresh}) async {
+  Future<void> setTokens({
+    required String access,
+    required String refresh,
+  }) async {
     await _secure.write(key: _accessKey, value: access);
     await _secure.write(key: _refreshKey, value: refresh);
   }

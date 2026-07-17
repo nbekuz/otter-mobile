@@ -1,29 +1,39 @@
+import 'dart:async';
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
 import '../utils/media_url.dart';
 
 class PomodoroAudio {
-  PomodoroAudio()
-      : _background = AudioPlayer(),
-        _effect = AudioPlayer() {
-    _background.onPlayerStateChanged.listen((state) {
-      debugPrint('[PomodoroAudio] background state → $state');
-    });
-    _background.onLog.listen((msg) {
-      debugPrint('[PomodoroAudio] background log: $msg');
-    });
-    _effect.onPlayerStateChanged.listen((state) {
-      debugPrint('[PomodoroAudio] effect state → $state');
-    });
-    _effect.onLog.listen((msg) {
-      debugPrint('[PomodoroAudio] effect log: $msg');
-    });
+  PomodoroAudio() : _background = AudioPlayer(), _effect = AudioPlayer() {
+    _subscriptions.add(
+      _background.onPlayerStateChanged.listen((state) {
+        debugPrint('[PomodoroAudio] background state → $state');
+      }),
+    );
+    _subscriptions.add(
+      _background.onLog.listen((msg) {
+        debugPrint('[PomodoroAudio] background log: $msg');
+      }),
+    );
+    _subscriptions.add(
+      _effect.onPlayerStateChanged.listen((state) {
+        debugPrint('[PomodoroAudio] effect state → $state');
+      }),
+    );
+    _subscriptions.add(
+      _effect.onLog.listen((msg) {
+        debugPrint('[PomodoroAudio] effect log: $msg');
+      }),
+    );
   }
 
   final AudioPlayer _background;
   final AudioPlayer _effect;
+  final _subscriptions = <StreamSubscription<dynamic>>[];
   String? _loopingUrl;
+  bool _disposed = false;
 
   Future<void> playBackgroundLoop(String? url) async {
     final resolved = resolveMediaUrl(url);
@@ -129,6 +139,12 @@ class PomodoroAudio {
   }
 
   Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    await Future.wait(
+      _subscriptions.map((subscription) => subscription.cancel()),
+    );
+    _subscriptions.clear();
     await stopAll();
     await _background.dispose();
     await _effect.dispose();

@@ -52,7 +52,9 @@ class _TaskGroupWidgetState extends State<TaskGroupWidget> {
                       '${widget.title} (${widget.tasks.length})',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
-                        color: isDark ? OtterColors.darkText : OtterColors.sberBlack,
+                        color: isDark
+                            ? OtterColors.darkText
+                            : OtterColors.sberBlack,
                       ),
                     ),
                   ),

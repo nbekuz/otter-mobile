@@ -26,7 +26,7 @@ class CalendarTaskBlock extends StatelessWidget {
   final VoidCallback onToggleComplete;
   final void Function(CalendarTaskDragMode mode) onDragStart;
   final void Function(DragUpdateDetails details, CalendarTaskDragMode mode)
-      onDragUpdate;
+  onDragUpdate;
   final VoidCallback onDragEnd;
 
   @override
@@ -62,7 +62,10 @@ class CalendarTaskBlock extends StatelessWidget {
           child: Align(
             alignment: isTop ? Alignment.topCenter : Alignment.bottomCenter,
             child: Padding(
-              padding: EdgeInsets.only(top: isTop ? 2 : 0, bottom: isTop ? 0 : 2),
+              padding: EdgeInsets.only(
+                top: isTop ? 2 : 0,
+                bottom: isTop ? 0 : 2,
+              ),
               child: Container(
                 width: compact ? 32 : 44,
                 height: 3,
@@ -79,19 +82,22 @@ class CalendarTaskBlock extends StatelessWidget {
 
     Widget checkbox() {
       final size = compact ? 12.0 : 14.0;
-      return GestureDetector(
-        onTap: onToggleComplete,
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            border: Border.all(color: color, width: compact ? 1.5 : 2),
-            color: item.task.completed ? color : Colors.transparent,
-            borderRadius: BorderRadius.circular(compact ? 3 : 4),
+      return MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: onToggleComplete,
+          child: Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              border: Border.all(color: color, width: compact ? 1.5 : 2),
+              color: item.task.completed ? color : Colors.transparent,
+              borderRadius: BorderRadius.circular(compact ? 3 : 4),
+            ),
+            child: item.task.completed
+                ? Icon(Icons.check, size: compact ? 8 : 10, color: Colors.white)
+                : null,
           ),
-          child: item.task.completed
-              ? Icon(Icons.check, size: compact ? 8 : 10, color: Colors.white)
-              : null,
         ),
       );
     }
@@ -128,8 +134,9 @@ class CalendarTaskBlock extends StatelessWidget {
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: color,
-                    decoration:
-                        item.task.completed ? TextDecoration.lineThrough : null,
+                    decoration: item.task.completed
+                        ? TextDecoration.lineThrough
+                        : null,
                   ),
                 ),
               ),
@@ -143,10 +150,7 @@ class CalendarTaskBlock extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: checkbox(),
-            ),
+            Padding(padding: const EdgeInsets.only(top: 2), child: checkbox()),
             const SizedBox(width: 6),
             Expanded(
               child: Column(
@@ -171,8 +175,9 @@ class CalendarTaskBlock extends StatelessWidget {
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                       color: OtterColors.sberBlack,
-                      decoration:
-                          item.task.completed ? TextDecoration.lineThrough : null,
+                      decoration: item.task.completed
+                          ? TextDecoration.lineThrough
+                          : null,
                     ),
                   ),
                 ],
@@ -188,45 +193,50 @@ class CalendarTaskBlock extends StatelessWidget {
       left: left,
       width: colWidth,
       height: blockHeight,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 120),
-        opacity: isDragging ? 0.92 : 1,
-        child: AnimatedContainer(
+      child: MouseRegion(
+        cursor: isDragging
+            ? SystemMouseCursors.grabbing
+            : SystemMouseCursors.grab,
+        child: AnimatedOpacity(
           duration: const Duration(milliseconds: 120),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: isDragging ? 0.18 : 0.12),
-            borderRadius: BorderRadius.circular(compact ? 8 : 12),
-            border: Border(
-              left: BorderSide(color: color, width: compact ? 2 : 3),
-            ),
-            boxShadow: isDragging
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          clipBehavior: Clip.hardEdge,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: onTap,
-                onVerticalDragStart: (_) =>
-                    onDragStart(CalendarTaskDragMode.move),
-                onVerticalDragUpdate: (d) =>
-                    onDragUpdate(d, CalendarTaskDragMode.move),
-                onVerticalDragEnd: (_) => onDragEnd(),
-                onVerticalDragCancel: onDragEnd,
-                child: bodyContent(),
+          opacity: isDragging ? 0.92 : 1,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: isDragging ? 0.18 : 0.12),
+              borderRadius: BorderRadius.circular(compact ? 8 : 12),
+              border: Border(
+                left: BorderSide(color: color, width: compact ? 2 : 3),
               ),
-              dragHandle(CalendarTaskDragMode.resizeStart, isTop: true),
-              dragHandle(CalendarTaskDragMode.resizeEnd, isTop: false),
-            ],
+              boxShadow: isDragging
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : null,
+            ),
+            clipBehavior: Clip.hardEdge,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onTap,
+                  onVerticalDragStart: (_) =>
+                      onDragStart(CalendarTaskDragMode.move),
+                  onVerticalDragUpdate: (d) =>
+                      onDragUpdate(d, CalendarTaskDragMode.move),
+                  onVerticalDragEnd: (_) => onDragEnd(),
+                  onVerticalDragCancel: onDragEnd,
+                  child: bodyContent(),
+                ),
+                dragHandle(CalendarTaskDragMode.resizeStart, isTop: true),
+                dragHandle(CalendarTaskDragMode.resizeEnd, isTop: false),
+              ],
+            ),
           ),
         ),
       ),

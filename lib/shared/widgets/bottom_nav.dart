@@ -94,8 +94,10 @@ class OtterBottomNav extends StatelessWidget {
                 onTap: () => context.go(item.path),
                 borderRadius: BorderRadius.circular(12),
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [

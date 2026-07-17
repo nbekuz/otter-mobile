@@ -18,9 +18,7 @@ import 'task_time_sync.dart';
 Future<void> showTaskDetailSheet(BuildContext context, Task task) {
   return showAppBottomSheet<void>(
     context: context,
-    builder: (ctx) => KeyboardDismissScope(
-      child: TaskDetailSheet(task: task),
-    ),
+    builder: (ctx) => TaskDetailSheet(task: task),
   );
 }
 
@@ -77,9 +75,8 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
       ? null
       : '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
-  String? _formatDate(DateTime? d) => d == null
-      ? null
-      : DateFormat('yyyy-MM-dd').format(d);
+  String? _formatDate(DateTime? d) =>
+      d == null ? null : DateFormat('yyyy-MM-dd').format(d);
 
   @override
   void dispose() {
@@ -166,7 +163,9 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
     });
 
     try {
-      await ref.read(tasksStateProvider.notifier).updateTask(
+      await ref
+          .read(tasksStateProvider.notifier)
+          .updateTask(
             widget.task.id,
             PartialTask(
               title: _title.text.trim(),
@@ -195,9 +194,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   }
 
   Future<void> _toggleComplete() async {
-    await ref
-        .read(tasksStateProvider.notifier)
-        .completeTask(widget.task);
+    await ref.read(tasksStateProvider.notifier).completeTask(widget.task);
     if (mounted) Navigator.pop(context);
   }
 
@@ -274,10 +271,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
             const SizedBox(height: 12),
             TextField(
               controller: _title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               onTapOutside: dismissKeyboardOnTapOutside,
               onEditingComplete: KeyboardDismisser.dismiss,
               decoration: const InputDecoration(
@@ -332,7 +326,9 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                       initial: _durationStart,
                       onPicked: _applyStartSync,
                     ),
-                    child: Text('Начало: ${_formatTime(_durationStart) ?? '—'}'),
+                    child: Text(
+                      'Начало: ${_formatTime(_durationStart) ?? '—'}',
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),

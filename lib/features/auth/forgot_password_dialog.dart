@@ -173,10 +173,9 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
     });
 
     try {
-      final token = await ref.read(authServiceProvider).forgotPasswordVerify(
-            _email.text.trim(),
-            code,
-          );
+      final token = await ref
+          .read(authServiceProvider)
+          .forgotPasswordVerify(_email.text.trim(), code);
       if (mounted) {
         _stopResendTimer();
         setState(() {
@@ -187,10 +186,7 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
     } catch (e) {
       if (mounted) {
         setState(
-          () => _error = getApiErrorMessage(
-            e,
-            'Неверный код или срок истёк',
-          ),
+          () => _error = getApiErrorMessage(e, 'Неверный код или срок истёк'),
         );
         _otpKey.currentState?.clear();
         setState(() => _code = '');
@@ -222,15 +218,15 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
     });
 
     try {
-      final message = await ref.read(authServiceProvider).forgotPasswordConfirm(
-            _resetToken!,
-            _newPassword.text,
-          );
+      final message = await ref
+          .read(authServiceProvider)
+          .forgotPasswordConfirm(_resetToken!, _newPassword.text);
       if (mounted) Navigator.of(context).pop(message);
     } catch (e) {
       if (mounted) {
         setState(
-          () => _passwordError = getApiFieldError(e, 'new_password') ??
+          () => _passwordError =
+              getApiFieldError(e, 'new_password') ??
               getApiErrorMessage(e, 'Не удалось сохранить пароль'),
         );
       }
@@ -266,10 +262,7 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
             const Expanded(
               child: Text(
                 'Восстановление пароля',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
             Material(
@@ -281,7 +274,11 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
                 child: const SizedBox(
                   width: 36,
                   height: 36,
-                  child: Icon(LucideIcons.x, size: 18, color: OtterColors.sberGray),
+                  child: Icon(
+                    LucideIcons.x,
+                    size: 18,
+                    color: OtterColors.sberGray,
+                  ),
                 ),
               ),
             ),
@@ -306,10 +303,7 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
         ] else if (_step == _ForgotStep.code) ...[
           Text.rich(
             TextSpan(
-              style: const TextStyle(
-                color: OtterColors.sberGray,
-                height: 1.4,
-              ),
+              style: const TextStyle(color: OtterColors.sberGray, height: 1.4),
               children: [
                 const TextSpan(text: 'Код отправлен на '),
                 TextSpan(
@@ -363,10 +357,7 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
         ] else ...[
           Text.rich(
             TextSpan(
-              style: const TextStyle(
-                color: OtterColors.sberGray,
-                height: 1.4,
-              ),
+              style: const TextStyle(color: OtterColors.sberGray, height: 1.4),
               children: [
                 const TextSpan(text: 'Новый пароль для '),
                 TextSpan(
@@ -403,9 +394,8 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
             icon: LucideIcons.lock,
             obscure: true,
             obscureVisible: _showConfirmPassword,
-            onToggleObscure: () => setState(
-              () => _showConfirmPassword = !_showConfirmPassword,
-            ),
+            onToggleObscure: () =>
+                setState(() => _showConfirmPassword = !_showConfirmPassword),
           ),
         ],
         if (_step == _ForgotStep.newPassword && _error != null) ...[
@@ -430,10 +420,8 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
-    final maxHeight = mq.size.height -
-        mq.viewInsets.bottom -
-        mq.padding.vertical -
-        32;
+    final maxHeight =
+        mq.size.height - mq.viewInsets.bottom - mq.padding.vertical - 32;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(24, 0, 24, mq.viewInsets.bottom),
@@ -477,15 +465,12 @@ class _CodeStepActions extends StatelessWidget {
   final VoidCallback onResend;
 
   static ButtonStyle get _linkStyle => TextButton.styleFrom(
-        foregroundColor: OtterColors.sberGreen,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        minimumSize: Size.zero,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        textStyle: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-        ),
-      );
+    foregroundColor: OtterColors.sberGreen,
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    minimumSize: Size.zero,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+  );
 
   @override
   Widget build(BuildContext context) {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../network/api_client.dart';
@@ -17,39 +19,45 @@ import '../../data/models/api/api_models.dart';
 import '../../data/models/ui/ui_models.dart';
 import '../audio/pomodoro_audio.dart';
 import '../utils/time_utils.dart';
+
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   final storage = ref.watch(tokenStorageProvider);
-  return ApiClient(
-    tokenStorage: storage,
-    onUnauthorized: () async {
-      await ref.read(authStateProvider.notifier).logout();
-    },
-  );
+  return ApiClient(storage, () async {
+    await ref.read(authStateProvider.notifier).logout();
+  });
 });
 
-final authServiceProvider =
-    Provider<AuthService>((ref) => AuthService(ref.watch(apiClientProvider)));
-final tasksServiceProvider =
-    Provider<TasksService>((ref) => TasksService(ref.watch(apiClientProvider)));
+final authServiceProvider = Provider<AuthService>(
+  (ref) => AuthService(ref.watch(apiClientProvider)),
+);
+final tasksServiceProvider = Provider<TasksService>(
+  (ref) => TasksService(ref.watch(apiClientProvider)),
+);
 final calendarServiceProvider = Provider<CalendarService>(
-    (ref) => CalendarService(ref.watch(apiClientProvider)));
-final matrixServiceProvider =
-    Provider<MatrixService>((ref) => MatrixService(ref.watch(apiClientProvider)));
+  (ref) => CalendarService(ref.watch(apiClientProvider)),
+);
+final matrixServiceProvider = Provider<MatrixService>(
+  (ref) => MatrixService(ref.watch(apiClientProvider)),
+);
 final pomodoroServiceProvider = Provider<PomodoroService>(
-    (ref) => PomodoroService(ref.watch(apiClientProvider)));
+  (ref) => PomodoroService(ref.watch(apiClientProvider)),
+);
 final soundsServiceProvider = Provider<SoundsService>(
-    (ref) => SoundsService(ref.watch(apiClientProvider)));
+  (ref) => SoundsService(ref.watch(apiClientProvider)),
+);
 final settingsServiceProvider = Provider<SettingsService>(
-    (ref) => SettingsService(ref.watch(apiClientProvider)));
+  (ref) => SettingsService(ref.watch(apiClientProvider)),
+);
 final premiumServiceProvider = Provider<PremiumService>(
-    (ref) => PremiumService(ref.watch(apiClientProvider)));
+  (ref) => PremiumService(ref.watch(apiClientProvider)),
+);
 
 final premiumStateProvider =
     StateNotifierProvider<PremiumNotifier, PremiumState>((ref) {
-  return PremiumNotifier(ref);
-});
+      return PremiumNotifier(ref);
+    });
 
 class PremiumState {
   const PremiumState({
@@ -77,8 +85,7 @@ class PremiumState {
     return tariffs.isEmpty ? null : tariffs.first;
   }
 
-  bool get isPremium =>
-      subscription?.isPremium ?? false;
+  bool get isPremium => subscription?.isPremium ?? false;
 
   PremiumState copyWith({
     List<ApiTariff>? tariffs,
@@ -89,16 +96,15 @@ class PremiumState {
     bool? actionLoading,
     String? error,
     bool clearError = false,
-  }) =>
-      PremiumState(
-        tariffs: tariffs ?? this.tariffs,
-        features: features ?? this.features,
-        subscription: subscription ?? this.subscription,
-        selectedTariffCode: selectedTariffCode ?? this.selectedTariffCode,
-        loading: loading ?? this.loading,
-        actionLoading: actionLoading ?? this.actionLoading,
-        error: clearError ? null : (error ?? this.error),
-      );
+  }) => PremiumState(
+    tariffs: tariffs ?? this.tariffs,
+    features: features ?? this.features,
+    subscription: subscription ?? this.subscription,
+    selectedTariffCode: selectedTariffCode ?? this.selectedTariffCode,
+    loading: loading ?? this.loading,
+    actionLoading: actionLoading ?? this.actionLoading,
+    error: clearError ? null : (error ?? this.error),
+  );
 }
 
 class PremiumNotifier extends StateNotifier<PremiumState> {
@@ -108,9 +114,9 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
 
   void _syncPremiumToSettings(ApiSubscription sub) {
     final settings = _ref.read(appSettingsProvider);
-    _ref.read(appSettingsProvider.notifier).applyLocal(
-          settings.copyWith(isPremium: sub.isPremium),
-        );
+    _ref
+        .read(appSettingsProvider.notifier)
+        .applyLocal(settings.copyWith(isPremium: sub.isPremium));
   }
 
   Future<void> loadAll() async {
@@ -138,10 +144,7 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
       );
       _syncPremiumToSettings(subscription);
     } catch (e) {
-      state = state.copyWith(
-        loading: false,
-        error: getApiErrorMessage(e),
-      );
+      state = state.copyWith(loading: false, error: getApiErrorMessage(e));
     }
   }
 
@@ -152,7 +155,9 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   Future<ApiSubscription> startTrial({bool recurringConsent = false}) async {
     state = state.copyWith(actionLoading: true, clearError: true);
     try {
-      final sub = await _ref.read(premiumServiceProvider).startTrial(
+      final sub = await _ref
+          .read(premiumServiceProvider)
+          .startTrial(
             tariff: state.selectedTariff?.code ?? state.selectedTariffCode,
             recurringConsent: recurringConsent,
           );
@@ -160,7 +165,10 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
       _syncPremiumToSettings(sub);
       return sub;
     } catch (e) {
-      state = state.copyWith(actionLoading: false, error: getApiErrorMessage(e));
+      state = state.copyWith(
+        actionLoading: false,
+        error: getApiErrorMessage(e),
+      );
       rethrow;
     }
   }
@@ -168,14 +176,19 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   Future<String> checkout({bool recurringConsent = false}) async {
     state = state.copyWith(actionLoading: true, clearError: true);
     try {
-      final response = await _ref.read(premiumServiceProvider).checkout(
+      final response = await _ref
+          .read(premiumServiceProvider)
+          .checkout(
             tariff: state.selectedTariff?.code ?? state.selectedTariffCode,
             recurringConsent: recurringConsent,
           );
       state = state.copyWith(actionLoading: false);
       return response.checkoutUrl;
     } catch (e) {
-      state = state.copyWith(actionLoading: false, error: getApiErrorMessage(e));
+      state = state.copyWith(
+        actionLoading: false,
+        error: getApiErrorMessage(e),
+      );
       rethrow;
     }
   }
@@ -183,13 +196,15 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   Future<ApiSubscription> refreshSubscription() async {
     state = state.copyWith(actionLoading: true, clearError: true);
     try {
-      final sub =
-          await _ref.read(premiumServiceProvider).fetchSubscription();
+      final sub = await _ref.read(premiumServiceProvider).fetchSubscription();
       state = state.copyWith(subscription: sub, actionLoading: false);
       _syncPremiumToSettings(sub);
       return sub;
     } catch (e) {
-      state = state.copyWith(actionLoading: false, error: getApiErrorMessage(e));
+      state = state.copyWith(
+        actionLoading: false,
+        error: getApiErrorMessage(e),
+      );
       rethrow;
     }
   }
@@ -202,19 +217,21 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
       _syncPremiumToSettings(sub);
       return sub;
     } catch (e) {
-      state = state.copyWith(actionLoading: false, error: getApiErrorMessage(e));
+      state = state.copyWith(
+        actionLoading: false,
+        error: getApiErrorMessage(e),
+      );
       rethrow;
     }
   }
 }
 
-final themeModeProvider =
-    StateProvider<String>((ref) => 'light');
+final themeModeProvider = StateProvider<String>((ref) => 'light');
 
 final appSettingsProvider =
     StateNotifierProvider<AppSettingsNotifier, AppSettings>((ref) {
-  return AppSettingsNotifier(ref);
-});
+      return AppSettingsNotifier(ref);
+    });
 
 class AppSettingsNotifier extends StateNotifier<AppSettings> {
   AppSettingsNotifier(this._ref) : super(AppSettings.defaults());
@@ -223,8 +240,7 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
 
   Future<void> load() async {
     try {
-      final settings =
-          await _ref.read(settingsServiceProvider).fetchSettings();
+      final settings = await _ref.read(settingsServiceProvider).fetchSettings();
       state = settings;
     } catch (_) {}
   }
@@ -233,8 +249,9 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
     final prevNotifications = state.notifications;
     state = next;
     try {
-      final patched =
-          await _ref.read(settingsServiceProvider).patchSettings(next);
+      final patched = await _ref
+          .read(settingsServiceProvider)
+          .patchSettings(next);
       state = patched.copyWith(
         theme: next.theme,
         notifications: next.notifications,
@@ -254,8 +271,7 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
   }
 }
 
-final authStateProvider =
-    StateNotifierProvider<AuthNotifier, AuthState>((ref) {
+final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   return AuthNotifier(ref);
 });
 
@@ -281,15 +297,13 @@ class AuthState {
     bool? isAuthenticated,
     bool? requiresProfileFill,
     bool? isBootstrapping,
-  }) =>
-      AuthState(
-        user: clearUser ? null : (user ?? this.user),
-        isLoading: isLoading ?? this.isLoading,
-        isAuthenticated: isAuthenticated ?? this.isAuthenticated,
-        requiresProfileFill:
-            requiresProfileFill ?? this.requiresProfileFill,
-        isBootstrapping: isBootstrapping ?? this.isBootstrapping,
-      );
+  }) => AuthState(
+    user: clearUser ? null : (user ?? this.user),
+    isLoading: isLoading ?? this.isLoading,
+    isAuthenticated: isAuthenticated ?? this.isAuthenticated,
+    requiresProfileFill: requiresProfileFill ?? this.requiresProfileFill,
+    isBootstrapping: isBootstrapping ?? this.isBootstrapping,
+  );
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
@@ -301,10 +315,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> _init() async {
     try {
-      final token = await _ref.read(tokenStorageProvider).getAccessToken();
+      // Windows credential storage can take an unexpectedly long time on a
+      // first run or when its backing store is unavailable. Do not leave the
+      // application-wide bootstrap overlay active indefinitely.
+      final token = await _ref
+          .read(tokenStorageProvider)
+          .getAccessToken()
+          .timeout(const Duration(seconds: 8), onTimeout: () => null);
       if (token != null && token.isNotEmpty) {
-        await _restoreSession();
+        await _restoreSession().timeout(const Duration(seconds: 12));
       }
+    } catch (_) {
+      // Start on the public route when local persistence or the network is
+      // unavailable. A later explicit sign-in can still establish a session.
     } finally {
       state = state.copyWith(isBootstrapping: false);
     }
@@ -315,8 +338,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _loadProfileIntoState();
     } catch (e) {
       if (e is ApiException && e.statusCode == 401) {
-        final refreshed =
-            await _ref.read(apiClientProvider).refreshAccessToken();
+        final refreshed = await _ref
+            .read(apiClientProvider)
+            .refreshAccessToken();
         if (refreshed != null) {
           try {
             await _loadProfileIntoState();
@@ -333,8 +357,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> _loadProfileIntoState() async {
     final profile = await _ref.read(authServiceProvider).fetchProfile();
     final names = await _ref.read(tokenStorageProvider).getProfileNames();
-    final first =
-        names.first.isNotEmpty ? names.first : profile.firstName;
+    final first = names.first.isNotEmpty ? names.first : profile.firstName;
     final last = names.last.isNotEmpty ? names.last : profile.lastName;
     final user = _mapUser(profile, first, last);
     state = AuthState(
@@ -386,9 +409,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     return OtterUser(
       id: profile.id.toString(),
       email: profile.email,
-      name: fullName.isNotEmpty
-          ? fullName
-          : profile.email.split('@').first,
+      name: fullName.isNotEmpty ? fullName : profile.email.split('@').first,
       avatar: profile.avatar,
     );
   }
@@ -398,21 +419,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String refresh,
     required BackendUser backendUser,
   }) async {
-    await _ref.read(tokenStorageProvider).setTokens(
-          access: access,
-          refresh: refresh,
-        );
+    await _ref
+        .read(tokenStorageProvider)
+        .setTokens(access: access, refresh: refresh);
     await _ref
         .read(tokenStorageProvider)
         .saveProfileNames(backendUser.firstName, backendUser.lastName);
     state = AuthState(
-      user: _mapUser(
-        backendUser,
-        backendUser.firstName,
-        backendUser.lastName,
-      ),
+      user: _mapUser(backendUser, backendUser.firstName, backendUser.lastName),
       isAuthenticated: true,
-      requiresProfileFill: backendUser.firstName.trim().isEmpty ||
+      requiresProfileFill:
+          backendUser.firstName.trim().isEmpty ||
           backendUser.lastName.trim().isEmpty,
       isBootstrapping: false,
     );
@@ -421,11 +438,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> login(String email, String password) async {
     state = state.copyWith(isLoading: true);
     try {
-      final tokens = await _ref.read(authServiceProvider).login(email, password);
-      await _ref.read(tokenStorageProvider).setTokens(
-            access: tokens.access,
-            refresh: tokens.refresh,
-          );
+      final tokens = await _ref
+          .read(authServiceProvider)
+          .login(email, password);
+      await _ref
+          .read(tokenStorageProvider)
+          .setTokens(access: tokens.access, refresh: tokens.refresh);
       await refreshProfile();
     } finally {
       state = state.copyWith(isLoading: false);
@@ -440,7 +458,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     state = state.copyWith(isLoading: true);
     try {
-      final result = await _ref.read(authServiceProvider).register(
+      final result = await _ref
+          .read(authServiceProvider)
+          .register(
             email: email,
             password: password,
             firstName: firstName,
@@ -459,8 +479,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> loginWithGoogle(String firebaseToken) async {
     state = state.copyWith(isLoading: true);
     try {
-      final result =
-          await _ref.read(authServiceProvider).loginWithGoogle(firebaseToken);
+      final result = await _ref
+          .read(authServiceProvider)
+          .loginWithGoogle(firebaseToken);
       await applySession(
         access: result.tokens.access,
         refresh: result.tokens.refresh,
@@ -480,8 +501,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 }
 
-final tasksStateProvider =
-    StateNotifierProvider<TasksNotifier, TasksState>((ref) {
+final tasksStateProvider = StateNotifierProvider<TasksNotifier, TasksState>((
+  ref,
+) {
   return TasksNotifier(ref);
 });
 
@@ -553,10 +575,9 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   Future<void> completeTask(Task task) async {
-    await _ref.read(tasksServiceProvider).toggleComplete(
-          task.id,
-          wasCompleted: task.completed,
-        );
+    await _ref
+        .read(tasksServiceProvider)
+        .toggleComplete(task.id, wasCompleted: task.completed);
     await loadGrouped();
   }
 
@@ -597,8 +618,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
     final payload = TaskMapper.uiToApiPayload(merged);
     debugPrint('[Tasks] PATCH tasks/$id/ payload=$payload');
 
-    final task =
-        await _ref.read(tasksServiceProvider).updateTask(id, merged);
+    final task = await _ref.read(tasksServiceProvider).updateTask(id, merged);
     if (refreshGrouped) {
       await loadGrouped();
     }
@@ -608,8 +628,8 @@ class TasksNotifier extends StateNotifier<TasksState> {
 
 final calendarStateProvider =
     StateNotifierProvider<CalendarNotifier, CalendarUiState>((ref) {
-  return CalendarNotifier(ref);
-});
+      return CalendarNotifier(ref);
+    });
 
 class CalendarUiState {
   const CalendarUiState({
@@ -629,13 +649,12 @@ class CalendarUiState {
     DateTime? date,
     List<Task>? tasks,
     bool? loading,
-  }) =>
-      CalendarUiState(
-        view: view ?? this.view,
-        date: date ?? this.date,
-        tasks: tasks ?? this.tasks,
-        loading: loading ?? this.loading,
-      );
+  }) => CalendarUiState(
+    view: view ?? this.view,
+    date: date ?? this.date,
+    tasks: tasks ?? this.tasks,
+    loading: loading ?? this.loading,
+  );
 
   String get displayLabel {
     final d = date ?? DateTime.now();
@@ -657,39 +676,38 @@ class CalendarUiState {
   }
 
   static String _monthName(int m) => const [
-        'января',
-        'февраля',
-        'марта',
-        'апреля',
-        'мая',
-        'июня',
-        'июля',
-        'августа',
-        'сентября',
-        'октября',
-        'ноября',
-        'декабря',
-      ][m - 1];
+    'января',
+    'февраля',
+    'марта',
+    'апреля',
+    'мая',
+    'июня',
+    'июля',
+    'августа',
+    'сентября',
+    'октября',
+    'ноября',
+    'декабря',
+  ][m - 1];
 
   static String _shortMonth(int m) => const [
-        'янв',
-        'фев',
-        'мар',
-        'апр',
-        'май',
-        'июн',
-        'июл',
-        'авг',
-        'сен',
-        'окт',
-        'ноя',
-        'дек',
-      ][m - 1];
+    'янв',
+    'фев',
+    'мар',
+    'апр',
+    'май',
+    'июн',
+    'июл',
+    'авг',
+    'сен',
+    'окт',
+    'ноя',
+    'дек',
+  ][m - 1];
 }
 
 class CalendarNotifier extends StateNotifier<CalendarUiState> {
-  CalendarNotifier(this._ref)
-      : super(CalendarUiState(date: DateTime.now()));
+  CalendarNotifier(this._ref) : super(CalendarUiState(date: DateTime.now()));
 
   final Ref _ref;
 
@@ -709,10 +727,9 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
       state = state.copyWith(view: v, date: d, loading: true);
     }
     try {
-      final tasks = await _ref.read(calendarServiceProvider).fetchCalendar(
-            view: v,
-            date: _formatDate(d),
-          );
+      final tasks = await _ref
+          .read(calendarServiceProvider)
+          .fetchCalendar(view: v, date: _formatDate(d));
       state = CalendarUiState(view: v, date: d, tasks: tasks);
     } catch (_) {
       if (!silent) {
@@ -759,7 +776,9 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
     applyTaskUpdate(optimistic);
 
     try {
-      final updated = await _ref.read(tasksStateProvider.notifier).updateTask(
+      final updated = await _ref
+          .read(tasksStateProvider.notifier)
+          .updateTask(
             task.id,
             PartialTask(
               dueDate: task.dueDate,
@@ -777,10 +796,7 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
 }
 
 class MatrixSettingsState {
-  const MatrixSettingsState({
-    this.blocks = const {},
-    this.loading = false,
-  });
+  const MatrixSettingsState({this.blocks = const {}, this.loading = false});
 
   final Map<MatrixBlock, MatrixBlockUiSetting> blocks;
   final bool loading;
@@ -788,29 +804,27 @@ class MatrixSettingsState {
   MatrixSettingsState copyWith({
     Map<MatrixBlock, MatrixBlockUiSetting>? blocks,
     bool? loading,
-  }) =>
-      MatrixSettingsState(
-        blocks: blocks ?? this.blocks,
-        loading: loading ?? this.loading,
-      );
+  }) => MatrixSettingsState(
+    blocks: blocks ?? this.blocks,
+    loading: loading ?? this.loading,
+  );
 }
 
 final matrixSettingsProvider =
     StateNotifierProvider<MatrixSettingsNotifier, MatrixSettingsState>((ref) {
-  return MatrixSettingsNotifier(ref);
-});
+      return MatrixSettingsNotifier(ref);
+    });
 
 class MatrixSettingsNotifier extends StateNotifier<MatrixSettingsState> {
   MatrixSettingsNotifier(this._ref)
-      : super(MatrixSettingsState(blocks: MatrixBlockUiSetting.defaults()));
+    : super(MatrixSettingsState(blocks: MatrixBlockUiSetting.defaults()));
 
   final Ref _ref;
 
   Future<void> load() async {
     state = state.copyWith(loading: true);
     try {
-      final settings =
-          await _ref.read(matrixServiceProvider).fetchSettings();
+      final settings = await _ref.read(matrixServiceProvider).fetchSettings();
       final blocks = Map<MatrixBlock, MatrixBlockUiSetting>.from(
         MatrixBlockUiSetting.defaults(),
       );
@@ -841,8 +855,8 @@ class MatrixSettingsNotifier extends StateNotifier<MatrixSettingsState> {
 
 final matrixStateProvider =
     StateNotifierProvider<MatrixNotifier, Map<String, List<Task>>>((ref) {
-  return MatrixNotifier(ref);
-});
+      return MatrixNotifier(ref);
+    });
 
 class MatrixNotifier extends StateNotifier<Map<String, List<Task>>> {
   MatrixNotifier(this._ref) : super({});
@@ -862,8 +876,8 @@ class MatrixNotifier extends StateNotifier<Map<String, List<Task>>> {
 
 final pomodoroStateProvider =
     StateNotifierProvider<PomodoroNotifier, PomodoroUiState>((ref) {
-  return PomodoroNotifier(ref);
-});
+      return PomodoroNotifier(ref);
+    });
 
 class PomodoroUiState {
   PomodoroUiState({
@@ -914,8 +928,9 @@ class PomodoroUiState {
       secondsLeft: secondsLeft ?? this.secondsLeft,
       timerState: timerState ?? this.timerState,
       selectedTaskId: selectedTaskId ?? this.selectedTaskId,
-      activeSessionId:
-          clearSession ? null : (activeSessionId ?? this.activeSessionId),
+      activeSessionId: clearSession
+          ? null
+          : (activeSessionId ?? this.activeSessionId),
       timerEndSoundDetail: timerEndSoundDetail ?? this.timerEndSoundDetail,
       workSoundDetail: workSoundDetail ?? this.workSoundDetail,
       workBackgroundSounds: workBackgroundSounds ?? this.workBackgroundSounds,
@@ -932,6 +947,17 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
 
   final Ref _ref;
   late final PomodoroAudio _audio;
+  Timer? _ticker;
+
+  void _startTicker() {
+    _ticker?.cancel();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) => tick());
+  }
+
+  void _stopTicker() {
+    _ticker?.cancel();
+    _ticker = null;
+  }
 
   Future<void> loadAll() async {
     await Future.wait([loadSettings(), loadSounds()]);
@@ -982,7 +1008,9 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
     if (url != null) {
       await _audio.playBackgroundLoop(url);
     } else {
-      debugPrint('[Pomodoro] workSoundDetail has no audioUrl — stop background');
+      debugPrint(
+        '[Pomodoro] workSoundDetail has no audioUrl — stop background',
+      );
       await _audio.stopBackground();
     }
   }
@@ -1039,8 +1067,7 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
     }
     if (patch.isEmpty) return;
 
-    final data =
-        await _ref.read(pomodoroServiceProvider).updateSettings(patch);
+    final data = await _ref.read(pomodoroServiceProvider).updateSettings(patch);
     state = state.copyWith(
       settings: data.settings,
       secondsLeft: state.timerState == 'idle'
@@ -1069,6 +1096,7 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
   }
 
   Future<void> _onTimerComplete() async {
+    _stopTicker();
     await _audio.stopBackground();
     if (state.settings.sound != 'none') {
       await _audio.playOnce(state.timerEndSoundDetail?.audioUrl);
@@ -1092,7 +1120,9 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
 
     var sessionId = state.activeSessionId;
     if (sessionId == null) {
-      final session = await _ref.read(pomodoroServiceProvider).createSession(
+      final session = await _ref
+          .read(pomodoroServiceProvider)
+          .createSession(
             taskId: state.selectedTaskId != null
                 ? int.tryParse(state.selectedTaskId!)
                 : null,
@@ -1112,12 +1142,14 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
           ? state.settings.duration * 60
           : state.secondsLeft,
     );
+    _startTicker();
     await _audio.stopEffect();
     await _syncBackgroundAudio();
   }
 
   Future<void> pause() async {
     if (state.timerState != 'running') return;
+    _stopTicker();
     await _audio.pauseBackground();
     if (state.activeSessionId != null) {
       await _ref
@@ -1128,6 +1160,7 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
   }
 
   Future<void> stop() async {
+    _stopTicker();
     await _audio.stopAll();
     if (state.activeSessionId != null) {
       await _ref
@@ -1143,7 +1176,8 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
 
   @override
   void dispose() {
-    _audio.dispose();
+    _stopTicker();
+    unawaited(_audio.dispose());
     super.dispose();
   }
 }

@@ -106,13 +106,13 @@ class LegalContentBlock {
   const LegalContentBlock._(this.kind, this.text);
 
   const LegalContentBlock.heading(String text)
-      : this._(LegalBlockKind.heading, text);
+    : this._(LegalBlockKind.heading, text);
 
   const LegalContentBlock.subheading(String text)
-      : this._(LegalBlockKind.subheading, text);
+    : this._(LegalBlockKind.subheading, text);
 
   const LegalContentBlock.paragraph(String text)
-      : this._(LegalBlockKind.paragraph, text);
+    : this._(LegalBlockKind.paragraph, text);
 
   final LegalBlockKind kind;
   final String text;

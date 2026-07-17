@@ -60,10 +60,7 @@ class PrimaryButton extends StatelessWidget {
       return SizedBox(
         height: 22,
         width: 22,
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          color: textColor,
-        ),
+        child: CircularProgressIndicator(strokeWidth: 2, color: textColor),
       );
     }
     return Text(

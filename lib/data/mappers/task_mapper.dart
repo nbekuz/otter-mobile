@@ -4,12 +4,15 @@ import '../../core/utils/time_utils.dart';
 
 abstract final class TaskMapper {
   static Task apiToUi(ApiTask task) {
-    final dueFields =
-        task.dueAt != null ? parseApiWallClock(task.dueAt!) : null;
-    final startFields =
-        task.startAt != null ? parseApiWallClock(task.startAt!) : null;
-    final endFields =
-        task.endAt != null ? parseApiWallClock(task.endAt!) : null;
+    final dueFields = task.dueAt != null
+        ? parseApiWallClock(task.dueAt!)
+        : null;
+    final startFields = task.startAt != null
+        ? parseApiWallClock(task.startAt!)
+        : null;
+    final endFields = task.endAt != null
+        ? parseApiWallClock(task.endAt!)
+        : null;
     final scheduleDay = startFields ?? dueFields;
 
     String? dueTime;
@@ -19,10 +22,7 @@ abstract final class TaskMapper {
 
     TaskDuration? duration;
     if (startFields != null && endFields != null) {
-      duration = TaskDuration(
-        start: startFields.time,
-        end: endFields.time,
-      );
+      duration = TaskDuration(start: startFields.time, end: endFields.time);
     }
 
     return Task(
@@ -35,7 +35,9 @@ abstract final class TaskMapper {
       priority: _apiPriorityToUi(task.priority),
       completed: task.isCompleted,
       completedAt: task.completedAt != null
-          ? DateTime.tryParse(task.completedAt!)?.toIso8601String().split('T').first
+          ? DateTime.tryParse(
+              task.completedAt!,
+            )?.toIso8601String().split('T').first
           : null,
       notification: _reminderMinutes(task.dueAt, task.reminderAt),
       repeat: _repeatToUi(task.repeatUnit),
@@ -74,25 +76,25 @@ abstract final class TaskMapper {
       'repeat_unit': _repeatToApi(task.repeat ?? RepeatType.none),
       'repeat_interval': 1,
       'priority': _uiPriorityToApi(task.priority ?? Priority.medium),
-      'matrix_block': (task.matrixBlock ?? MatrixBlock.notUrgentNotImportant)
-          .apiValue,
+      'matrix_block':
+          (task.matrixBlock ?? MatrixBlock.notUrgentNotImportant).apiValue,
       if (task.completed != null) 'is_completed': task.completed,
     };
   }
 
   static Priority _apiPriorityToUi(String priority) => switch (priority) {
-        'critical' || 'high' => Priority.high,
-        'low' => Priority.low,
-        'medium' => Priority.medium,
-        _ => Priority.medium,
-      };
+    'critical' || 'high' => Priority.high,
+    'low' => Priority.low,
+    'medium' => Priority.medium,
+    _ => Priority.medium,
+  };
 
   static String _uiPriorityToApi(Priority priority) => switch (priority) {
-        Priority.none => 'medium',
-        Priority.high => 'high',
-        Priority.low => 'low',
-        Priority.medium => 'medium',
-      };
+    Priority.none => 'medium',
+    Priority.high => 'high',
+    Priority.low => 'low',
+    Priority.medium => 'medium',
+  };
 
   static String? _reminderMinutes(String? dueAt, String? reminderAt) {
     if (dueAt == null || reminderAt == null) return null;
@@ -123,7 +125,8 @@ abstract final class TaskMapper {
     TaskDuration? duration,
   ) {
     if (dueDate == null || duration == null) return (null, null);
-    if (parseTimeToMinutes(duration.end) <= parseTimeToMinutes(duration.start)) {
+    if (parseTimeToMinutes(duration.end) <=
+        parseTimeToMinutes(duration.start)) {
       return (null, null);
     }
     return (
@@ -133,21 +136,21 @@ abstract final class TaskMapper {
   }
 
   static RepeatType _repeatToUi(String unit) => switch (unit) {
-        'day' => RepeatType.daily,
-        'week' => RepeatType.weekly,
-        'month' => RepeatType.monthly,
-        'year' => RepeatType.yearly,
-        _ => RepeatType.none,
-      };
+    'day' => RepeatType.daily,
+    'week' => RepeatType.weekly,
+    'month' => RepeatType.monthly,
+    'year' => RepeatType.yearly,
+    _ => RepeatType.none,
+  };
 
   static String _repeatToApi(RepeatType repeat) => switch (repeat) {
-        RepeatType.daily => 'day',
-        RepeatType.weekly => 'week',
-        RepeatType.monthly => 'month',
-        RepeatType.yearly => 'year',
-        RepeatType.custom => 'week',
-        RepeatType.none => 'none',
-      };
+    RepeatType.daily => 'day',
+    RepeatType.weekly => 'week',
+    RepeatType.monthly => 'month',
+    RepeatType.yearly => 'year',
+    RepeatType.custom => 'week',
+    RepeatType.none => 'none',
+  };
 }
 
 class PartialTask {

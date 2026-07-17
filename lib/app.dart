@@ -27,20 +27,23 @@ class OtterApp extends ConsumerWidget {
       builder: (context, child) {
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (child != null) child,
-              if (auth.isBootstrapping)
-                const Positioned.fill(
-                  child: AbsorbPointer(
-                    child: ColoredBox(
-                      color: Colors.white,
-                      child: Center(child: CircularProgressIndicator()),
+          child: FocusTraversalGroup(
+            policy: WidgetOrderTraversalPolicy(),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                child ?? const SizedBox.shrink(),
+                if (auth.isBootstrapping)
+                  Positioned.fill(
+                    child: AbsorbPointer(
+                      child: ColoredBox(
+                        color: Theme.of(context).scaffoldBackgroundColor,
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         );
       },

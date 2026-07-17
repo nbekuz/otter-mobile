@@ -38,7 +38,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Future<void> _register() async {
     setState(() => _loading = true);
     try {
-      await ref.read(authStateProvider.notifier).register(
+      await ref
+          .read(authStateProvider.notifier)
+          .register(
             email: _email.text.trim(),
             password: _password.text,
             firstName: _firstName.text.trim(),
