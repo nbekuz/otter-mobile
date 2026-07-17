@@ -8,7 +8,6 @@ import 'core/theme/otter_theme.dart';
 
 class OtterApp extends ConsumerWidget {
   const OtterApp({super.key});
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
