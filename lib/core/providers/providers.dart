@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../firebase/firebase_bootstrap.dart';
 import '../network/api_client.dart';
 import '../network/api_exception.dart';
 import '../storage/token_storage.dart';
@@ -59,6 +60,14 @@ final premiumStateProvider =
       return PremiumNotifier(ref);
     });
 
+enum PremiumPaymentPollingResult {
+  success,
+  cancelled,
+  timeout,
+  fatalError,
+  stopped,
+}
+
 class PremiumState {
   const PremiumState({
     this.tariffs = const [],
@@ -68,6 +77,8 @@ class PremiumState {
     this.loading = false,
     this.actionLoading = false,
     this.error,
+    this.paymentPolling = false,
+    this.paymentPollingMessage,
   });
 
   final List<ApiTariff> tariffs;
@@ -77,6 +88,8 @@ class PremiumState {
   final bool loading;
   final bool actionLoading;
   final String? error;
+  final bool paymentPolling;
+  final String? paymentPollingMessage;
 
   ApiTariff? get selectedTariff {
     for (final t in tariffs) {
@@ -85,7 +98,11 @@ class PremiumState {
     return tariffs.isEmpty ? null : tariffs.first;
   }
 
-  bool get isPremium => subscription?.isPremium ?? false;
+  bool get isPremium {
+    final current = subscription;
+    return current?.isPremium == true ||
+        current?.status.toLowerCase() == 'active';
+  }
 
   PremiumState copyWith({
     List<ApiTariff>? tariffs,
@@ -96,6 +113,9 @@ class PremiumState {
     bool? actionLoading,
     String? error,
     bool clearError = false,
+    bool? paymentPolling,
+    String? paymentPollingMessage,
+    bool clearPaymentPollingMessage = false,
   }) => PremiumState(
     tariffs: tariffs ?? this.tariffs,
     features: features ?? this.features,
@@ -104,6 +124,10 @@ class PremiumState {
     loading: loading ?? this.loading,
     actionLoading: actionLoading ?? this.actionLoading,
     error: clearError ? null : (error ?? this.error),
+    paymentPolling: paymentPolling ?? this.paymentPolling,
+    paymentPollingMessage: clearPaymentPollingMessage
+        ? null
+        : (paymentPollingMessage ?? this.paymentPollingMessage),
   );
 }
 
@@ -111,12 +135,17 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   PremiumNotifier(this._ref) : super(const PremiumState());
 
   final Ref _ref;
+  Future<PremiumPaymentPollingResult>? _paymentPollingFuture;
+  Completer<void>? _paymentPollingCancellation;
+  Completer<void>? _paymentPollingWake;
+  int _paymentPollingGeneration = 0;
 
   void _syncPremiumToSettings(ApiSubscription sub) {
     final settings = _ref.read(appSettingsProvider);
+    final isPremium = sub.isPremium || sub.status.toLowerCase() == 'active';
     _ref
         .read(appSettingsProvider.notifier)
-        .applyLocal(settings.copyWith(isPremium: sub.isPremium));
+        .applyLocal(settings.copyWith(isPremium: isPremium));
   }
 
   Future<void> loadAll() async {
@@ -209,6 +238,227 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
     }
   }
 
+  Future<PremiumPaymentPollingResult> pollForPayment({
+    Duration interval = const Duration(seconds: 2),
+    Duration timeout = const Duration(minutes: 10),
+  }) async {
+    final activePolling = _paymentPollingFuture;
+    if (activePolling != null) return activePolling;
+
+    final generation = ++_paymentPollingGeneration;
+    final cancellation = Completer<void>();
+    _paymentPollingCancellation = cancellation;
+    final polling = _runPaymentPolling(
+      generation: generation,
+      interval: interval,
+      timeout: timeout,
+      cancellation: cancellation.future,
+    );
+    _paymentPollingFuture = polling;
+
+    try {
+      return await polling;
+    } finally {
+      if (identical(_paymentPollingFuture, polling)) {
+        _paymentPollingFuture = null;
+        _paymentPollingCancellation = null;
+        _paymentPollingWake = null;
+        state = state.copyWith(
+          paymentPolling: false,
+          clearPaymentPollingMessage: true,
+        );
+      }
+    }
+  }
+
+  void cancelPaymentPolling() {
+    _paymentPollingGeneration++;
+    final cancellation = _paymentPollingCancellation;
+    if (cancellation != null && !cancellation.isCompleted) {
+      cancellation.complete();
+    }
+    final wake = _paymentPollingWake;
+    if (wake != null && !wake.isCompleted) {
+      wake.complete();
+    }
+    state = state.copyWith(
+      paymentPolling: false,
+      clearPaymentPollingMessage: true,
+    );
+  }
+
+  /// Forces an immediate subscription check while Windows polling is active
+  /// (for example after the app is restored from minimized state).
+  void wakePaymentPolling() {
+    if (!state.paymentPolling) return;
+    final wake = _paymentPollingWake;
+    if (wake != null && !wake.isCompleted) {
+      wake.complete();
+    }
+  }
+
+  Future<PremiumPaymentPollingResult> _runPaymentPolling({
+    required int generation,
+    required Duration interval,
+    required Duration timeout,
+    required Future<void> cancellation,
+  }) async {
+    final stopwatch = Stopwatch()..start();
+    var transientFailures = 0;
+    final baseline = state.subscription;
+    final baselineStatus = baseline?.status.toLowerCase() ?? 'none';
+    final baselineIsPremium = baseline?.isPremium == true;
+
+    state = state.copyWith(
+      paymentPolling: true,
+      paymentPollingMessage: 'Ожидаем подтверждение оплаты…',
+      clearError: true,
+    );
+
+    while (generation == _paymentPollingGeneration) {
+      if (stopwatch.elapsed >= timeout) {
+        return PremiumPaymentPollingResult.timeout;
+      }
+
+      try {
+        final remaining = timeout - stopwatch.elapsed;
+        if (remaining <= Duration.zero) {
+          return PremiumPaymentPollingResult.timeout;
+        }
+        final subscription = await _ref
+            .read(premiumServiceProvider)
+            .fetchSubscription()
+            .timeout(remaining);
+        if (generation != _paymentPollingGeneration) {
+          return PremiumPaymentPollingResult.stopped;
+        }
+
+        transientFailures = 0;
+        state = state.copyWith(
+          subscription: subscription,
+          paymentPollingMessage: 'Ожидаем подтверждение оплаты…',
+          clearError: true,
+        );
+        _syncPremiumToSettings(subscription);
+
+        final status = subscription.status.toLowerCase();
+        if (_isPaidCheckoutSuccess(
+          subscription,
+          baselineStatus: baselineStatus,
+          baselineIsPremium: baselineIsPremium,
+        )) {
+          _syncPremiumToSettings(subscription);
+          return PremiumPaymentPollingResult.success;
+        }
+        // Keep waiting while the user still has an existing trial; only stop on
+        // terminal statuses that appear after checkout began.
+        if (const {
+              'cancelled',
+              'canceled',
+              'failed',
+              'expired',
+            }.contains(status) &&
+            status != baselineStatus) {
+          return PremiumPaymentPollingResult.cancelled;
+        }
+
+        await _waitForNextAttempt(
+          interval,
+          stopwatch: stopwatch,
+          timeout: timeout,
+          cancellation: cancellation,
+        );
+      } catch (error) {
+        if (generation != _paymentPollingGeneration) {
+          return PremiumPaymentPollingResult.stopped;
+        }
+        if (stopwatch.elapsed >= timeout) {
+          return PremiumPaymentPollingResult.timeout;
+        }
+        if (!_isTransientPollingError(error)) {
+          state = state.copyWith(error: getApiErrorMessage(error));
+          return PremiumPaymentPollingResult.fatalError;
+        }
+
+        transientFailures++;
+        final retryDelay = _pollingRetryDelay(
+          transientFailures,
+          baseInterval: interval,
+        );
+        state = state.copyWith(
+          paymentPollingMessage:
+              'Нет соединения. Повторная проверка через '
+              '${retryDelay.inSeconds} сек…',
+        );
+        await _waitForNextAttempt(
+          retryDelay,
+          stopwatch: stopwatch,
+          timeout: timeout,
+          cancellation: cancellation,
+        );
+      }
+    }
+
+    return PremiumPaymentPollingResult.stopped;
+  }
+
+  /// Paid checkout is complete when Robokassa activates a paid subscription.
+  /// Existing trial users already have [ApiSubscription.isPremium] == true, so
+  /// that alone must not end polling.
+  bool _isPaidCheckoutSuccess(
+    ApiSubscription current, {
+    required String baselineStatus,
+    required bool baselineIsPremium,
+  }) {
+    final status = current.status.toLowerCase();
+    if (status == 'active' && status != baselineStatus) return true;
+    if (current.isPremium && !baselineIsPremium) return true;
+    return false;
+  }
+
+  bool _isTransientPollingError(Object error) {
+    if (error is! ApiException) return false;
+    final status = error.statusCode;
+    // 401 is handled by ApiClient JWT refresh; a surviving 401 is fatal.
+    if (status == null || status >= 500 || status == 408 || status == 429) {
+      return true;
+    }
+    return false;
+  }
+
+  Duration _pollingRetryDelay(
+    int failureCount, {
+    required Duration baseInterval,
+  }) {
+    final exponent = (failureCount - 1).clamp(0, 4);
+    final seconds = baseInterval.inSeconds * (1 << exponent);
+    return Duration(seconds: seconds.clamp(2, 30));
+  }
+
+  Future<void> _waitForNextAttempt(
+    Duration requestedDelay, {
+    required Stopwatch stopwatch,
+    required Duration timeout,
+    required Future<void> cancellation,
+  }) async {
+    final remaining = timeout - stopwatch.elapsed;
+    if (remaining <= Duration.zero) return;
+    final delay = requestedDelay < remaining ? requestedDelay : remaining;
+    final wake = Completer<void>();
+    _paymentPollingWake = wake;
+    try {
+      await Future.any<void>([
+        Future<void>.delayed(delay),
+        cancellation,
+        wake.future,
+      ]);
+    } finally {
+      if (identical(_paymentPollingWake, wake)) {
+        _paymentPollingWake = null;
+      }
+    }
+  }
+
   Future<ApiSubscription> cancel() async {
     state = state.copyWith(actionLoading: true, clearError: true);
     try {
@@ -223,6 +473,12 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
       );
       rethrow;
     }
+  }
+
+  @override
+  void dispose() {
+    cancelPaymentPolling();
+    super.dispose();
   }
 }
 
@@ -494,6 +750,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    try {
+      await FirebaseBootstrap.signOut();
+    } catch (_) {
+      // Local/backend logout must still complete if Firebase is unavailable.
+    }
     await _ref.read(tokenStorageProvider).clear();
     await _ref.read(tokenStorageProvider).clearProfileNames();
     state = const AuthState();

@@ -1,2 +1,9 @@
-/// No-op on web — desktop Google Sign-In is not used in the browser build.
-Future<void> configureGoogleSignInDesktop({required String clientId}) async {}
+Future<String?> signInWithGoogleDesktop({required String clientId}) {
+  throw UnsupportedError('Desktop Google Sign-In is Windows-only.');
+}
+
+Future<void> signOutGoogleDesktop() async {}
+
+Future<String?> refreshGoogleFirebaseTokenDesktop({
+  bool forceRefresh = true,
+}) async => null;

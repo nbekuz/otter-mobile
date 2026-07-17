@@ -16,13 +16,6 @@ abstract final class FirebaseBootstrap {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-
-    // FlutterFire Windows example: register after Firebase.initializeApp.
-    if (defaultTargetPlatform == TargetPlatform.windows) {
-      await configureGoogleSignInDesktop(
-        clientId: Env.firebaseGoogleWebClientId,
-      );
-    }
   }
 
   static Future<String?> signInWithGoogle() async {
@@ -30,6 +23,9 @@ abstract final class FirebaseBootstrap {
 
     if (defaultTargetPlatform == TargetPlatform.windows) {
       _ensureWindowsFirebaseConfigured();
+      return signInWithGoogleDesktop(
+        clientId: Env.firebaseGoogleDesktopClientId,
+      );
     }
 
     final googleSignIn = GoogleSignIn(
@@ -54,6 +50,19 @@ abstract final class FirebaseBootstrap {
     return userCredential.user?.getIdToken();
   }
 
+  static Future<void> signOut() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      await signOutGoogleDesktop();
+    }
+  }
+
+  static Future<String?> refreshIdToken({bool forceRefresh = true}) async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      return refreshGoogleFirebaseTokenDesktop(forceRefresh: forceRefresh);
+    }
+    return FirebaseAuth.instance.currentUser?.getIdToken(forceRefresh);
+  }
+
   static void _ensureWindowsFirebaseConfigured() {
     if (Env.firebaseApiKey.isEmpty || Env.firebaseAppId.isEmpty) {
       throw StateError(
@@ -61,10 +70,11 @@ abstract final class FirebaseBootstrap {
         'FIREBASE_APP_ID in .env (Firebase Console → Web app).',
       );
     }
-    if (Env.firebaseGoogleWebClientId.isEmpty) {
+    if (Env.firebaseGoogleDesktopClientId.isEmpty) {
       throw StateError(
         'Windows Google Sign-In is not configured. Set '
-        'FIREBASE_GOOGLE_WEB_CLIENT_ID in .env (Google Cloud → Web OAuth client).',
+        'FIREBASE_GOOGLE_DESKTOP_CLIENT_ID in .env '
+        '(Google Cloud → Desktop OAuth client).',
       );
     }
   }

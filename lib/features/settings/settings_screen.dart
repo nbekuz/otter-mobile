@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +16,7 @@ import '../../data/models/ui/ui_models.dart';
 import '../../shared/widgets/bottom_nav.dart';
 import '../../shared/widgets/keyboard_dismisser.dart';
 import '../../shared/widgets/otter_checkbox.dart';
+import 'windows_premium_payment_dialog.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({
@@ -362,6 +366,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (!mounted || url.isEmpty) return;
       final opened = await openExternalUrl(url);
       if (!mounted) return;
+      if (Platform.isWindows && opened) {
+        final result = await showWindowsPremiumPaymentDialog(context: context);
+        if (!mounted) return;
+
+        switch (result) {
+          case PremiumPaymentPollingResult.success:
+            setState(() => _premiumVisible = false);
+            unawaited(ref.read(appSettingsProvider.notifier).load());
+            unawaited(ref.read(authStateProvider.notifier).refreshProfile());
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Premium успешно активирован')),
+            );
+          case PremiumPaymentPollingResult.cancelled:
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Платёж отменён')));
+          case PremiumPaymentPollingResult.timeout:
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Время ожидания истекло. Статус можно обновить вручную.',
+                ),
+              ),
+            );
+          case PremiumPaymentPollingResult.fatalError:
+            final error = ref.read(premiumStateProvider).error;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(error ?? 'Не удалось проверить статус платежа'),
+              ),
+            );
+          case PremiumPaymentPollingResult.stopped:
+          case null:
+            break;
+        }
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(

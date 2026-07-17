@@ -46,14 +46,18 @@ abstract final class Env {
       dotenv.env['FIREBASE_GOOGLE_SERVER_CLIENT_ID'] ??
       '911773858551-23po5m63ppifv4kqmi9uphkcoo1iq6fb.apps.googleusercontent.com';
 
-  /// OAuth Web client ID — Windows desktop Google Sign-In
-  /// ([GoogleSignInDart.register] / loopback OAuth in the system browser).
-  ///
-  /// Use the **Web application** client from Google Cloud Console, not a
-  /// separate "Desktop" OAuth client. Falls back to [firebaseGoogleServerClientId].
+  /// OAuth Web client ID used by the existing web configuration.
   static String get firebaseGoogleWebClientId =>
       dotenv.env['FIREBASE_GOOGLE_WEB_CLIENT_ID'] ??
       firebaseGoogleServerClientId;
+
+  /// OAuth Desktop client used only by Windows system-browser PKCE sign-in.
+  ///
+  /// A desktop client secret is intentionally not used: an installed
+  /// application cannot keep it confidential, and PKCE protects the code.
+  static String get firebaseGoogleDesktopClientId =>
+      dotenv.env['FIREBASE_GOOGLE_DESKTOP_CLIENT_ID'] ??
+      '911773858551-bbjtglnabr6hcakovna9qbvm9c0tegr9.apps.googleusercontent.com';
 
   static String? get firebaseMeasurementId =>
       dotenv.env['FIREBASE_MEASUREMENT_ID'];

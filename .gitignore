@@ -33,6 +33,7 @@ migrate_working_dir/
 /build/
 /coverage/
 .env.bak
+client_secret_*.json
 
 # Symbolication related
 app.*.symbols
