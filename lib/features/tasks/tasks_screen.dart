@@ -29,6 +29,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     Future.microtask(() {
       ref.read(tasksStateProvider.notifier).loadGrouped();
       ref.read(appSettingsProvider.notifier).load();
+      ref.read(notificationsInboxProvider.notifier).fetchUnreadCount();
     });
   }
 
@@ -38,17 +39,20 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     super.dispose();
   }
 
+  /// Local device time: 05–11 утро, 12–16 день, 17–22 вечер, 23–04 ночь.
   String _greeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Доброе утро';
-    if (hour < 18) return 'Добрый день';
-    return 'Добрый вечер';
+    if (hour >= 5 && hour < 12) return 'Доброе утро';
+    if (hour >= 12 && hour < 17) return 'Добрый день';
+    if (hour >= 17 && hour < 23) return 'Добрый вечер';
+    return 'Доброй ночи';
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(tasksStateProvider);
     final settings = ref.watch(appSettingsProvider);
+    final inbox = ref.watch(notificationsInboxProvider);
     final isDark = settings.theme == 'dark';
     final showingSearch = _searchVisible || state.searchQuery.isNotEmpty;
     final groups = TaskGroupKey.values;
@@ -56,7 +60,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
 
     final overdue = state.groups[TaskGroupKey.overdue]?.length ?? 0;
     final today = state.groups[TaskGroupKey.today]?.length ?? 0;
-    final completed = state.groups[TaskGroupKey.completed]?.length ?? 0;
+    final tomorrow = state.groups[TaskGroupKey.tomorrow]?.length ?? 0;
 
     return Scaffold(
       backgroundColor: isDark ? OtterColors.darkBg : OtterColors.grayLight,
@@ -80,28 +84,6 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                       ),
                     ),
                   ),
-                  if (!wide)
-                    IconButton(
-                      tooltip: 'FAQ',
-                      onPressed: () => context.push('/app/faq'),
-                      icon: const Icon(LucideIcons.helpCircle),
-                      style: IconButton.styleFrom(
-                        backgroundColor: isDark
-                            ? OtterColors.darkSurface
-                            : Colors.white,
-                      ),
-                    ),
-                  if (!wide)
-                    IconButton(
-                      tooltip: 'Документы',
-                      onPressed: () => context.push('/app/legal'),
-                      icon: const Icon(LucideIcons.fileText, size: 20),
-                      style: IconButton.styleFrom(
-                        backgroundColor: isDark
-                            ? OtterColors.darkSurface
-                            : Colors.white,
-                      ),
-                    ),
                   if (wide)
                     IconButton(
                       tooltip: 'Обновить',
@@ -114,6 +96,24 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                             : Colors.white,
                       ),
                     ),
+                  IconButton(
+                    tooltip: 'Уведомления',
+                    onPressed: () => context.push('/app/notifications'),
+                    icon: Badge(
+                      isLabelVisible: inbox.unreadCount > 0,
+                      label: Text(
+                        inbox.unreadCount > 99
+                            ? '99+'
+                            : '${inbox.unreadCount}',
+                      ),
+                      child: const Icon(LucideIcons.bell),
+                    ),
+                    style: IconButton.styleFrom(
+                      backgroundColor: isDark
+                          ? OtterColors.darkSurface
+                          : Colors.white,
+                    ),
+                  ),
                   IconButton(
                     tooltip: 'Поиск',
                     onPressed: () =>
@@ -173,9 +173,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                     ),
                     const SizedBox(width: 8),
                     _StatChip(
-                      label: 'Готово',
-                      count: completed,
-                      color: OtterColors.sberGreen,
+                      label: 'Завтра',
+                      count: tomorrow,
+                      color: const Color(0xFF007AFF),
                       isDark: isDark,
                     ),
                   ],
@@ -227,10 +227,61 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   }
 
   Future<void> _delete(Task task) async {
+    if (task.repeat != RepeatType.none) {
+      final choice = await showModalBottomSheet<String>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Удалить повторяющуюся задачу?',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Выберите, что именно удалить.',
+                  style: TextStyle(fontSize: 13, color: OtterColors.sberGray),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, 'occurrence'),
+                  child: const Text('Удалить только этот повтор'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, 'series'),
+                  child: const Text('Удалить все повторения'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Отмена'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      if (choice == 'occurrence') {
+        await ref.read(tasksStateProvider.notifier).deleteOccurrence(task);
+      } else if (choice == 'series') {
+        await ref.read(tasksStateProvider.notifier).deleteSeries(task.id);
+      }
+      return;
+    }
     await ref.read(tasksStateProvider.notifier).deleteTask(task.id);
   }
 
   void _openDetail(Task task) {
+    final query = ref.read(tasksStateProvider).searchQuery;
+    if (_searchVisible || query.isNotEmpty) {
+      _search.clear();
+      ref.read(tasksStateProvider.notifier).search('');
+      setState(() => _searchVisible = false);
+    }
     showTaskDetailSheet(context, task);
   }
 
@@ -318,8 +369,12 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
           key == TaskGroupKey.nodate ? 'nodate' : key.name,
         ))
           TaskGroupWidget(
+            key: ValueKey('group-${key.name}'),
             title: key.titleRu,
             tasks: state.groups[key] ?? [],
+            accentColor: taskGroupAccent(key),
+            surfaceColor: taskGroupSurfaceTint(key),
+            initiallyExpanded: false,
             onComplete: onComplete,
             onDelete: onDelete,
             onOpen: onOpen,
@@ -366,8 +421,12 @@ class _WideTaskGroups extends StatelessWidget {
         children: [
           for (final key in keys)
             TaskGroupWidget(
+              key: ValueKey('wide-group-${key.name}'),
               title: key.titleRu,
               tasks: state.groups[key] ?? [],
+              accentColor: taskGroupAccent(key),
+              surfaceColor: taskGroupSurfaceTint(key),
+              initiallyExpanded: false,
               onComplete: onComplete,
               onDelete: onDelete,
               onOpen: onOpen,

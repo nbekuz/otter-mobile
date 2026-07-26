@@ -75,7 +75,11 @@ class AppShell extends ConsumerWidget {
     );
   }
 
-  bool _hideFab(String path) => path.contains('new-task');
+  bool _hideFab(String path) =>
+      path.contains('new-task') ||
+      path.contains('/profile') ||
+      path.endsWith('/settings') ||
+      path.contains('/settings?');
 }
 
 class _Sidebar extends ConsumerWidget {
@@ -122,7 +126,11 @@ class _Sidebar extends ConsumerWidget {
         children: [
           BrandLogo(showName: true, lightText: isDark),
           const SizedBox(height: 24),
-          _ProfileCard(auth: auth, isDark: isDark),
+          _ProfileCard(
+            auth: auth,
+            isDark: isDark,
+            isPremium: settings.isPremium,
+          ),
           const SizedBox(height: 16),
           Expanded(
             child: ListView(
@@ -265,10 +273,15 @@ class _SidebarLink extends StatelessWidget {
 }
 
 class _ProfileCard extends StatelessWidget {
-  const _ProfileCard({required this.auth, required this.isDark});
+  const _ProfileCard({
+    required this.auth,
+    required this.isDark,
+    required this.isPremium,
+  });
 
   final AuthState auth;
   final bool isDark;
+  final bool isPremium;
 
   @override
   Widget build(BuildContext context) {
@@ -283,38 +296,66 @@ class _ProfileCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: OtterColors.sberGreen,
-                backgroundImage: user?.avatar != null
-                    ? NetworkImage(user!.avatar!)
-                    : null,
-                child: user?.avatar == null
-                    ? Text(
-                        (user?.name.isNotEmpty == true ? user!.name[0] : 'A')
-                            .toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
+              Container(
+                decoration: isPremium
+                    ? BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0xFFFACC15),
+                          width: 2,
                         ),
                       )
                     : null,
+                padding: isPremium ? const EdgeInsets.all(2) : EdgeInsets.zero,
+                child: CircleAvatar(
+                  radius: 24,
+                  backgroundColor: OtterColors.sberGreen,
+                  backgroundImage: user?.avatar != null
+                      ? NetworkImage(user!.avatar!)
+                      : null,
+                  child: user?.avatar == null
+                      ? Text(
+                          (user?.name.isNotEmpty == true ? user!.name[0] : 'A')
+                              .toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        )
+                      : null,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      user?.name ?? 'Пользователь',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: isDark
-                            ? OtterColors.darkText
-                            : OtterColors.sberBlack,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            user?.name ?? 'Пользователь',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: isDark
+                                  ? OtterColors.darkText
+                                  : OtterColors.sberBlack,
+                            ),
+                          ),
+                        ),
+                        if (isPremium) ...[
+                          const SizedBox(width: 4),
+                          const Text(
+                            '⭐',
+                            style: TextStyle(
+                              fontSize: 13,
+                              height: 1,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     if (user?.email != null)
                       Text(

@@ -16,6 +16,7 @@ import '../../features/pomodoro/pomodoro_screen.dart';
 import '../../features/settings/settings_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/faq/faq_screen.dart';
+import '../../features/notifications/notifications_screen.dart';
 import '../../features/legal/legal_screen.dart';
 import '../../features/legal/static_legal_screen.dart';
 
@@ -116,6 +117,10 @@ GoRouter createAppRouter(Ref ref, Listenable refreshListenable) {
                 },
               ),
               GoRoute(path: 'faq', builder: (_, _) => const FaqScreen()),
+              GoRoute(
+                path: 'notifications',
+                builder: (_, _) => const NotificationsScreen(),
+              ),
               GoRoute(path: 'legal', builder: (_, _) => const LegalScreen()),
               GoRoute(
                 path: 'profile',
@@ -133,10 +138,15 @@ final routerProvider = Provider<GoRouter>((ref) {
   final refresh = _RouterRefresh();
   final router = createAppRouter(ref, refresh);
 
-  ref.listen<AuthState>(
-    authStateProvider,
-    (previous, next) => refresh.refresh(),
-  );
+  ref.listen<AuthState>(authStateProvider, (previous, next) {
+    // Only refresh routes when auth identity changes — not on isLoading,
+    // which would remount login/register and dismiss the keyboard.
+    if (previous?.isAuthenticated != next.isAuthenticated ||
+        previous?.requiresProfileFill != next.requiresProfileFill ||
+        previous?.isBootstrapping != next.isBootstrapping) {
+      refresh.refresh();
+    }
+  });
   ref.onDispose(() {
     router.dispose();
     refresh.dispose();

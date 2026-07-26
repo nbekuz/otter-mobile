@@ -8,18 +8,28 @@ import '../network/api_exception.dart';
 import '../storage/token_storage.dart';
 import '../../data/services/auth_service.dart';
 import '../../data/services/calendar_service.dart';
+import '../../data/services/devices_service.dart';
 import '../../data/services/matrix_service.dart';
 import '../../data/services/pomodoro_service.dart';
 import '../../data/services/settings_service.dart';
 import '../../data/services/premium_service.dart';
+import '../../data/services/reminders_service.dart';
 import '../../data/services/sounds_service.dart';
 import '../../data/services/tasks_service.dart';
+import '../../data/services/notifications_service.dart';
 import '../../features/matrix/matrix_block_setting.dart';
 import '../../data/mappers/task_mapper.dart';
 import '../../data/models/api/api_models.dart';
 import '../../data/models/ui/ui_models.dart';
 import '../audio/pomodoro_audio.dart';
+import '../audio/feedback_audio.dart';
+import '../push/push_notifications.dart';
+import '../utils/premium_tariffs.dart';
+import '../utils/recurrence.dart';
 import '../utils/time_utils.dart';
+import '../utils/timezone_utils.dart';
+import '../locale/app_languages.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 
@@ -48,12 +58,178 @@ final pomodoroServiceProvider = Provider<PomodoroService>(
 final soundsServiceProvider = Provider<SoundsService>(
   (ref) => SoundsService(ref.watch(apiClientProvider)),
 );
+
+final feedbackAudioProvider = Provider<FeedbackAudio>((ref) {
+  final audio = FeedbackAudio(ref.watch(soundsServiceProvider));
+  ref.onDispose(() {
+    unawaited(audio.dispose());
+  });
+  return audio;
+});
 final settingsServiceProvider = Provider<SettingsService>(
   (ref) => SettingsService(ref.watch(apiClientProvider)),
 );
 final premiumServiceProvider = Provider<PremiumService>(
   (ref) => PremiumService(ref.watch(apiClientProvider)),
 );
+final devicesServiceProvider = Provider<DevicesService>(
+  (ref) => DevicesService(ref.watch(apiClientProvider)),
+);
+final remindersServiceProvider = Provider<RemindersService>(
+  (ref) => RemindersService(ref.watch(apiClientProvider)),
+);
+final notificationsServiceProvider = Provider<NotificationsService>(
+  (ref) => NotificationsService(ref.watch(apiClientProvider)),
+);
+final pushNotificationsProvider = Provider<PushNotifications>((ref) {
+  return PushNotifications(
+    devices: ref.watch(devicesServiceProvider),
+    reminders: ref.watch(remindersServiceProvider),
+    onTasksChanged: () => ref.read(tasksStateProvider.notifier).loadGrouped(),
+    onReminderSound: () async {
+      final settings = ref.read(appSettingsProvider);
+      if (!settings.notifications) return;
+      await ref.read(feedbackAudioProvider).playKey(
+            'notification',
+            settings.notificationSound,
+          );
+    },
+  );
+});
+
+class NotificationsInboxState {
+  const NotificationsInboxState({
+    this.items = const [],
+    this.unreadCount = 0,
+    this.loading = false,
+    this.error,
+  });
+
+  final List<ApiNotificationItem> items;
+  final int unreadCount;
+  final bool loading;
+  final String? error;
+
+  NotificationsInboxState copyWith({
+    List<ApiNotificationItem>? items,
+    int? unreadCount,
+    bool? loading,
+    String? error,
+    bool clearError = false,
+  }) => NotificationsInboxState(
+    items: items ?? this.items,
+    unreadCount: unreadCount ?? this.unreadCount,
+    loading: loading ?? this.loading,
+    error: clearError ? null : (error ?? this.error),
+  );
+}
+
+class NotificationsInboxNotifier
+    extends StateNotifier<NotificationsInboxState> {
+  NotificationsInboxNotifier(this._ref)
+    : super(const NotificationsInboxState());
+
+  final Ref _ref;
+
+  Future<void> fetchUnreadCount() async {
+    try {
+      final count = await _ref
+          .read(notificationsServiceProvider)
+          .unreadCount();
+      state = state.copyWith(unreadCount: count);
+    } catch (_) {}
+  }
+
+  Future<void> load() async {
+    state = state.copyWith(loading: true, clearError: true);
+    try {
+      final page = await _ref.read(notificationsServiceProvider).list();
+      state = NotificationsInboxState(
+        items: page.results,
+        unreadCount: page.unreadCount,
+      );
+      if (page.unreadCount == 0 && page.results.any((e) => !e.isRead)) {
+        await fetchUnreadCount();
+      }
+    } catch (e) {
+      state = state.copyWith(
+        loading: false,
+        error: getApiErrorMessage(e, 'Не удалось загрузить уведомления'),
+      );
+    }
+  }
+
+  Future<void> markRead(int id) async {
+    await _ref.read(notificationsServiceProvider).markRead(id);
+    final items = state.items.map((n) {
+      if (n.id != id || n.isRead) return n;
+      return ApiNotificationItem(
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        body: n.body,
+        data: n.data,
+        task: n.task,
+        isRead: true,
+        readAt: DateTime.now().toIso8601String(),
+        createdAt: n.createdAt,
+      );
+    }).toList();
+    final wasUnread = state.items.any((n) => n.id == id && !n.isRead);
+    state = state.copyWith(
+      items: items,
+      unreadCount: wasUnread
+          ? (state.unreadCount - 1).clamp(0, 1 << 30)
+          : state.unreadCount,
+    );
+  }
+
+  Future<void> markAllRead() async {
+    final count = await _ref.read(notificationsServiceProvider).markAllRead();
+    state = state.copyWith(
+      items: state.items
+          .map(
+            (n) => ApiNotificationItem(
+              id: n.id,
+              type: n.type,
+              title: n.title,
+              body: n.body,
+              data: n.data,
+              task: n.task,
+              isRead: true,
+              readAt: n.readAt ?? DateTime.now().toIso8601String(),
+              createdAt: n.createdAt,
+            ),
+          )
+          .toList(),
+      unreadCount: count,
+    );
+  }
+
+  Future<void> remove(int id) async {
+    await _ref.read(notificationsServiceProvider).delete(id);
+    ApiNotificationItem? removed;
+    for (final n in state.items) {
+      if (n.id == id) {
+        removed = n;
+        break;
+      }
+    }
+    state = state.copyWith(
+      items: state.items.where((n) => n.id != id).toList(),
+      unreadCount: removed != null && !removed.isRead
+          ? (state.unreadCount - 1).clamp(0, 1 << 30)
+          : state.unreadCount,
+    );
+  }
+}
+
+final notificationsInboxProvider =
+    StateNotifierProvider<NotificationsInboxNotifier, NotificationsInboxState>((
+      ref,
+    ) {
+      return NotificationsInboxNotifier(ref);
+    });
 
 final premiumStateProvider =
     StateNotifierProvider<PremiumNotifier, PremiumState>((ref) {
@@ -157,12 +333,14 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
         service.fetchSubscription(),
         service.fetchFeatures(),
       ]);
-      final tariffs = results[0] as List<ApiTariff>;
+      final tariffs = normalizeTariffsForDisplay(
+        results[0] as List<ApiTariff>,
+      );
       final subscription = results[1] as ApiSubscription;
       final features = results[2] as List<ApiPremiumFeature>;
       var selected = state.selectedTariffCode;
       if (!tariffs.any((t) => t.code == selected) && tariffs.isNotEmpty) {
-        selected = tariffs.first.code;
+        selected = tariffs.firstOrNull?.code ?? selected;
       }
       state = state.copyWith(
         tariffs: tariffs,
@@ -490,40 +668,175 @@ final appSettingsProvider =
     });
 
 class AppSettingsNotifier extends StateNotifier<AppSettings> {
-  AppSettingsNotifier(this._ref) : super(AppSettings.defaults());
+  AppSettingsNotifier(this._ref) : super(AppSettings.defaults()) {
+    unawaited(_hydrateLocalPrefs());
+  }
 
   final Ref _ref;
+
+  static const _themeKey = 'otter.settings.theme';
+  static const _notificationsKey = 'otter.settings.notifications';
+  static const _languageKey = 'otter.settings.language';
+  static const _calendarViewKey = 'otter.settings.calendarDefaultView';
+  static const _collapseEarlyKey = 'otter.settings.calendarCollapseEarlyHours';
+  static const _collapseLateKey = 'otter.settings.calendarCollapseLateHours';
+
+  Future<void> _hydrateLocalPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final theme = prefs.getString(_themeKey);
+      final notifications = prefs.getBool(_notificationsKey);
+      final language = prefs.getString(_languageKey);
+      final calendarView = prefs.getString(_calendarViewKey);
+      final collapseEarly = prefs.getBool(_collapseEarlyKey);
+      final collapseLate = prefs.getBool(_collapseLateKey);
+      if (theme == null &&
+          notifications == null &&
+          language == null &&
+          calendarView == null &&
+          collapseEarly == null &&
+          collapseLate == null) {
+        return;
+      }
+      state = state.copyWith(
+        theme: theme ?? state.theme,
+        notifications: notifications ?? state.notifications,
+        language: language != null
+            ? normalizeAppLanguage(language)
+            : state.language,
+        calendarDefaultView: calendarView ?? state.calendarDefaultView,
+        calendarCollapseEarlyHours:
+            collapseEarly ?? state.calendarCollapseEarlyHours,
+        calendarCollapseLateHours:
+            collapseLate ?? state.calendarCollapseLateHours,
+      );
+      if (theme != null) {
+        _ref.read(themeModeProvider.notifier).state = theme;
+      }
+      // Keep an already-created calendar in sync after prefs hydrate.
+      try {
+        _ref
+            .read(calendarStateProvider.notifier)
+            .applyViewDefaultsFromSettings();
+      } catch (_) {}
+    } catch (_) {}
+  }
+
+  Future<void> _persistLocalPrefs(AppSettings settings) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_themeKey, settings.theme);
+      await prefs.setBool(_notificationsKey, settings.notifications);
+      await prefs.setString(
+        _languageKey,
+        normalizeAppLanguage(settings.language),
+      );
+      await prefs.setString(_calendarViewKey, settings.calendarDefaultView);
+      await prefs.setBool(
+        _collapseEarlyKey,
+        settings.calendarCollapseEarlyHours,
+      );
+      await prefs.setBool(
+        _collapseLateKey,
+        settings.calendarCollapseLateHours,
+      );
+    } catch (_) {}
+  }
+
+  AppSettings _mergeLocal(AppSettings remote) {
+    return remote.copyWith(
+      theme: state.theme,
+      notifications: state.notifications,
+      language: normalizeAppLanguage(remote.language),
+      calendarDefaultView: state.calendarDefaultView,
+      calendarCollapseEarlyHours: state.calendarCollapseEarlyHours,
+      calendarCollapseLateHours: state.calendarCollapseLateHours,
+    );
+  }
 
   Future<void> load() async {
     try {
       final settings = await _ref.read(settingsServiceProvider).fetchSettings();
-      state = settings;
+      state = _mergeLocal(settings);
+      unawaited(_persistLocalPrefs(state));
+      await ensureTimezoneSynced();
+    } catch (_) {}
+  }
+
+  /// Persist device IANA timezone on first open / when empty or stale.
+  Future<void> ensureTimezoneSynced() async {
+    try {
+      final tz = await deviceTimezone();
+      if (tz.isEmpty) return;
+      if (state.timezone == tz) return;
+      final next = state.copyWith(timezone: tz);
+      final patched = await _ref
+          .read(settingsServiceProvider)
+          .patchSettings(next);
+      state = _mergeLocal(patched).copyWith(timezone: tz);
+    } catch (_) {}
+  }
+
+  Future<void> syncPushRegistration() async {
+    try {
+      await _ref.read(pushNotificationsProvider).registerDevice();
     } catch (_) {}
   }
 
   Future<void> update(AppSettings next) async {
     final prevNotifications = state.notifications;
-    state = next;
+    final normalized = next.copyWith(
+      language: normalizeAppLanguage(next.language),
+    );
+    final viewChanged =
+        normalized.calendarDefaultView != state.calendarDefaultView ||
+            normalized.calendarCollapseEarlyHours !=
+                state.calendarCollapseEarlyHours ||
+            normalized.calendarCollapseLateHours !=
+                state.calendarCollapseLateHours;
+    state = normalized;
+    unawaited(_persistLocalPrefs(normalized));
     try {
       final patched = await _ref
           .read(settingsServiceProvider)
-          .patchSettings(next);
-      state = patched.copyWith(
-        theme: next.theme,
-        notifications: next.notifications,
+          .patchSettings(normalized);
+      state = _mergeLocal(patched).copyWith(
+        theme: normalized.theme,
+        notifications: normalized.notifications,
+        language: normalizeAppLanguage(
+          normalized.language.isNotEmpty
+              ? normalized.language
+              : patched.language,
+        ),
+        timezone: normalized.timezone ?? patched.timezone,
+        calendarDefaultView: normalized.calendarDefaultView,
+        calendarCollapseEarlyHours: normalized.calendarCollapseEarlyHours,
+        calendarCollapseLateHours: normalized.calendarCollapseLateHours,
       );
+      unawaited(_persistLocalPrefs(state));
+      if (viewChanged) {
+        _ref.read(calendarStateProvider.notifier).applyViewDefaultsFromSettings();
+      }
     } catch (_) {
-      state = next.copyWith(notifications: prevNotifications);
+      state = normalized.copyWith(notifications: prevNotifications);
     }
   }
 
   void applyLocal(AppSettings next) {
+    final viewChanged = next.calendarDefaultView != state.calendarDefaultView ||
+        next.calendarCollapseEarlyHours != state.calendarCollapseEarlyHours ||
+        next.calendarCollapseLateHours != state.calendarCollapseLateHours;
     state = next;
+    unawaited(_persistLocalPrefs(next));
+    if (viewChanged) {
+      _ref.read(calendarStateProvider.notifier).applyViewDefaultsFromSettings();
+    }
   }
 
   void setTheme(String theme) {
     state = state.copyWith(theme: theme);
     _ref.read(themeModeProvider.notifier).state = theme;
+    unawaited(_persistLocalPrefs(state));
   }
 }
 
@@ -622,6 +935,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
       requiresProfileFill: first.trim().isEmpty || last.trim().isEmpty,
       isBootstrapping: false,
     );
+    // ignore: discarded_futures
+    _postAuthSideEffects();
+  }
+
+  Future<void> _postAuthSideEffects() async {
+    try {
+      await _ref.read(appSettingsProvider.notifier).load();
+      await _ref.read(appSettingsProvider.notifier).syncPushRegistration();
+      await _ref.read(notificationsInboxProvider.notifier).fetchUnreadCount();
+      await _ref.read(pushNotificationsProvider).pollDueReminders();
+    } catch (_) {}
   }
 
   Future<void> _markAuthenticatedFromStoredToken() async {
@@ -643,6 +967,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
           names.first.trim().isEmpty || names.last.trim().isEmpty,
       isBootstrapping: false,
     );
+    // ignore: discarded_futures
+    _postAuthSideEffects();
   }
 
   Future<void> refreshProfile() async {
@@ -689,6 +1015,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
           backendUser.lastName.trim().isEmpty,
       isBootstrapping: false,
     );
+    // ignore: discarded_futures
+    _postAuthSideEffects();
   }
 
   Future<void> login(String email, String password) async {
@@ -701,6 +1029,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
           .read(tokenStorageProvider)
           .setTokens(access: tokens.access, refresh: tokens.refresh);
       await refreshProfile();
+    } catch (e) {
+      // Keep unauthenticated; rethrow so UI can show field errors.
+      rethrow;
     } finally {
       state = state.copyWith(isLoading: false);
     }
@@ -727,6 +1058,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         refresh: result.tokens.refresh,
         backendUser: result.user,
       );
+    } catch (e) {
+      rethrow;
     } finally {
       state = state.copyWith(isLoading: false);
     }
@@ -751,6 +1084,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     try {
+      await _ref.read(pushNotificationsProvider).unregisterDevice();
+    } catch (_) {}
+    try {
       await FirebaseBootstrap.signOut();
     } catch (_) {
       // Local/backend logout must still complete if Firebase is unavailable.
@@ -759,6 +1095,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _ref.read(tokenStorageProvider).clearProfileNames();
     state = const AuthState();
     _ref.invalidate(tasksStateProvider);
+  }
+
+  Future<void> deleteAccount() async {
+    state = state.copyWith(isLoading: true);
+    try {
+      await _ref.read(authServiceProvider).deleteAccount();
+      await logout();
+    } finally {
+      state = state.copyWith(isLoading: false);
+    }
   }
 }
 
@@ -813,6 +1159,49 @@ class TasksNotifier extends StateNotifier<TasksState> {
     }
   }
 
+  /// Optimistic insert/update into grouped lists (web `upsertTaskInState`).
+  void upsertLocalTask(Task task) {
+    final next = <TaskGroupKey, List<Task>>{
+      for (final e in state.groups.entries)
+        e.key: [for (final t in e.value) if (t.id != task.id) t],
+    };
+    final key = _groupKeyForTask(task);
+    next[key] = [task, ...?next[key]];
+    state = TasksState(
+      groups: next,
+      searchQuery: state.searchQuery,
+      searchResults: state.searchResults,
+    );
+  }
+
+  void removeLocalTask(String id) {
+    final next = <TaskGroupKey, List<Task>>{
+      for (final e in state.groups.entries)
+        e.key: [for (final t in e.value) if (t.id != id) t],
+    };
+    state = TasksState(
+      groups: next,
+      searchQuery: state.searchQuery,
+      searchResults: state.searchResults,
+    );
+  }
+
+  static TaskGroupKey _groupKeyForTask(Task task) {
+    if (task.completed) return TaskGroupKey.completed;
+    final due = task.dueDate;
+    if (due == null || due.isEmpty) return TaskGroupKey.nodate;
+    final day = DateTime.tryParse(due);
+    if (day == null) return TaskGroupKey.nodate;
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+    final dueOnly = DateTime(day.year, day.month, day.day);
+    final diff = dueOnly.difference(todayOnly).inDays;
+    if (diff < 0) return TaskGroupKey.overdue;
+    if (diff == 0) return TaskGroupKey.today;
+    if (diff == 1) return TaskGroupKey.tomorrow;
+    return TaskGroupKey.later;
+  }
+
   Future<void> search(String query) async {
     state = TasksState(
       groups: state.groups,
@@ -835,21 +1224,77 @@ class TasksNotifier extends StateNotifier<TasksState> {
     );
   }
 
+  final Set<String> _completeInFlight = {};
+
   Future<void> completeTask(Task task) async {
-    await _ref
-        .read(tasksServiceProvider)
-        .toggleComplete(task.id, wasCompleted: task.completed);
-    await loadGrouped();
+    if (_completeInFlight.contains(task.id)) return;
+    _completeInFlight.add(task.id);
+    try {
+      final willComplete = !task.completed;
+      final result = await _ref
+          .read(tasksServiceProvider)
+          .toggleComplete(task.id, wasCompleted: task.completed);
+
+      if (willComplete) {
+        final settings = _ref.read(appSettingsProvider);
+        unawaited(
+          _ref.read(feedbackAudioProvider).playKey(
+                'completion',
+                settings.completionSound,
+              ),
+        );
+        // Backend spawn-on-complete: upsert nested next_task only — never POST.
+        if (result.nextTask != null) {
+          upsertLocalTask(result.nextTask!);
+        }
+      }
+
+      await loadGrouped();
+    } finally {
+      _completeInFlight.remove(task.id);
+    }
   }
 
-  Future<void> deleteTask(String id) async {
-    await _ref.read(tasksServiceProvider).deleteTask(id);
+  Future<void> deleteTask(String id, {String? scope}) async {
+    await _ref.read(tasksServiceProvider).deleteTask(id, scope: scope);
+    removeLocalTask(id);
+    _ref.read(calendarStateProvider.notifier).removeTask(id);
     await loadGrouped();
+    try {
+      await _ref.read(calendarStateProvider.notifier).load(silent: true);
+    } catch (_) {}
+  }
+
+  /// Delete only this occurrence (`scope=this`). Backend owns series continuation.
+  Future<void> deleteOccurrence(Task task) async {
+    await deleteTask(task.id, scope: 'this');
+  }
+
+  Future<void> deleteSeries(String id) async {
+    await deleteTask(id, scope: 'series');
   }
 
   Future<Task> addTask(PartialTask partial) async {
-    final task = await _ref.read(tasksServiceProvider).createTask(partial);
-    await loadGrouped();
+    final created = await _ref.read(tasksServiceProvider).createTask(partial);
+    // Prefer client schedule fields if the create response omits them.
+    final task = created.copyWith(
+      dueDate: created.dueDate ?? partial.dueDate,
+      dueTime: created.dueTime ?? partial.dueTime,
+      duration: created.duration ?? partial.duration,
+    );
+    // Web: upsert into main tasks list immediately so calendar pool sees it.
+    upsertLocalTask(task);
+    _ref.read(calendarStateProvider.notifier).upsertTask(task);
+    try {
+      await loadGrouped();
+    } catch (_) {}
+    // Re-apply if grouped fetch was briefly stale.
+    upsertLocalTask(task);
+    try {
+      await _ref.read(calendarStateProvider.notifier).load(silent: true);
+    } catch (_) {}
+    // Keep optimistic task if calendar fetch was briefly stale.
+    _ref.read(calendarStateProvider.notifier).upsertTask(task);
     return task;
   }
 
@@ -870,19 +1315,27 @@ class TasksNotifier extends StateNotifier<TasksState> {
     PartialTask partial, {
     bool refreshGrouped = true,
   }) async {
-    final existing = findTaskById(id);
-    if (existing == null) {
-      throw StateError('Task $id not found');
-    }
+    var existing = findTaskById(id);
+    existing ??= await _ref.read(tasksServiceProvider).fetchTask(id);
 
     final merged = TaskMapper.mergePartial(existing, partial);
     final payload = TaskMapper.uiToApiPayload(merged);
     debugPrint('[Tasks] PATCH tasks/$id/ payload=$payload');
 
     final task = await _ref.read(tasksServiceProvider).updateTask(id, merged);
+    upsertLocalTask(task);
+    _ref.read(calendarStateProvider.notifier).upsertTask(task);
     if (refreshGrouped) {
       await loadGrouped();
     }
+    // Keep Eisenhower matrix in sync with priority/date changes.
+    try {
+      await _ref.read(matrixStateProvider.notifier).load();
+    } catch (_) {}
+    try {
+      await _ref.read(calendarStateProvider.notifier).load(silent: true);
+    } catch (_) {}
+    _ref.read(calendarStateProvider.notifier).upsertTask(task);
     return task;
   }
 }
@@ -898,6 +1351,8 @@ class CalendarUiState {
     this.date,
     this.tasks = const [],
     this.loading = false,
+    this.collapsedEarlyHours = true,
+    this.collapsedLateHours = true,
   });
 
   final CalendarView view;
@@ -905,38 +1360,49 @@ class CalendarUiState {
   final List<Task> tasks;
   final bool loading;
 
+  /// Matches web: 00:00–06:00 collapsed by default.
+  final bool collapsedEarlyHours;
+
+  /// Matches web: 22:00–00:00 collapsed by default.
+  final bool collapsedLateHours;
+
   CalendarUiState copyWith({
     CalendarView? view,
     DateTime? date,
     List<Task>? tasks,
     bool? loading,
+    bool? collapsedEarlyHours,
+    bool? collapsedLateHours,
   }) => CalendarUiState(
     view: view ?? this.view,
     date: date ?? this.date,
     tasks: tasks ?? this.tasks,
     loading: loading ?? this.loading,
+    collapsedEarlyHours: collapsedEarlyHours ?? this.collapsedEarlyHours,
+    collapsedLateHours: collapsedLateHours ?? this.collapsedLateHours,
   );
 
   String get displayLabel {
     final d = date ?? DateTime.now();
     switch (view) {
       case CalendarView.day:
-        return '${d.day} ${_monthName(d.month)} ${d.year}';
+        return '${d.day} ${_monthNameGenitive(d.month)} ${d.year}';
       case CalendarView.week:
         final start = d.subtract(Duration(days: d.weekday - 1));
         final end = start.add(const Duration(days: 6));
         if (start.month == end.month) {
-          return '${start.day}–${end.day} ${_monthName(end.month)} ${end.year}';
+          return '${start.day}–${end.day} ${_monthNameGenitive(end.month)} ${end.year}';
         }
         return '${start.day} ${_shortMonth(start.month)} – ${end.day} ${_shortMonth(end.month)} ${end.year}';
       case CalendarView.month:
-        return '${_monthName(d.month)} ${d.year}';
+        // Nominative month + year — same as web `MMMM YYYY`.
+        return '${_monthNameNominative(d.month)} ${d.year}';
       case CalendarView.year:
         return '${d.year}';
     }
   }
 
-  static String _monthName(int m) => const [
+  static String _monthNameGenitive(int m) => const [
     'января',
     'февраля',
     'марта',
@@ -949,6 +1415,21 @@ class CalendarUiState {
     'октября',
     'ноября',
     'декабря',
+  ][m - 1];
+
+  static String _monthNameNominative(int m) => const [
+    'Январь',
+    'Февраль',
+    'Март',
+    'Апрель',
+    'Май',
+    'Июнь',
+    'Июль',
+    'Август',
+    'Сентябрь',
+    'Октябрь',
+    'Ноябрь',
+    'Декабрь',
   ][m - 1];
 
   static String _shortMonth(int m) => const [
@@ -968,9 +1449,29 @@ class CalendarUiState {
 }
 
 class CalendarNotifier extends StateNotifier<CalendarUiState> {
-  CalendarNotifier(this._ref) : super(CalendarUiState(date: DateTime.now()));
+  CalendarNotifier(this._ref)
+      : super(CalendarUiState(date: DateTime.now())) {
+    applyViewDefaultsFromSettings();
+  }
 
   final Ref _ref;
+
+  static CalendarView _parseView(String value) => switch (value) {
+        'week' => CalendarView.week,
+        'month' => CalendarView.month,
+        'year' => CalendarView.year,
+        _ => CalendarView.day,
+      };
+
+  /// Apply Settings → Вид defaults to the open calendar session.
+  void applyViewDefaultsFromSettings() {
+    final s = _ref.read(appSettingsProvider);
+    state = state.copyWith(
+      view: _parseView(s.calendarDefaultView),
+      collapsedEarlyHours: s.calendarCollapseEarlyHours,
+      collapsedLateHours: s.calendarCollapseLateHours,
+    );
+  }
 
   String _formatDate(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-'
@@ -984,26 +1485,119 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
   }) async {
     final v = view ?? state.view;
     final d = date ?? state.date ?? DateTime.now();
+    var collapsedEarly = state.collapsedEarlyHours;
+    var collapsedLate = state.collapsedLateHours;
     if (!silent) {
       state = state.copyWith(view: v, date: d, loading: true);
     }
     try {
-      final tasks = await _ref
+      final fetched = await _ref
           .read(calendarServiceProvider)
           .fetchCalendar(view: v, date: _formatDate(d));
-      state = CalendarUiState(view: v, date: d, tasks: tasks);
+      // Auto-expand when tasks fall outside the main 06–22 band (web parity).
+      if (v == CalendarView.day || v == CalendarView.week) {
+        if (_calendarHasEarlyTasks(fetched)) collapsedEarly = false;
+        if (_calendarHasLateTasks(fetched)) collapsedLate = false;
+      }
+      // Merge like web fetchCalendar: keep prior object when schedule unchanged.
+      final prevById = {for (final t in state.tasks) t.id: t};
+      final merged = [
+        for (final task in fetched)
+          if (prevById[task.id] != null &&
+              _taskScheduleKey(prevById[task.id]!) == _taskScheduleKey(task))
+            prevById[task.id]!
+          else
+            task,
+      ];
+      state = CalendarUiState(
+        view: v,
+        date: d,
+        tasks: merged,
+        collapsedEarlyHours: collapsedEarly,
+        collapsedLateHours: collapsedLate,
+      );
     } catch (_) {
       if (!silent) {
-        state = CalendarUiState(view: v, date: d, tasks: const []);
+        state = CalendarUiState(
+          view: v,
+          date: d,
+          tasks: const [],
+          collapsedEarlyHours: collapsedEarly,
+          collapsedLateHours: collapsedLate,
+        );
       }
     }
   }
+
+  void toggleEarlyHours() {
+    state = state.copyWith(collapsedEarlyHours: !state.collapsedEarlyHours);
+  }
+
+  void toggleLateHours() {
+    state = state.copyWith(collapsedLateHours: !state.collapsedLateHours);
+  }
+
+  static bool _calendarHasEarlyTasks(List<Task> tasks) {
+    for (final task in tasks) {
+      final start = taskScheduleStart(
+        dueTime: task.dueTime,
+        durationStart: task.duration?.start,
+      );
+      if (start == null || start.isEmpty) continue;
+      if (parseTimeToMinutes(start) ~/ 60 < 6) return true;
+    }
+    return false;
+  }
+
+  static bool _calendarHasLateTasks(List<Task> tasks) {
+    for (final task in tasks) {
+      final start = taskScheduleStart(
+        dueTime: task.dueTime,
+        durationStart: task.duration?.start,
+      );
+      if (start == null || start.isEmpty) continue;
+      final hour = parseTimeToMinutes(start) ~/ 60;
+      final endHour = task.duration?.end != null
+          ? parseTimeToMinutes(task.duration!.end) ~/ 60
+          : hour;
+      if (hour >= 21 || endHour >= 21) return true;
+    }
+    return false;
+  }
+
+  static String _taskScheduleKey(Task task) => [
+        task.dueDate ?? '',
+        task.dueTime ?? '',
+        task.duration?.start ?? '',
+        task.duration?.end ?? '',
+        task.completed ? '1' : '0',
+        task.title,
+        task.priority.name,
+        task.matrixBlock?.name ?? '',
+      ].join('|');
 
   void applyTaskUpdate(Task updated) {
     final tasks = state.tasks
         .map((t) => t.id == updated.id ? updated : t)
         .toList(growable: false);
     state = state.copyWith(tasks: tasks);
+  }
+
+  void upsertTask(Task task) {
+    final index = state.tasks.indexWhere((t) => t.id == task.id);
+    if (index == -1) {
+      state = state.copyWith(tasks: [...state.tasks, task]);
+    } else {
+      final next = [...state.tasks];
+      next[index] = task;
+      state = state.copyWith(tasks: next);
+    }
+  }
+
+  void removeTask(String id) {
+    state = state.copyWith(
+      tasks: [for (final t in state.tasks) if (t.id != id) t],
+    );
   }
 
   void setView(CalendarView view) => load(view: view);
@@ -1026,21 +1620,28 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
     int startMinutes,
     int endMinutes,
   ) async {
+    final realId = resolveRealTaskId(task.id);
     final start = formatMinutesToTime(startMinutes);
     final end = formatMinutesToTime(endMinutes);
-    debugPrint('[Calendar] reschedule ${task.id} $start – $end');
+    debugPrint('[Calendar] reschedule $realId $start – $end');
 
     final optimistic = task.copyWith(
+      id: realId,
       dueTime: start,
       duration: TaskDuration(start: start, end: end),
     );
     applyTaskUpdate(optimistic);
+    // Also update any expanded occurrence id in the list.
+    if (task.id != realId) {
+      removeTask(task.id);
+      upsertTask(optimistic);
+    }
 
     try {
       final updated = await _ref
           .read(tasksStateProvider.notifier)
           .updateTask(
-            task.id,
+            realId,
             PartialTask(
               dueDate: task.dueDate,
               dueTime: start,
@@ -1049,8 +1650,9 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
             refreshGrouped: false,
           );
       applyTaskUpdate(updated);
+      _ref.read(tasksStateProvider.notifier).upsertLocalTask(updated);
     } catch (e) {
-      applyTaskUpdate(task);
+      applyTaskUpdate(task.copyWith(id: realId));
       rethrow;
     }
   }
@@ -1106,7 +1708,7 @@ class MatrixSettingsNotifier extends StateNotifier<MatrixSettingsState> {
         block: setting.block.apiValue,
         title: setting.title,
         allowedPriorities: setting.toApiPriorities(),
-        dateFilter: setting.toApiDateFilter(),
+        dateFilters: setting.toApiDateFilters(),
       );
     }
     state = MatrixSettingsState(blocks: blocks);
@@ -1125,8 +1727,84 @@ class MatrixNotifier extends StateNotifier<Map<String, List<Task>>> {
   final Ref _ref;
 
   Future<void> load() async {
-    final data = await _ref.read(matrixServiceProvider).fetchMatrix();
-    state = data;
+    // Ensure we have grouped tasks for client-side multi-filter.
+    final tasksState = _ref.read(tasksStateProvider);
+    if (tasksState.groups.isEmpty && !tasksState.loading) {
+      await _ref.read(tasksStateProvider.notifier).loadGrouped();
+    }
+
+    Map<String, List<Task>> fromApi = {};
+    try {
+      fromApi = await _ref.read(matrixServiceProvider).fetchMatrix();
+    } catch (_) {
+      fromApi = {};
+    }
+
+    final settings = _ref.read(matrixSettingsProvider).blocks;
+    final groups = _ref.read(tasksStateProvider).groups;
+    final allTasks = <Task>[
+      for (final list in groups.values) ...list,
+    ];
+    final incomplete = allTasks.where((t) => !t.completed).toList();
+
+    final result = <String, List<Task>>{};
+    for (final block in MatrixBlock.values) {
+      final setting = settings[block] ?? MatrixBlockUiSetting.defaults()[block]!;
+      final matched = _filterTasksForBlock(incomplete, groups, setting);
+      final assigned = fromApi[block.id] ?? [];
+      final byId = <String, Task>{};
+      for (final t in [...matched, ...assigned]) {
+        if (!t.completed) byId[t.id] = t;
+      }
+      result[block.id] = byId.values.toList();
+    }
+    state = result;
+  }
+
+  List<Task> _filterTasksForBlock(
+    List<Task> incomplete,
+    Map<TaskGroupKey, List<Task>> groups,
+    MatrixBlockUiSetting setting,
+  ) {
+    final hasDateFilters = setting.dateFilters.isNotEmpty;
+    final hasPriorityFilters = setting.priorityFilters.isNotEmpty;
+
+    if (!hasDateFilters && !hasPriorityFilters) {
+      return incomplete;
+    }
+
+    final dateMatchedIds = <String>{};
+    if (hasDateFilters) {
+      for (final key in setting.dateFilters) {
+        final groupKey = TaskGroupKeyX.fromApi(
+          key == 'nodate' ? 'no_deadline' : key,
+        );
+        final list = groups[groupKey];
+        if (list != null) {
+          for (final t in list) {
+            dateMatchedIds.add(t.id);
+          }
+        }
+      }
+    }
+
+    final allowedPriorities = setting.priorityFilters.toSet();
+
+    // Multiple filters are OR: any matching date chip OR any matching priority.
+    return incomplete.where((t) {
+      final byDate = hasDateFilters && dateMatchedIds.contains(t.id);
+      final priority = switch (t.priority) {
+        Priority.high => 'high',
+        Priority.medium => 'medium',
+        Priority.low => 'low',
+        Priority.none => 'none',
+      };
+      final byPriority =
+          hasPriorityFilters && allowedPriorities.contains(priority);
+      if (hasDateFilters && hasPriorityFilters) return byDate || byPriority;
+      if (hasDateFilters) return byDate;
+      return byPriority;
+    }).toList();
   }
 
   Future<void> moveTask(String taskId, MatrixBlock block) async {
@@ -1152,6 +1830,7 @@ class PomodoroUiState {
     this.workBackgroundSounds = const [],
     this.timerEndSounds = const [],
     this.sessionCount = 0,
+    this.isBreak = false,
   }) : settings = settings ?? PomodoroSettings.defaults();
 
   final PomodoroSettings settings;
@@ -1164,9 +1843,18 @@ class PomodoroUiState {
   final List<ApiSound> workBackgroundSounds;
   final List<ApiSound> timerEndSounds;
   final int sessionCount;
+  final bool isBreak;
+
+  int get phaseTotalSeconds {
+    if (!isBreak) return settings.duration * 60;
+    final useLong =
+        sessionCount > 0 &&
+        sessionCount % settings.sessionsUntilLong == 0;
+    return (useLong ? settings.longBreak : settings.shortBreak) * 60;
+  }
 
   double get progress {
-    final total = settings.duration * 60;
+    final total = phaseTotalSeconds;
     if (total <= 0) return 0;
     return 1 - secondsLeft / total;
   }
@@ -1182,13 +1870,17 @@ class PomodoroUiState {
     List<ApiSound>? workBackgroundSounds,
     List<ApiSound>? timerEndSounds,
     int? sessionCount,
+    bool? isBreak,
     bool clearSession = false,
+    bool clearSelectedTask = false,
   }) {
     return PomodoroUiState(
       settings: settings ?? this.settings,
       secondsLeft: secondsLeft ?? this.secondsLeft,
       timerState: timerState ?? this.timerState,
-      selectedTaskId: selectedTaskId ?? this.selectedTaskId,
+      selectedTaskId: clearSelectedTask
+          ? null
+          : (selectedTaskId ?? this.selectedTaskId),
       activeSessionId: clearSession
           ? null
           : (activeSessionId ?? this.activeSessionId),
@@ -1197,6 +1889,7 @@ class PomodoroUiState {
       workBackgroundSounds: workBackgroundSounds ?? this.workBackgroundSounds,
       timerEndSounds: timerEndSounds ?? this.timerEndSounds,
       sessionCount: sessionCount ?? this.sessionCount,
+      isBreak: isBreak ?? this.isBreak,
     );
   }
 }
@@ -1209,6 +1902,8 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
   final Ref _ref;
   late final PomodoroAudio _audio;
   Timer? _ticker;
+  /// Prevents re-entrant phase completion while transitioning work ↔ break.
+  bool _phaseCompleting = false;
 
   void _startTicker() {
     _ticker?.cancel();
@@ -1247,7 +1942,7 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
   Future<void> _syncBackgroundAudio() async {
     debugPrint(
       '[Pomodoro] syncBackgroundAudio timer=${state.timerState} '
-      'sound=${state.settings.workingSound} '
+      'break=${state.isBreak} sound=${state.settings.workingSound} '
       'url=${state.workSoundDetail?.audioUrl}',
     );
 
@@ -1255,8 +1950,8 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
       debugPrint('[Pomodoro] timer paused — keep background position');
       return;
     }
-    if (state.timerState != 'running') {
-      debugPrint('[Pomodoro] timer not running — stop background');
+    if (state.timerState != 'running' || state.isBreak) {
+      debugPrint('[Pomodoro] timer not running / break — stop background');
       await _audio.stopBackground();
       return;
     }
@@ -1341,43 +2036,135 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
   }
 
   void selectTask(String? taskId) {
-    state = state.copyWith(selectedTaskId: taskId);
+    state = state.copyWith(
+      selectedTaskId: taskId,
+      clearSelectedTask: taskId == null,
+    );
   }
 
   void tick() {
     if (state.timerState != 'running') return;
-    if (state.secondsLeft <= 0) return;
+    if (_phaseCompleting) return;
 
-    if (state.secondsLeft <= 1) {
-      _onTimerComplete();
+    // Match otter-app: decrement first; when we hit 0, complete the phase.
+    if (state.secondsLeft > 0) {
+      state = state.copyWith(secondsLeft: state.secondsLeft - 1);
       return;
     }
 
-    state = state.copyWith(secondsLeft: state.secondsLeft - 1);
+    // secondsLeft == 0 → transition (do not await audio/API here).
+    _onPhaseComplete();
   }
 
-  Future<void> _onTimerComplete() async {
-    _stopTicker();
-    await _audio.stopBackground();
-    if (state.settings.sound != 'none') {
-      await _audio.playOnce(state.timerEndSoundDetail?.audioUrl);
-    }
+  /// Port of otter-app `onPhaseComplete`.
+  ///
+  /// Critical: transition timer state **synchronously** before any async
+  /// audio/API work. Awaiting `playOnce` previously blocked auto-start of
+  /// the break when the end-sound URL was slow or hung.
+  void _onPhaseComplete() {
+    if (_phaseCompleting) return;
+    if (state.timerState != 'running') return;
+    _phaseCompleting = true;
+
+    final wasBreak = state.isBreak;
     final sessionId = state.activeSessionId;
-    if (sessionId != null) {
-      await _ref
-          .read(pomodoroServiceProvider)
-          .updateSessionState(sessionId, 'completed');
+    final settings = state.settings;
+    final endSoundUrl = state.timerEndSoundDetail?.audioUrl;
+    final playEndSound = settings.sound != 'none';
+
+    try {
+      if (!wasBreak) {
+        // Work → auto-start break (keep ticker running, like web).
+        final nextCount = state.sessionCount + 1;
+        final useLong =
+            nextCount > 0 && nextCount % settings.sessionsUntilLong == 0;
+        final breakMinutes =
+            useLong ? settings.longBreak : settings.shortBreak;
+
+        state = state.copyWith(
+          sessionCount: nextCount,
+          isBreak: true,
+          secondsLeft: breakMinutes * 60,
+          timerState: 'running',
+          clearSession: true,
+        );
+
+        // Side effects after the break is already running.
+        unawaited(
+          _afterWorkPhaseComplete(
+            sessionId: sessionId,
+            playEndSound: playEndSound,
+            endSoundUrl: endSoundUrl,
+          ),
+        );
+        return;
+      }
+
+      // Break → idle work duration.
+      _stopTicker();
+      state = state.copyWith(
+        isBreak: false,
+        secondsLeft: settings.duration * 60,
+        timerState: 'idle',
+        clearSession: true,
+      );
+      unawaited(
+        _afterBreakPhaseComplete(
+          playEndSound: playEndSound,
+          endSoundUrl: endSoundUrl,
+        ),
+      );
+    } finally {
+      _phaseCompleting = false;
     }
-    state = state.copyWith(
-      secondsLeft: state.settings.duration * 60,
-      timerState: 'idle',
-      sessionCount: state.sessionCount + 1,
-      clearSession: true,
-    );
+  }
+
+  Future<void> _afterWorkPhaseComplete({
+    required int? sessionId,
+    required bool playEndSound,
+    required String? endSoundUrl,
+  }) async {
+    try {
+      await _audio.stopBackground();
+      if (playEndSound) {
+        await _audio.playOnce(endSoundUrl);
+      }
+    } catch (_) {}
+    if (sessionId != null) {
+      try {
+        await _ref
+            .read(pomodoroServiceProvider)
+            .updateSessionState(sessionId, 'completed');
+      } catch (_) {}
+    }
+    try {
+      await _syncBackgroundAudio();
+    } catch (_) {}
+  }
+
+  Future<void> _afterBreakPhaseComplete({
+    required bool playEndSound,
+    required String? endSoundUrl,
+  }) async {
+    try {
+      await _audio.stopBackground();
+      if (playEndSound) {
+        await _audio.playOnce(endSoundUrl);
+      }
+    } catch (_) {}
   }
 
   Future<void> start() async {
     if (state.timerState != 'idle' && state.timerState != 'paused') return;
+
+    // Break resume: just continue ticking (no API work session).
+    if (state.isBreak) {
+      state = state.copyWith(timerState: 'running');
+      _startTicker();
+      await _audio.stopEffect();
+      await _syncBackgroundAudio();
+      return;
+    }
 
     var sessionId = state.activeSessionId;
     if (sessionId == null) {
@@ -1399,6 +2186,7 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
     state = state.copyWith(
       timerState: 'running',
       activeSessionId: sessionId,
+      isBreak: false,
       secondsLeft: state.timerState == 'idle'
           ? state.settings.duration * 60
           : state.secondsLeft,
@@ -1412,7 +2200,7 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
     if (state.timerState != 'running') return;
     _stopTicker();
     await _audio.pauseBackground();
-    if (state.activeSessionId != null) {
+    if (!state.isBreak && state.activeSessionId != null) {
       await _ref
           .read(pomodoroServiceProvider)
           .updateSessionState(state.activeSessionId!, 'paused');
@@ -1423,7 +2211,7 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
   Future<void> stop() async {
     _stopTicker();
     await _audio.stopAll();
-    if (state.activeSessionId != null) {
+    if (!state.isBreak && state.activeSessionId != null) {
       await _ref
           .read(pomodoroServiceProvider)
           .updateSessionState(state.activeSessionId!, 'stopped');
@@ -1431,6 +2219,7 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
     state = state.copyWith(
       secondsLeft: state.settings.duration * 60,
       timerState: 'idle',
+      isBreak: false,
       clearSession: true,
     );
   }

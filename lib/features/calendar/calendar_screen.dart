@@ -9,12 +9,14 @@ import '../../core/providers/providers.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../../core/theme/otter_colors.dart';
 import '../../core/theme/priority_colors.dart';
+import '../../core/utils/recurrence.dart';
 import '../../core/utils/time_utils.dart';
 import '../../data/models/ui/ui_models.dart';
 import '../../data/services/calendar_service.dart';
 import '../tasks/task_detail_sheet.dart';
 import 'calendar_task_block.dart';
 import 'calendar_timeline.dart';
+import 'calendar_grid.dart';
 
 class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
@@ -23,16 +25,43 @@ class CalendarScreen extends ConsumerStatefulWidget {
   ConsumerState<CalendarScreen> createState() => _CalendarScreenState();
 }
 
-class _CalendarScreenState extends ConsumerState<CalendarScreen> {
+class _CalendarScreenState extends ConsumerState<CalendarScreen>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => ref.read(calendarStateProvider.notifier).load());
+    WidgetsBinding.instance.addObserver(this);
+    Future.microtask(() {
+      final hasTasks = ref.read(calendarStateProvider).tasks.isNotEmpty ||
+          ref.read(tasksStateProvider).groups.values.any((g) => g.isNotEmpty);
+      // Avoid full-screen spinner when returning from new-task with optimistic data.
+      ref.read(calendarStateProvider.notifier).load(silent: hasTasks);
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.read(calendarStateProvider.notifier).load(silent: true);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(calendarStateProvider);
+    final tasksState = ref.watch(tasksStateProvider);
+    // Web getTasksForDate: union grouped tasks + calendar tasks so a just-created
+    // task stays visible even if the calendar endpoint is briefly stale.
+    final tasks = poolCalendarTasks(
+      calendarTasks: state.tasks,
+      groups: tasksState.groups,
+    );
     final date = state.date ?? DateTime.now();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -58,43 +87,152 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             Expanded(
               child: state.loading
                   ? const Center(child: CircularProgressIndicator())
-                  : state.view == CalendarView.day
-                  ? _DayView(
-                      date: date,
-                      tasks: state.tasks,
-                      onTaskTap: (t) => showTaskDetailSheet(context, t),
-                      onHourTap: (hour) =>
-                          _openNewTaskAtHour(context, date, hour),
-                      onToggleComplete: (id) async {
-                        final task = state.tasks.firstWhere((t) => t.id == id);
-                        await ref
-                            .read(tasksStateProvider.notifier)
-                            .completeTask(task);
-                        await ref.read(calendarStateProvider.notifier).load();
-                      },
-                      onReschedule: (task, start, end) async {
-                        try {
+                  : switch (state.view) {
+                      CalendarView.day => _DayView(
+                        date: date,
+                        tasks: tasks,
+                        collapsedEarlyHours: state.collapsedEarlyHours,
+                        collapsedLateHours: state.collapsedLateHours,
+                        onToggleEarlyHours: () => ref
+                            .read(calendarStateProvider.notifier)
+                            .toggleEarlyHours(),
+                        onToggleLateHours: () => ref
+                            .read(calendarStateProvider.notifier)
+                            .toggleLateHours(),
+                        onTaskTap: (t) => showTaskDetailSheet(
+                          context,
+                          t.id.contains('__')
+                              ? t.copyWith(id: resolveRealTaskId(t.id))
+                              : t,
+                        ),
+                        onHourTap: (hour) =>
+                            _openNewTaskAtHour(context, date, hour),
+                        onToggleComplete: (id) async {
+                          final realId = resolveRealTaskId(id);
+                          final task = tasks.firstWhere(
+                            (t) => resolveRealTaskId(t.id) == realId,
+                          );
+                          await ref
+                              .read(tasksStateProvider.notifier)
+                              .completeTask(task);
                           await ref
                               .read(calendarStateProvider.notifier)
-                              .rescheduleTask(task, start, end);
-                        } catch (e) {
-                          if (context.mounted) {
-                            showAppToast(
-                              context,
-                              getApiErrorMessage(
-                                e,
-                                'Не удалось сохранить время',
-                              ),
-                            );
+                              .load();
+                        },
+                        onReschedule: (task, start, end) async {
+                          try {
+                            await ref
+                                .read(calendarStateProvider.notifier)
+                                .rescheduleTask(task, start, end);
+                          } catch (e) {
+                            if (context.mounted) {
+                              showAppToast(
+                                context,
+                                getApiErrorMessage(
+                                  e,
+                                  'Не удалось сохранить время',
+                                ),
+                              );
+                            }
+                            rethrow;
                           }
-                          rethrow;
-                        }
-                      },
-                    )
-                  : _SimpleListView(
-                      tasks: state.tasks,
-                      onTaskTap: (t) => showTaskDetailSheet(context, t),
-                    ),
+                        },
+                      ),
+                      CalendarView.week => _WeekView(
+                        date: date,
+                        tasks: tasks,
+                        collapsedEarlyHours: state.collapsedEarlyHours,
+                        collapsedLateHours: state.collapsedLateHours,
+                        onToggleEarlyHours: () => ref
+                            .read(calendarStateProvider.notifier)
+                            .toggleEarlyHours(),
+                        onToggleLateHours: () => ref
+                            .read(calendarStateProvider.notifier)
+                            .toggleLateHours(),
+                        onTaskTap: (t) => showTaskDetailSheet(
+                          context,
+                          t.id.contains('__')
+                              ? t.copyWith(id: resolveRealTaskId(t.id))
+                              : t,
+                        ),
+                        onDayTap: (d) => ref
+                            .read(calendarStateProvider.notifier)
+                            .load(view: CalendarView.day, date: d),
+                        onHourTap: (d, hour) =>
+                            _openNewTaskAtHour(context, d, hour),
+                        onToggleComplete: (id) async {
+                          final realId = resolveRealTaskId(id);
+                          final task = tasks.firstWhere(
+                            (t) => resolveRealTaskId(t.id) == realId,
+                          );
+                          await ref
+                              .read(tasksStateProvider.notifier)
+                              .completeTask(task);
+                          await ref
+                              .read(calendarStateProvider.notifier)
+                              .load();
+                        },
+                        onReschedule: (task, start, end) async {
+                          try {
+                            await ref
+                                .read(calendarStateProvider.notifier)
+                                .rescheduleTask(task, start, end);
+                          } catch (e) {
+                            if (context.mounted) {
+                              showAppToast(
+                                context,
+                                getApiErrorMessage(
+                                  e,
+                                  'Не удалось сохранить время',
+                                ),
+                              );
+                            }
+                            rethrow;
+                          }
+                        },
+                      ),
+                      CalendarView.month => _MonthView(
+                        date: date,
+                        tasks: tasks,
+                        onTaskTap: (t) => showTaskDetailSheet(
+                          context,
+                          t.id.contains('__')
+                              ? t.copyWith(id: resolveRealTaskId(t.id))
+                              : t,
+                        ),
+                        onDayNumberTap: (d) => ref
+                            .read(calendarStateProvider.notifier)
+                            .load(view: CalendarView.week, date: d),
+                        onEmptyCellTap: (d) =>
+                            _openNewTaskOnDate(context, d),
+                        onToggleComplete: (id) async {
+                          final realId = resolveRealTaskId(id);
+                          final task = tasks.firstWhere(
+                            (t) => resolveRealTaskId(t.id) == realId,
+                          );
+                          await ref
+                              .read(tasksStateProvider.notifier)
+                              .completeTask(task);
+                          await ref
+                              .read(calendarStateProvider.notifier)
+                              .load();
+                        },
+                      ),
+                      CalendarView.year => _YearView(
+                        date: date,
+                        tasks: tasks,
+                        onMonthTap: (monthIndex) {
+                          final d = DateTime(date.year, monthIndex + 1, 1);
+                          ref.read(calendarStateProvider.notifier).load(
+                                view: CalendarView.month,
+                                date: d,
+                              );
+                        },
+                        onDayTap: (d) => ref
+                            .read(calendarStateProvider.notifier)
+                            .load(view: CalendarView.day, date: d),
+                      ),
+                    },
             ),
           ],
         ),
@@ -105,10 +243,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   void _openNewTaskAtHour(BuildContext context, DateTime date, int hour) {
     final dateStr = DateFormat('yyyy-MM-dd').format(date);
     final slotStart = '${hour.toString().padLeft(2, '0')}:00';
-    final slotEnd = addMinutesToTime(slotStart, 60);
+    final slotEnd = defaultDurationEnd(slotStart);
     final returnTo = Uri.encodeComponent('/app/calendar');
     context.push(
       '/app/new-task?returnTo=$returnTo&dueDate=$dateStr&dueTime=$slotStart&durationStart=$slotStart&durationEnd=$slotEnd',
+    );
+  }
+
+  void _openNewTaskOnDate(BuildContext context, DateTime date) {
+    final dateStr = DateFormat('yyyy-MM-dd').format(date);
+    final returnTo = Uri.encodeComponent('/app/calendar');
+    context.push(
+      '/app/new-task?returnTo=$returnTo&dueDate=$dateStr',
     );
   }
 }
@@ -292,6 +438,10 @@ class _DayView extends StatefulWidget {
   const _DayView({
     required this.date,
     required this.tasks,
+    required this.collapsedEarlyHours,
+    required this.collapsedLateHours,
+    required this.onToggleEarlyHours,
+    required this.onToggleLateHours,
     required this.onTaskTap,
     required this.onHourTap,
     required this.onToggleComplete,
@@ -300,6 +450,10 @@ class _DayView extends StatefulWidget {
 
   final DateTime date;
   final List<Task> tasks;
+  final bool collapsedEarlyHours;
+  final bool collapsedLateHours;
+  final VoidCallback onToggleEarlyHours;
+  final VoidCallback onToggleLateHours;
   final void Function(Task task) onTaskTap;
   final void Function(int hour) onHourTap;
   final Future<void> Function(String id) onToggleComplete;
@@ -310,6 +464,7 @@ class _DayView extends StatefulWidget {
 }
 
 class _DayViewState extends State<_DayView> {
+  double _untimedHeight = untimedDefaultPx;
   CalendarDragPreview? _dragPreview;
   CalendarTimelineTask? _dragTask;
   CalendarTaskDragMode? _dragMode;
@@ -436,125 +591,1059 @@ class _DayViewState extends State<_DayView> {
     widget.onTaskTap(task);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final untimed = untimedTasksForDate(widget.tasks);
-    final timeline = buildDayTimelineTasks(
-      widget.tasks,
-      dragPreview: _dragPreview,
+  Widget _hoursToggle({
+    required String label,
+    required bool collapsed,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: OtterColors.grayLight,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 56,
+                child: Text(
+                  label,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: OtterColors.sberGray,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Divider(height: 1, color: OtterColors.grayMid),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                collapsed ? LucideIcons.chevronDown : LucideIcons.chevronUp,
+                size: 16,
+                color: OtterColors.sberGray,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
-    final timelineHeight = (mainEndMinutes - mainStartMinutes) * minuteHeightPx;
+  }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final timelineWidth = constraints.maxWidth - 56;
-
-        return ListView(
-          physics: _dragTask != null
-              ? const NeverScrollableScrollPhysics()
-              : null,
-          padding: const EdgeInsets.only(bottom: 100),
-          children: [
-            if (untimed.isNotEmpty)
-              Container(
-                color: Colors.white,
-                padding: const EdgeInsets.all(12),
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: untimed.map((task) {
-                    final color = priorityColor(task.priority);
-                    return InkWell(
-                      onTap: () => widget.onTaskTap(task),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.1),
-                          border: Border.all(
-                            color: color.withValues(alpha: 0.35),
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+  Widget _hourRows(
+    List<int> hours, {
+    required List<CalendarTimelineTask> timeline,
+    double? nowOffsetPx,
+  }) {
+    final height = hours.length * hourHeightPx;
+    return SizedBox(
+      height: height,
+      width: double.infinity,
+      child: Stack(
+        children: [
+          Column(
+            children: hours.map((h) {
+              return SizedBox(
+                height: hourHeightPx,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 56,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 4, right: 8),
                         child: Text(
-                          task.title,
-                          style: TextStyle(
+                          '${h.toString().padLeft(2, '0')}:00',
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
                             fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            decoration: task.completed
-                                ? TextDecoration.lineThrough
-                                : null,
+                            color: OtterColors.sberGray,
                           ),
                         ),
                       ),
-                    );
-                  }).toList(),
+                    ),
+                    Expanded(
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: () => widget.onHourTap(h),
+                          child: Container(
+                            decoration: const BoxDecoration(
+                              border: Border(
+                                top: BorderSide(color: Color(0xFFE5E5EA)),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+          if (nowOffsetPx != null)
+            Positioned(
+              top: nowOffsetPx,
+              left: 56,
+              right: 0,
+              child: IgnorePointer(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const Expanded(
+                      child: Divider(height: 2, thickness: 2, color: Colors.red),
+                    ),
+                  ],
                 ),
               ),
-            Container(
-              color: Colors.white,
-              child: Stack(
-                children: [
-                  Column(
-                    children: mainHours.map((h) {
-                      return SizedBox(
-                        height: hourHeightPx,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: 56,
-                              child: Padding(
-                                padding: const EdgeInsets.only(
-                                  top: 4,
-                                  right: 8,
+            ),
+          Positioned(
+            left: 56,
+            right: 0,
+            top: 0,
+            height: height,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final timelineWidth = constraints.maxWidth;
+                // Paint order matches web zIndex: (dragging ? 35 : 1) + layoutCol
+                final items = [...timeline]..sort((a, b) {
+                  final az =
+                      (_dragPreview?.taskId == a.task.id ? 35 : 1) +
+                      a.layoutCol;
+                  final bz =
+                      (_dragPreview?.taskId == b.task.id ? 35 : 1) +
+                      b.layoutCol;
+                  return az.compareTo(bz);
+                });
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const SizedBox.expand(),
+                    ...items.map((item) {
+                      final dragging = _dragPreview?.taskId == item.task.id;
+                      return CalendarTaskBlock(
+                        item: item,
+                        timelineWidth: timelineWidth,
+                        isDragging: dragging,
+                        onTap: () => _handleTaskTap(item.task),
+                        onToggleComplete: () =>
+                            widget.onToggleComplete(item.task.id),
+                        onDragStart: (mode) => _beginDrag(item, mode),
+                        onDragUpdate: _updateDrag,
+                        onDragEnd: _endDrag,
+                      );
+                    }),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dateKey = DateFormat('yyyy-MM-dd').format(widget.date);
+    final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final dayTasks = expandTasksForDate(widget.tasks, dateKey);
+    final untimed = untimedTasksForDate(dayTasks, dateKey: dateKey);
+    final earlyTimeline = buildEarlyTimelineTasks(
+      dayTasks,
+      dragPreview: _dragPreview,
+    );
+    final mainTimeline = buildMainTimelineTasks(
+      dayTasks,
+      dragPreview: _dragPreview,
+    );
+    final lateTimeline = buildLateTimelineTasks(
+      dayTasks,
+      dragPreview: _dragPreview,
+    );
+
+    final now = DateTime.now();
+    final nowMinutes = now.hour * 60 + now.minute;
+    final showNowInMain = dateKey == todayKey &&
+        nowMinutes >= mainStartMinutes &&
+        nowMinutes <= mainEndMinutes;
+    final nowOffsetPx =
+        showNowInMain ? (nowMinutes - mainStartMinutes) * minuteHeightPx : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (untimed.isNotEmpty)
+          Material(
+            color: Colors.white,
+            elevation: 1,
+            shadowColor: Colors.black26,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Без времени',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.4,
+                          color: OtterColors.sberGray,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${untimed.length}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: OtterColors.sberGray,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  height: _untimedHeight,
+                  child: ListView(
+                    primary: false,
+                    padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+                    children: untimed.map((task) {
+                      final color = priorityColor(task.priority);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: InkWell(
+                          onTap: () => _handleTaskTap(task),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border(
+                                left: BorderSide(color: color, width: 3),
+                                top: BorderSide(
+                                  color: color.withValues(alpha: 0.25),
                                 ),
-                                child: Text(
-                                  '${h.toString().padLeft(2, '0')}:00',
-                                  textAlign: TextAlign.right,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: OtterColors.sberGray,
-                                  ),
+                                right: BorderSide(
+                                  color: color.withValues(alpha: 0.25),
+                                ),
+                                bottom: BorderSide(
+                                  color: color.withValues(alpha: 0.25),
                                 ),
                               ),
                             ),
-                            Expanded(
-                              child: MouseRegion(
-                                cursor: SystemMouseCursors.click,
-                                child: GestureDetector(
-                                  onTap: () => widget.onHourTap(h),
-                                  child: Container(
-                                    decoration: const BoxDecoration(
-                                      border: Border(
-                                        top: BorderSide(
-                                          color: Color(0xFFE5E5EA),
-                                        ),
-                                      ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    task.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ),
-                              ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       );
                     }).toList(),
                   ),
-                  Positioned(
-                    left: 56,
-                    right: 0,
-                    top: 0,
-                    height: timelineHeight,
-                    child: Stack(
-                      children: timeline.map((item) {
-                        final dragging = _dragPreview?.taskId == item.task.id;
+                ),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onVerticalDragUpdate: (details) {
+                    setState(() {
+                      _untimedHeight =
+                          (_untimedHeight + details.delta.dy).clamp(
+                        untimedMinPx,
+                        untimedMaxPx,
+                      );
+                    });
+                  },
+                  child: const SizedBox(
+                    height: 16,
+                    child: Center(
+                      child: SizedBox(
+                        width: 40,
+                        height: 4,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: OtterColors.grayMid,
+                            borderRadius:
+                                BorderRadius.all(Radius.circular(2)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: SingleChildScrollView(
+            physics: _dragTask != null
+                ? const NeverScrollableScrollPhysics()
+                : null,
+            padding: const EdgeInsets.only(bottom: 100),
+            child: ColoredBox(
+              color: Colors.white,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _hoursToggle(
+                    label: '00–06',
+                    collapsed: widget.collapsedEarlyHours,
+                    onTap: widget.onToggleEarlyHours,
+                  ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
+                    alignment: Alignment.topCenter,
+                    child: widget.collapsedEarlyHours
+                        ? const SizedBox(width: double.infinity)
+                        : _hourRows(
+                            earlyHours,
+                            timeline: earlyTimeline,
+                          ),
+                  ),
+                  _hourRows(
+                    mainHours,
+                    timeline: mainTimeline,
+                    nowOffsetPx: nowOffsetPx,
+                  ),
+                  _hoursToggle(
+                    label: '22–00',
+                    collapsed: widget.collapsedLateHours,
+                    onTap: widget.onToggleLateHours,
+                  ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
+                    alignment: Alignment.topCenter,
+                    child: widget.collapsedLateHours
+                        ? const SizedBox(width: double.infinity)
+                        : _hourRows(
+                            lateHours,
+                            timeline: lateTimeline,
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MonthView extends StatelessWidget {
+  const _MonthView({
+    required this.date,
+    required this.tasks,
+    required this.onTaskTap,
+    required this.onDayNumberTap,
+    required this.onEmptyCellTap,
+    required this.onToggleComplete,
+  });
+
+  final DateTime date;
+  final List<Task> tasks;
+  final void Function(Task task) onTaskTap;
+  final void Function(DateTime day) onDayNumberTap;
+  final void Function(DateTime day) onEmptyCellTap;
+  final Future<void> Function(String id) onToggleComplete;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final cells = buildMonthCells(anchor: date, today: today);
+    final selectedKey = DateFormat('yyyy-MM-dd').format(date);
+    const gridBorder = Color(0xFFC8CFDB);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final colW = (constraints.maxWidth - 16 - 6) / 7;
+        final cellH = colW; // aspect-square like web
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 100),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  for (final label in weekdayHeadersRu)
+                    Expanded(
+                      child: Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: OtterColors.sberGray,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              for (var row = 0; row < cells.length ~/ 7; row++)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var col = 0; col < 7; col++)
+                        Expanded(
+                          child: _MonthCell(
+                            cell: cells[row * 7 + col],
+                            height: cellH,
+                            selectedKey: selectedKey,
+                            tasks: monthCellTasks(
+                              tasks,
+                              cells[row * 7 + col].dateKey,
+                            ),
+                            borderColor: gridBorder,
+                            onDayNumberTap: onDayNumberTap,
+                            onEmptyCellTap: onEmptyCellTap,
+                            onTaskTap: onTaskTap,
+                            onToggleComplete: onToggleComplete,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MonthCell extends StatelessWidget {
+  const _MonthCell({
+    required this.cell,
+    required this.height,
+    required this.selectedKey,
+    required this.tasks,
+    required this.borderColor,
+    required this.onDayNumberTap,
+    required this.onEmptyCellTap,
+    required this.onTaskTap,
+    required this.onToggleComplete,
+  });
+
+  final CalendarMonthCell cell;
+  final double height;
+  final String selectedKey;
+  final List<Task> tasks;
+  final Color borderColor;
+  final void Function(DateTime day) onDayNumberTap;
+  final void Function(DateTime day) onEmptyCellTap;
+  final void Function(Task task) onTaskTap;
+  final Future<void> Function(String id) onToggleComplete;
+
+  @override
+  Widget build(BuildContext context) {
+    final day = DateTime.parse(cell.dateKey);
+    final isSelected = cell.dateKey == selectedKey;
+    Color bg;
+    if (isSelected) {
+      bg = OtterColors.sberGreenLight.withValues(alpha: 0.7);
+    } else if (cell.isToday) {
+      bg = OtterColors.sberGreenLight.withValues(alpha: 0.4);
+    } else {
+      bg = Colors.white.withValues(alpha: 0.4);
+    }
+
+    return Opacity(
+      opacity: cell.isCurrentMonth ? 1 : 0.35,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Material(
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: () => onEmptyCellTap(day),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              height: height,
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: borderColor),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: InkWell(
+                      onTap: () => onDayNumberTap(day),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        width: 20,
+                        height: 20,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: cell.isToday
+                              ? OtterColors.sberGreen
+                              : Colors.transparent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '${cell.day}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: cell.isToday
+                                ? Colors.white
+                                : OtterColors.sberBlack,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Expanded(
+                    child: ListView(
+                      primary: false,
+                      padding: EdgeInsets.zero,
+                      children: [
+                        for (final task in tasks)
+                          _MonthTaskChip(
+                            task: task,
+                            onTap: () => onTaskTap(task),
+                            onToggleComplete: () =>
+                                onToggleComplete(task.id),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MonthTaskChip extends StatelessWidget {
+  const _MonthTaskChip({
+    required this.task,
+    required this.onTap,
+    required this.onToggleComplete,
+  });
+
+  final Task task;
+  final VoidCallback onTap;
+  final VoidCallback onToggleComplete;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = priorityColor(task.priority);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Opacity(
+        opacity: task.completed ? 0.45 : 1,
+        child: Material(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(4),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: const Color(0xFFC8CFDB)),
+              ),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: onToggleComplete,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: color, width: 1.2),
+                        color: task.completed ? color : Colors.transparent,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 3),
+                  Expanded(
+                    child: Text(
+                      task.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _YearView extends StatelessWidget {
+  const _YearView({
+    required this.date,
+    required this.tasks,
+    required this.onMonthTap,
+    required this.onDayTap,
+  });
+
+  final DateTime date;
+  final List<Task> tasks;
+  final void Function(int monthIndex) onMonthTap;
+  final void Function(DateTime day) onDayTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final months = buildYearMonths(year: date.year, today: today);
+    final byDate = groupTasksByDate(
+      tasks,
+      '${date.year}-01-01',
+      '${date.year}-12-31',
+    );
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 100),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // 3 columns like web
+          const gap = 12.0;
+          final cardW = (constraints.maxWidth - gap * 2) / 3;
+          return Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (final month in months)
+                SizedBox(
+                  width: cardW,
+                  child: Material(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    child: InkWell(
+                      onTap: () => onMonthTap(month.index),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              month.name,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: OtterColors.sberBlack,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            for (var row = 0; row < 6; row++)
+                              Row(
+                                children: [
+                                  for (var col = 0; col < 7; col++)
+                                    Expanded(
+                                      child: _YearDayCell(
+                                        cell: month.cells[row * 7 + col],
+                                        dots: dotsForDate(
+                                          byDate,
+                                          month.cells[row * 7 + col].dateKey ??
+                                              '',
+                                        ),
+                                        onDayTap: onDayTap,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _YearDayCell extends StatelessWidget {
+  const _YearDayCell({
+    required this.cell,
+    required this.dots,
+    required this.onDayTap,
+  });
+
+  final CalendarYearDayCell cell;
+  final List<Color> dots;
+  final void Function(DateTime day) onDayTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final day = cell.day;
+    final dateKey = cell.dateKey;
+
+    return AspectRatio(
+      aspectRatio: 1,
+      child: InkWell(
+        onTap: dateKey == null
+            ? null
+            : () => onDayTap(DateTime.parse(dateKey)),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (day != null)
+              Container(
+                width: 16,
+                height: 16,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: cell.isToday
+                      ? OtterColors.sberGreen
+                      : Colors.transparent,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  '$day',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight:
+                        cell.isToday ? FontWeight.w600 : FontWeight.w400,
+                    color: cell.isToday
+                        ? Colors.white
+                        : OtterColors.sberGray,
+                  ),
+                ),
+              ),
+            if (dots.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (final c in dots)
+                      Container(
+                        width: 4,
+                        height: 4,
+                        margin: const EdgeInsets.symmetric(horizontal: 0.5),
+                        decoration: BoxDecoration(
+                          color: c,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WeekView extends StatefulWidget {
+  const _WeekView({
+    required this.date,
+    required this.tasks,
+    required this.collapsedEarlyHours,
+    required this.collapsedLateHours,
+    required this.onToggleEarlyHours,
+    required this.onToggleLateHours,
+    required this.onTaskTap,
+    required this.onDayTap,
+    required this.onHourTap,
+    required this.onToggleComplete,
+    required this.onReschedule,
+  });
+
+  final DateTime date;
+  final List<Task> tasks;
+  final bool collapsedEarlyHours;
+  final bool collapsedLateHours;
+  final VoidCallback onToggleEarlyHours;
+  final VoidCallback onToggleLateHours;
+  final void Function(Task task) onTaskTap;
+  final void Function(DateTime day) onDayTap;
+  final void Function(DateTime day, int hour) onHourTap;
+  final Future<void> Function(String id) onToggleComplete;
+  final Future<void> Function(Task task, int start, int end) onReschedule;
+
+  @override
+  State<_WeekView> createState() => _WeekViewState();
+}
+
+class _WeekViewState extends State<_WeekView> {
+  static const _hourH = hourHeightPx;
+  static const _gutter = weekGutterWidth;
+  static const _gridBorder = Color(0xFFC8CFDB);
+
+  double _untimedHeight = untimedDefaultPx;
+  CalendarDragPreview? _dragPreview;
+  CalendarTimelineTask? _dragTask;
+  CalendarTaskDragMode? _dragMode;
+  double _dragStartDy = 0;
+  int _initialStart = 0;
+  int _initialEnd = 0;
+  bool _didDrag = false;
+  bool _ignoreNextTap = false;
+
+  void _beginDrag(CalendarTimelineTask item, CalendarTaskDragMode mode) {
+    setState(() {
+      _dragTask = item;
+      _dragMode = mode;
+      _dragStartDy = 0;
+      _initialStart = item.rawStart;
+      _initialEnd = item.rawEnd;
+      _didDrag = false;
+      _dragPreview = CalendarDragPreview(
+        taskId: item.task.id,
+        start: item.rawStart,
+        end: item.rawEnd,
+      );
+    });
+  }
+
+  void _updateDrag(DragUpdateDetails details, CalendarTaskDragMode mode) {
+    if (_dragTask == null || _dragMode != mode) return;
+
+    _dragStartDy += details.delta.dy;
+    final deltaMinutes = _dragStartDy / minuteHeightPx;
+
+    if (deltaMinutes.abs() >= 1.5) _didDrag = true;
+
+    var nextStart = _initialStart;
+    var nextEnd = _initialEnd;
+    final delta = deltaMinutes.round();
+
+    if (mode == CalendarTaskDragMode.move) {
+      final duration = _initialEnd - _initialStart;
+      nextStart = snapMinutes(clampMoveStart(_initialStart + delta, duration));
+      nextEnd = nextStart + duration;
+    } else if (mode == CalendarTaskDragMode.resizeStart) {
+      nextStart = snapMinutes(
+        (_initialStart + delta).clamp(
+          0,
+          _initialEnd - calendarMinDurationMinutes,
+        ),
+      );
+    } else {
+      nextEnd = snapMinutes(
+        (_initialEnd + delta).clamp(
+          _initialStart + calendarMinDurationMinutes,
+          24 * 60,
+        ),
+      );
+    }
+
+    setState(() {
+      _dragPreview = CalendarDragPreview(
+        taskId: _dragTask!.task.id,
+        start: nextStart,
+        end: nextEnd,
+      );
+    });
+  }
+
+  Future<void> _endDrag() async {
+    final task = _dragTask;
+    final preview = _dragPreview;
+    final didDrag = _didDrag;
+
+    if (!didDrag || task == null || preview == null) {
+      setState(() {
+        _dragTask = null;
+        _dragMode = null;
+        _dragPreview = null;
+        _didDrag = false;
+      });
+      return;
+    }
+
+    if (preview.start == task.rawStart && preview.end == task.rawEnd) {
+      setState(() {
+        _dragTask = null;
+        _dragMode = null;
+        _dragPreview = null;
+        _didDrag = false;
+      });
+      return;
+    }
+
+    final savedTask = task.task;
+    final savedStart = preview.start;
+    final savedEnd = preview.end;
+
+    _ignoreNextTap = true;
+    final saveFuture = widget.onReschedule(savedTask, savedStart, savedEnd);
+
+    setState(() {
+      _dragTask = null;
+      _dragMode = null;
+      _dragPreview = null;
+      _didDrag = false;
+    });
+
+    try {
+      await saveFuture;
+    } catch (_) {
+      // Toast shown by parent; optimistic state reverted in rescheduleTask.
+    } finally {
+      if (mounted) {
+        Future.delayed(const Duration(milliseconds: 400), () {
+          if (mounted) _ignoreNextTap = false;
+        });
+      }
+    }
+  }
+
+  void _handleTaskTap(Task task) {
+    if (_ignoreNextTap) {
+      _ignoreNextTap = false;
+      return;
+    }
+    widget.onTaskTap(task);
+  }
+
+  List<Task> _timedDayTasks(DateTime day) {
+    final key = DateFormat('yyyy-MM-dd').format(day);
+    return expandTasksForDate(widget.tasks, key)
+        .where(
+          (t) =>
+              taskScheduleStart(
+                dueTime: t.dueTime,
+                durationStart: t.duration?.start,
+              ) !=
+              null,
+        )
+        .toList();
+  }
+
+  Widget _weekHourBlock({
+    required List<DateTime> days,
+    required List<int> hours,
+    required List<CalendarTimelineTask> Function(List<Task> dayTasks)
+        buildTimeline,
+  }) {
+    final height = hours.length * _hourH;
+    return SizedBox(
+      height: height,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: _gutter,
+            child: Column(
+              children: [
+                for (final h in hours)
+                  SizedBox(
+                    height: _hourH,
+                    child: Align(
+                      alignment: Alignment.topRight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 4, right: 8),
+                        child: Text(
+                          '${h.toString().padLeft(2, '0')}:00',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: OtterColors.sberGray,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          for (final d in days)
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final colW = constraints.maxWidth;
+                  final dayTasks = _timedDayTasks(d);
+                  final timeline = buildTimeline(dayTasks);
+                  final items = [...timeline]..sort((a, b) {
+                    final az =
+                        (_dragPreview?.taskId == a.task.id ? 35 : 1) +
+                        a.layoutCol;
+                    final bz =
+                        (_dragPreview?.taskId == b.task.id ? 35 : 1) +
+                        b.layoutCol;
+                    return az.compareTo(bz);
+                  });
+                  return Stack(
+                    clipBehavior: Clip.hardEdge,
+                    children: [
+                      Column(
+                        children: [
+                          for (final h in hours)
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => widget.onHourTap(d, h),
+                              child: Container(
+                                height: _hourH,
+                                decoration: const BoxDecoration(
+                                  border: Border(
+                                    top: BorderSide(color: _gridBorder),
+                                    left: BorderSide(color: _gridBorder),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      // Absolute overlay — same as web `pointer-events-none absolute inset-0`.
+                      ...items.map((item) {
+                        final dragging =
+                            _dragPreview?.taskId == item.task.id;
                         return CalendarTaskBlock(
                           item: item,
-                          timelineWidth: timelineWidth,
+                          timelineWidth: colW,
                           isDragging: dragging,
+                          pad: weekOverlapPad,
+                          gap: weekOverlapGap,
+                          cornerRadius: 4,
                           onTap: () => _handleTaskTap(item.task),
                           onToggleComplete: () =>
                               widget.onToggleComplete(item.task.id),
@@ -562,61 +1651,335 @@ class _DayViewState extends State<_DayView> {
                           onDragUpdate: _updateDrag,
                           onDragEnd: _endDrag,
                         );
-                      }).toList(),
+                      }),
+                    ],
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _weekHoursToggle({
+    required String label,
+    required bool collapsed,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: OtterColors.grayLight,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            children: [
+              SizedBox(
+                width: _gutter,
+                child: Text(
+                  label,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: OtterColors.sberGray,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Divider(height: 1, color: OtterColors.grayMid),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                collapsed ? LucideIcons.chevronDown : LucideIcons.chevronUp,
+                size: 16,
+                color: OtterColors.sberGray,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _untimedChip(Task task) {
+    final color = priorityColor(task.priority);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Opacity(
+        opacity: task.completed ? 0.45 : 1,
+        child: Material(
+          color: color.withValues(alpha: 0.13),
+          borderRadius: BorderRadius.circular(4),
+          child: InkWell(
+            onTap: () => widget.onTaskTap(task),
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                border: Border(
+                  left: BorderSide(color: color, width: 3),
+                  top: BorderSide(color: color.withValues(alpha: 0.25)),
+                  right: BorderSide(color: color.withValues(alpha: 0.25)),
+                  bottom: BorderSide(color: color.withValues(alpha: 0.25)),
+                ),
+              ),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => widget.onToggleComplete(task.id),
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: color, width: 1.2),
+                        color: task.completed ? color : Colors.transparent,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      task.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-        );
-      },
+          ),
+        ),
+      ),
     );
   }
-}
-
-class _SimpleListView extends StatelessWidget {
-  const _SimpleListView({required this.tasks, required this.onTaskTap});
-
-  final List<Task> tasks;
-  final void Function(Task task) onTaskTap;
 
   @override
   Widget build(BuildContext context) {
-    if (tasks.isEmpty) {
-      return const Center(
-        child: Text(
-          'Нет задач на этот период',
-          style: TextStyle(color: OtterColors.sberGray),
-        ),
-      );
-    }
+    final weekStart = widget.date.subtract(
+      Duration(days: widget.date.weekday - 1),
+    );
+    final days = List.generate(7, (i) => weekStart.add(Duration(days: i)));
+    final today = DateTime.now();
+    final hasUntimed = days.any((d) {
+      final key = DateFormat('yyyy-MM-dd').format(d);
+      return untimedTasksForDate(
+        expandTasksForDate(widget.tasks, key),
+        dateKey: key,
+      ).isNotEmpty;
+    });
+    final hours = visibleWeekHours(
+      collapsedEarly: widget.collapsedEarlyHours,
+      collapsedLate: widget.collapsedLateHours,
+    );
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: tasks.length,
-      itemBuilder: (_, i) {
-        final t = tasks[i];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          child: ListTile(
-            title: Text(t.title),
-            subtitle: Text(
-              [
-                if (t.dueTime != null) t.dueTime,
-                if (t.duration != null)
-                  '${t.duration!.start}–${t.duration!.end}',
-              ].whereType<String>().join(' · '),
-            ),
-            leading: Icon(
-              LucideIcons.circle,
-              color: priorityColor(t.priority),
-              size: 12,
-            ),
-            onTap: () => onTaskTap(t),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Pinned day headers (+ untimed) — matches web sticky week chrome.
+        ColoredBox(
+          color: OtterColors.grayLight,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
+                child: Row(
+                  children: [
+                    const SizedBox(width: _gutter),
+                    for (final d in days)
+                      Expanded(
+                        child: InkWell(
+                          onTap: () => widget.onDayTap(d),
+                          borderRadius: BorderRadius.circular(10),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Column(
+                              children: [
+                                Text(
+                                  DateFormat('E', 'ru').format(d).substring(0, 2),
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: OtterColors.sberGray,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Container(
+                                  width: 32,
+                                  height: 32,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: d.year == today.year &&
+                                            d.month == today.month &&
+                                            d.day == today.day
+                                        ? OtterColors.sberGreen
+                                        : Colors.transparent,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    '${d.day}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: d.year == today.year &&
+                                              d.month == today.month &&
+                                              d.day == today.day
+                                          ? Colors.white
+                                          : OtterColors.sberBlack,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (hasUntimed) ...[
+                SizedBox(
+                  height: _untimedHeight,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(
+                        width: _gutter,
+                        child: Padding(
+                          padding: EdgeInsets.only(top: 6, right: 4),
+                          child: Text(
+                            'Без\nвр.',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: OtterColors.sberGray,
+                              height: 1.1,
+                            ),
+                          ),
+                        ),
+                      ),
+                      for (final d in days)
+                        Expanded(
+                          child: Builder(
+                            builder: (context) {
+                              final key =
+                                  DateFormat('yyyy-MM-dd').format(d);
+                              final untimed = untimedTasksForDate(
+                                expandTasksForDate(widget.tasks, key),
+                                dateKey: key,
+                              );
+                              return Container(
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 1),
+                                padding: const EdgeInsets.all(2),
+                                decoration: const BoxDecoration(
+                                  border: Border(
+                                    bottom: BorderSide(color: _gridBorder),
+                                  ),
+                                ),
+                                child: ListView(
+                                  primary: false,
+                                  children: [
+                                    for (final task in untimed)
+                                      _untimedChip(task),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onVerticalDragUpdate: (details) {
+                    setState(() {
+                      _untimedHeight = (_untimedHeight + details.delta.dy)
+                          .clamp(untimedMinPx, untimedMaxPx);
+                    });
+                  },
+                  child: const SizedBox(
+                    height: 16,
+                    child: Center(
+                      child: SizedBox(
+                        width: 40,
+                        height: 4,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: OtterColors.grayMid,
+                            borderRadius:
+                                BorderRadius.all(Radius.circular(2)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
-        );
-      },
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            physics: _dragTask != null
+                ? const NeverScrollableScrollPhysics()
+                : null,
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 100),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _gridBorder),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _weekHoursToggle(
+                      label: '00–06',
+                      collapsed: widget.collapsedEarlyHours,
+                      onTap: widget.onToggleEarlyHours,
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeInOut,
+                      alignment: Alignment.topCenter,
+                      child: hours.isEmpty
+                          ? const SizedBox(width: double.infinity)
+                          : _weekHourBlock(
+                              days: days,
+                              hours: hours,
+                              buildTimeline: (dayTasks) =>
+                                  buildWeekTimelineTasks(
+                                dayTasks,
+                                visibleHours: hours,
+                                dragPreview: _dragPreview,
+                              ),
+                            ),
+                    ),
+                    _weekHoursToggle(
+                      label: '22–00',
+                      collapsed: widget.collapsedLateHours,
+                      onTap: widget.onToggleLateHours,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

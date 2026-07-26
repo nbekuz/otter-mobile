@@ -6,12 +6,21 @@ class ApiTask {
     this.dueAt,
     this.startAt,
     this.endAt,
+    this.isAllDay = false,
     this.reminderAt,
+    this.reminderOffsetMinutes,
     required this.repeatUnit,
     required this.repeatInterval,
+    this.repeatUntil,
+    this.seriesId,
+    this.parentTask,
     required this.priority,
     required this.matrixBlock,
     this.image,
+    this.imageUrl,
+    this.attachments = const [],
+    this.listKey,
+    this.nextTask,
     required this.isCompleted,
     this.completedAt,
     required this.createdAt,
@@ -24,12 +33,21 @@ class ApiTask {
   final String? dueAt;
   final String? startAt;
   final String? endAt;
+  final bool isAllDay;
   final String? reminderAt;
+  final int? reminderOffsetMinutes;
   final String repeatUnit;
   final int repeatInterval;
+  final String? repeatUntil;
+  final String? seriesId;
+  final int? parentTask;
   final String priority;
   final String matrixBlock;
   final String? image;
+  final String? imageUrl;
+  final List<ApiAttachment> attachments;
+  final String? listKey;
+  final ApiTask? nextTask;
   final bool isCompleted;
   final String? completedAt;
   final String createdAt;
@@ -42,17 +60,128 @@ class ApiTask {
     dueAt: json['due_at'] as String?,
     startAt: json['start_at'] as String?,
     endAt: json['end_at'] as String?,
+    isAllDay: json['is_all_day'] as bool? ?? false,
     reminderAt: json['reminder_at'] as String?,
+    reminderOffsetMinutes: json['reminder_offset_minutes'] as int?,
     repeatUnit: json['repeat_unit'] as String? ?? 'none',
     repeatInterval: json['repeat_interval'] as int? ?? 1,
+    repeatUntil: json['repeat_until'] as String?,
+    seriesId: json['series_id'] as String?,
+    parentTask: json['parent_task'] as int?,
     priority: json['priority'] as String? ?? 'medium',
     matrixBlock: json['matrix_block'] as String? ?? 'not_urgent_not_important',
     image: json['image'] as String?,
+    imageUrl: json['image_url'] as String?,
+    attachments: (json['attachments'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((e) => ApiAttachment.fromJson(Map<String, dynamic>.from(e)))
+        .toList(),
+    listKey: json['list_key'] as String?,
+    nextTask: json['next_task'] is Map
+        ? ApiTask.fromJson(Map<String, dynamic>.from(json['next_task'] as Map))
+        : null,
     isCompleted: json['is_completed'] as bool? ?? false,
     completedAt: json['completed_at'] as String?,
     createdAt: json['created_at'] as String,
     updatedAt: json['updated_at'] as String,
   );
+}
+
+class ApiAttachment {
+  ApiAttachment({
+    required this.id,
+    required this.fileUrl,
+    required this.originalName,
+    required this.contentType,
+    required this.size,
+    required this.createdAt,
+  });
+
+  final int id;
+  final String fileUrl;
+  final String originalName;
+  final String contentType;
+  final int size;
+  final String createdAt;
+
+  factory ApiAttachment.fromJson(Map<String, dynamic> json) => ApiAttachment(
+    id: json['id'] as int,
+    fileUrl: json['file_url'] as String? ?? '',
+    originalName: json['original_name'] as String? ?? '',
+    contentType: json['content_type'] as String? ?? '',
+    size: json['size'] as int? ?? 0,
+    createdAt: json['created_at'] as String? ?? '',
+  );
+}
+
+class ApiNotificationItem {
+  ApiNotificationItem({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.body,
+    required this.data,
+    this.task,
+    required this.isRead,
+    this.readAt,
+    required this.createdAt,
+  });
+
+  final int id;
+  final String type;
+  final String title;
+  final String body;
+  final Map<String, String> data;
+  final int? task;
+  final bool isRead;
+  final String? readAt;
+  final String createdAt;
+
+  factory ApiNotificationItem.fromJson(Map<String, dynamic> json) {
+    final rawData = json['data'];
+    final data = <String, String>{};
+    if (rawData is Map) {
+      for (final e in rawData.entries) {
+        data[e.key.toString()] = e.value?.toString() ?? '';
+      }
+    }
+    return ApiNotificationItem(
+      id: json['id'] as int,
+      type: json['type'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      body: json['body'] as String? ?? '',
+      data: data,
+      task: json['task'] as int?,
+      isRead: json['is_read'] as bool? ?? false,
+      readAt: json['read_at'] as String?,
+      createdAt: json['created_at'] as String? ?? '',
+    );
+  }
+}
+
+class ApiNotificationsPage {
+  ApiNotificationsPage({
+    required this.count,
+    required this.results,
+    this.unreadCount = 0,
+  });
+
+  final int count;
+  final int unreadCount;
+  final List<ApiNotificationItem> results;
+
+  factory ApiNotificationsPage.fromJson(Map<String, dynamic> json) =>
+      ApiNotificationsPage(
+        count: json['count'] as int? ?? 0,
+        unreadCount: json['unread_count'] as int? ?? 0,
+        results: (json['results'] as List<dynamic>? ?? [])
+            .whereType<Map>()
+            .map(
+              (e) =>
+                  ApiNotificationItem.fromJson(Map<String, dynamic>.from(e)),
+            )
+            .toList(),
+      );
 }
 
 class ApiTaskGroup {
@@ -83,20 +212,44 @@ class ApiCalendarResponse {
     required this.view,
     required this.date,
     required this.tasks,
+    this.allDayIds = const {},
   });
 
   final String view;
   final String date;
   final List<ApiTask> tasks;
+  final Set<int> allDayIds;
 
-  factory ApiCalendarResponse.fromJson(Map<String, dynamic> json) =>
-      ApiCalendarResponse(
-        view: json['view'] as String,
-        date: json['date'] as String,
-        tasks: (json['tasks'] as List<dynamic>? ?? [])
-            .map((e) => ApiTask.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+  factory ApiCalendarResponse.fromJson(Map<String, dynamic> json) {
+    final flat = (json['tasks'] as List<dynamic>? ?? [])
+        .map((e) => ApiTask.fromJson(e as Map<String, dynamic>))
+        .toList();
+    final allDay = (json['all_day_tasks'] as List<dynamic>? ?? [])
+        .map((e) => ApiTask.fromJson(e as Map<String, dynamic>))
+        .toList();
+    final timed = (json['timed_tasks'] as List<dynamic>? ?? [])
+        .map((e) => ApiTask.fromJson(e as Map<String, dynamic>))
+        .toList();
+
+    // Prefer split payloads when backend sends them; fall back to flat `tasks`.
+    final tasks = (allDay.isNotEmpty || timed.isNotEmpty)
+        ? [...allDay, ...timed]
+        : flat;
+
+    // Deduplicate by id (flat + split can overlap on older backends).
+    final seen = <int>{};
+    final unique = <ApiTask>[];
+    for (final t in tasks) {
+      if (seen.add(t.id)) unique.add(t);
+    }
+
+    return ApiCalendarResponse(
+      view: json['view'] as String? ?? 'day',
+      date: json['date'] as String? ?? '',
+      tasks: unique,
+      allDayIds: {for (final t in allDay) t.id},
+    );
+  }
 }
 
 class ApiMatrixBlockData {
@@ -231,6 +384,7 @@ class ApiPomodoroSession {
 class ApiAppSettings {
   ApiAppSettings({
     required this.language,
+    this.timezone,
     required this.showOverdue,
     required this.showToday,
     required this.showTomorrow,
@@ -247,6 +401,7 @@ class ApiAppSettings {
   });
 
   final String language;
+  final String? timezone;
   final bool showOverdue;
   final bool showToday;
   final bool showTomorrow;
@@ -263,6 +418,7 @@ class ApiAppSettings {
 
   factory ApiAppSettings.fromJson(Map<String, dynamic> json) => ApiAppSettings(
     language: json['language'] as String? ?? 'ru',
+    timezone: json['timezone'] as String?,
     showOverdue: json['show_overdue'] as bool? ?? true,
     showToday: json['show_today'] as bool? ?? true,
     showTomorrow: json['show_tomorrow'] as bool? ?? true,
@@ -287,25 +443,36 @@ class ApiMatrixSetting {
     required this.block,
     required this.title,
     required this.allowedPriorities,
-    required this.dateFilter,
+    required this.dateFilters,
   });
 
   final int id;
   final String block;
   final String title;
   final List<String> allowedPriorities;
-  final String dateFilter;
+  final List<String> dateFilters;
 
-  factory ApiMatrixSetting.fromJson(Map<String, dynamic> json) =>
-      ApiMatrixSetting(
-        id: json['id'] as int,
-        block: json['block'] as String,
-        title: json['title'] as String? ?? '',
-        allowedPriorities: (json['allowed_priorities'] as List<dynamic>? ?? [])
-            .map((e) => e.toString())
-            .toList(),
-        dateFilter: json['date_filter'] as String? ?? 'all',
-      );
+  factory ApiMatrixSetting.fromJson(Map<String, dynamic> json) {
+    List<String> filters = [];
+    final rawList = json['date_filters'];
+    if (rawList is List) {
+      filters = rawList.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList();
+    } else {
+      final raw = json['date_filter'] as String? ?? '';
+      if (raw.isNotEmpty && raw != 'all') {
+        filters = raw.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+      }
+    }
+    return ApiMatrixSetting(
+      id: json['id'] as int,
+      block: json['block'] as String,
+      title: json['title'] as String? ?? '',
+      allowedPriorities: (json['allowed_priorities'] as List<dynamic>? ?? [])
+          .map((e) => e.toString())
+          .toList(),
+      dateFilters: filters,
+    );
+  }
 }
 
 class ApiHelpItem {

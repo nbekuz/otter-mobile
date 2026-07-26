@@ -65,27 +65,26 @@ class MatrixBlockUiSetting {
   factory MatrixBlockUiSetting.fromApi(ApiMatrixSetting api) {
     final block = MatrixBlockX.fromApi(api.block);
     final fallback = defaults()[block]!;
-    final dateFilters = api.dateFilter.isEmpty || api.dateFilter == 'all'
-        ? fallback.dateFilters
-        : api.dateFilter.split(',').where((s) => s.trim().isNotEmpty).toList();
-    final priorityFilters = api.allowedPriorities.isEmpty
-        ? fallback.priorityFilters
-        : api.allowedPriorities
-              .map((p) => p == 'critical' ? 'high' : p)
-              .toList();
+    final dateFilters = api.dateFilters
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty && s != 'all')
+        .toList();
+    final priorityFilters = api.allowedPriorities
+        .map((p) => p == 'critical' ? 'high' : p)
+        .toList();
 
     return MatrixBlockUiSetting(
       id: api.id,
       block: block,
       title: api.title.isNotEmpty ? api.title : fallback.title,
-      dateFilters: dateFilters,
+      dateFilters: dateFilters.isEmpty ? fallback.dateFilters : dateFilters,
       priorityFilters: priorityFilters,
     );
   }
 
   List<String> toApiPriorities() => priorityFilters;
 
-  String toApiDateFilter() => dateFilters.join(',');
+  List<String> toApiDateFilters() => dateFilters;
 
   static Priority defaultPriorityFor(
     MatrixBlock block, [

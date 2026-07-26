@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/locale/app_languages.dart';
 import 'core/providers/providers.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/otter_theme.dart';
@@ -12,13 +13,35 @@ class OtterApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
-    final auth = ref.watch(authStateProvider);
+    final language = ref.watch(
+      appSettingsProvider.select((s) => s.language),
+    );
+    final locale = localeFromAppLanguage(language);
+    // Only watch bootstrap flag — watching full AuthState remounts the tree
+    // on every isLoading flip and dismisses the soft keyboard.
+    final isBootstrapping = ref.watch(
+      authStateProvider.select((s) => s.isBootstrapping),
+    );
+
+    // Bind FCM / local-notification taps → task screen (no provider cycle).
+    ref.listen(routerProvider, (_, next) {
+      ref.read(pushNotificationsProvider).setOpenTaskHandler((taskId) {
+        next.go(
+          '/app/new-task?taskId=${Uri.encodeComponent(taskId)}&returnTo=/app',
+        );
+      });
+    });
+    ref.read(pushNotificationsProvider).setOpenTaskHandler((taskId) {
+      router.go(
+        '/app/new-task?taskId=${Uri.encodeComponent(taskId)}&returnTo=/app',
+      );
+    });
 
     return MaterialApp.router(
-      title: 'Otter',
+      title: 'Оттер',
       debugShowCheckedModeBanner: false,
-      locale: const Locale('ru'),
-      supportedLocales: const [Locale('ru')],
+      locale: locale,
+      supportedLocales: kSupportedAppLocales,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -33,7 +56,7 @@ class OtterApp extends ConsumerWidget {
               fit: StackFit.expand,
               children: [
                 child ?? const SizedBox.shrink(),
-                if (auth.isBootstrapping)
+                if (isBootstrapping)
                   Positioned.fill(
                     child: AbsorbPointer(
                       child: ColoredBox(

@@ -45,6 +45,21 @@ class TaskDuration {
   final String end;
 }
 
+class RepeatCustom {
+  const RepeatCustom({
+    required this.interval,
+    required this.unit,
+    this.weekdays,
+    this.monthDay,
+  });
+
+  final int interval;
+  /// `week` or `month`
+  final String unit;
+  final List<int>? weekdays;
+  final int? monthDay;
+}
+
 class Task {
   Task({
     required this.id,
@@ -58,8 +73,17 @@ class Task {
     this.completedAt,
     this.notification,
     required this.repeat,
+    this.repeatDays,
+    this.repeatCustom,
     this.imageUrl,
+    this.attachmentId,
+    this.attachmentName,
+    this.attachmentMimeType,
+    this.isAllDay = false,
+    this.listKey,
     this.matrixBlock,
+    this.seriesId,
+    this.parentTaskId,
     required this.createdAt,
   });
 
@@ -74,8 +98,17 @@ class Task {
   final String? completedAt;
   final String? notification;
   final RepeatType repeat;
+  final List<int>? repeatDays;
+  final RepeatCustom? repeatCustom;
   final String? imageUrl;
+  final int? attachmentId;
+  final String? attachmentName;
+  final String? attachmentMimeType;
+  final bool isAllDay;
+  final TaskGroupKey? listKey;
   final MatrixBlock? matrixBlock;
+  final String? seriesId;
+  final String? parentTaskId;
   final String createdAt;
 
   Task copyWith({
@@ -90,8 +123,17 @@ class Task {
     String? completedAt,
     String? notification,
     RepeatType? repeat,
+    List<int>? repeatDays,
+    RepeatCustom? repeatCustom,
     String? imageUrl,
+    int? attachmentId,
+    String? attachmentName,
+    String? attachmentMimeType,
+    bool? isAllDay,
+    TaskGroupKey? listKey,
     MatrixBlock? matrixBlock,
+    String? seriesId,
+    String? parentTaskId,
     String? createdAt,
   }) => Task(
     id: id ?? this.id,
@@ -105,8 +147,17 @@ class Task {
     completedAt: completedAt ?? this.completedAt,
     notification: notification ?? this.notification,
     repeat: repeat ?? this.repeat,
+    repeatDays: repeatDays ?? this.repeatDays,
+    repeatCustom: repeatCustom ?? this.repeatCustom,
     imageUrl: imageUrl ?? this.imageUrl,
+    attachmentId: attachmentId ?? this.attachmentId,
+    attachmentName: attachmentName ?? this.attachmentName,
+    attachmentMimeType: attachmentMimeType ?? this.attachmentMimeType,
+    isAllDay: isAllDay ?? this.isAllDay,
+    listKey: listKey ?? this.listKey,
     matrixBlock: matrixBlock ?? this.matrixBlock,
+    seriesId: seriesId ?? this.seriesId,
+    parentTaskId: parentTaskId ?? this.parentTaskId,
     createdAt: createdAt ?? this.createdAt,
   );
 }
@@ -137,7 +188,11 @@ class AppSettings {
     required this.notificationSound,
     required this.completionSound,
     required this.bottomNavItems,
+    this.timezone,
     this.isPremium = false,
+    this.calendarDefaultView = 'day',
+    this.calendarCollapseEarlyHours = true,
+    this.calendarCollapseLateHours = true,
   });
 
   final String language;
@@ -148,7 +203,17 @@ class AppSettings {
   final String notificationSound;
   final String completionSound;
   final List<String> bottomNavItems;
+  final String? timezone;
   final bool isPremium;
+
+  /// Local-only: initial calendar view (`day` | `week` | `month` | `year`).
+  final String calendarDefaultView;
+
+  /// Local-only: collapse 00:00–06:00 by default.
+  final bool calendarCollapseEarlyHours;
+
+  /// Local-only: collapse 22:00–00:00 by default.
+  final bool calendarCollapseLateHours;
 
   static AppSettings defaults() => AppSettings(
     language: 'ru',
@@ -170,7 +235,11 @@ class AppSettings {
     String? notificationSound,
     String? completionSound,
     List<String>? bottomNavItems,
+    String? timezone,
     bool? isPremium,
+    String? calendarDefaultView,
+    bool? calendarCollapseEarlyHours,
+    bool? calendarCollapseLateHours,
   }) => AppSettings(
     language: language ?? this.language,
     theme: theme ?? this.theme,
@@ -180,7 +249,13 @@ class AppSettings {
     notificationSound: notificationSound ?? this.notificationSound,
     completionSound: completionSound ?? this.completionSound,
     bottomNavItems: bottomNavItems ?? this.bottomNavItems,
+    timezone: timezone ?? this.timezone,
     isPremium: isPremium ?? this.isPremium,
+    calendarDefaultView: calendarDefaultView ?? this.calendarDefaultView,
+    calendarCollapseEarlyHours:
+        calendarCollapseEarlyHours ?? this.calendarCollapseEarlyHours,
+    calendarCollapseLateHours:
+        calendarCollapseLateHours ?? this.calendarCollapseLateHours,
   );
 }
 

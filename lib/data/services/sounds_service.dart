@@ -24,4 +24,10 @@ class SoundsService {
     ]);
     return (workBackground: results[0], timerEnd: results[1]);
   }
+
+  Future<List<ApiSound>> fetchNotificationSounds() =>
+      fetchByCategory('notification');
+
+  Future<List<ApiSound>> fetchCompletionSounds() =>
+      fetchByCategory('completion');
 }

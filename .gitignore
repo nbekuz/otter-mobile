@@ -32,7 +32,9 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+.env
 .env.bak
+.env.local
 client_secret_*.json
 
 # Symbolication related

@@ -22,6 +22,12 @@ class CalendarService {
       queryParameters: {'view': view.apiValue, 'date': date},
     );
     final response = ApiCalendarResponse.fromJson(data);
-    return response.tasks.map(TaskMapper.apiToUi).toList();
+    return [
+      for (final t in response.tasks)
+        TaskMapper.apiToUi(t).copyWith(
+          // Split all-day payloads may omit the flag; match web mapping.
+          isAllDay: t.isAllDay || response.allDayIds.contains(t.id),
+        ),
+    ];
   }
 }

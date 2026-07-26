@@ -29,13 +29,13 @@ const kAllNavItems = [
   BottomNavItem(
     id: 'calendar',
     path: '/app/calendar',
-    icon: LucideIcons.calendar,
+    icon: LucideIcons.calendarDays,
     label: 'Календарь',
   ),
   BottomNavItem(
     id: 'matrix',
     path: '/app/matrix',
-    icon: LucideIcons.grid,
+    icon: LucideIcons.layoutGrid,
     label: 'Матрица',
   ),
   BottomNavItem(
@@ -163,7 +163,10 @@ class OtterBottomNav extends StatelessWidget {
   }
 
   bool _isActive(String path) {
-    if (path == '/app') return currentPath == '/app';
-    return currentPath.startsWith(path);
+    final current = currentPath.endsWith('/') && currentPath.length > 1
+        ? currentPath.substring(0, currentPath.length - 1)
+        : currentPath;
+    if (path == '/app') return current == '/app';
+    return current == path || current.startsWith('$path/');
   }
 }

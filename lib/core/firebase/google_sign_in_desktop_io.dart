@@ -1,27 +1,62 @@
 import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import 'windows_google_oauth.dart';
 
-Future<String?> signInWithGoogleDesktop({required String clientId}) async {
+const _logTag = '[otter:windows-google-auth]';
+
+Future<String?> signInWithGoogleDesktop({
+  required String clientId,
+  required String clientSecret,
+}) async {
   _ensureWindows();
 
   try {
-    final tokens = await WindowsGoogleOAuth(clientId: clientId).signIn();
-    if (tokens == null) return null;
+    debugPrint(
+      '$_logTag starting Google OAuth '
+      '(client_id=$clientId, client_secret_configured=${clientSecret.isNotEmpty})',
+    );
+
+    final tokens = await WindowsGoogleOAuth(
+      clientId: clientId,
+      clientSecret: clientSecret,
+    ).signIn();
+    if (tokens == null) {
+      debugPrint('$_logTag user cancelled Google OAuth');
+      return null;
+    }
+
+    debugPrint(
+      '$_logTag Firebase signInWithCredential '
+      '(has_access_token=${tokens.accessToken.isNotEmpty}, '
+      'has_id_token=${tokens.idToken.isNotEmpty})',
+    );
 
     final credential = GoogleAuthProvider.credential(
       accessToken: tokens.accessToken,
       idToken: tokens.idToken,
     );
     final result = await FirebaseAuth.instance.signInWithCredential(credential);
-    return result.user?.getIdToken();
+    final firebaseToken = await result.user?.getIdToken();
+
+    debugPrint(
+      '$_logTag Firebase sign-in OK '
+      '(uid=${result.user?.uid}, has_firebase_id_token=${firebaseToken != null})',
+    );
+
+    return firebaseToken;
   } on WindowsGoogleOAuthException catch (error) {
+    debugPrint('$_logTag OAuth failed (${error.code}): ${error.message}');
     throw StateError(error.message);
   } on FirebaseAuthException catch (error) {
+    debugPrint(
+      '$_logTag Firebase failed (${error.code}): ${error.message}',
+    );
     throw StateError(_firebaseErrorMessage(error));
   } on SocketException {
+    debugPrint('$_logTag network error');
     throw StateError('Нет подключения к интернету. Попробуйте ещё раз.');
   }
 }

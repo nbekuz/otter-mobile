@@ -90,12 +90,6 @@ class _MobileLayout extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 24),
-        const Text(
-          'FAQ и документы — после входа в «Настройки»',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: OtterColors.sberGray, fontSize: 12),
-        ),
-        const SizedBox(height: 16),
         PrimaryButton(label: 'Войти', onPressed: () => context.push('/login')),
         const SizedBox(height: 12),
         PrimaryButton(

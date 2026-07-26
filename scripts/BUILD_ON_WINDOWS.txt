@@ -1,4 +1,4 @@
-Otter — Windows build (do'st PC uchun)
+Оттер — Windows build (do'st PC uchun)
 =====================================
 
 1. Flutter o'rnatilgan bo'lsin: https://docs.flutter.dev/get-started/install/windows

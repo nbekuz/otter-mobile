@@ -140,12 +140,26 @@ class _MatrixSettingsSheetState extends ConsumerState<_MatrixSettingsSheet> {
         ],
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-          child: Text(
-            'Настройки блоков',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: OtterColors.sberBlack,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Настройки блоков',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: OtterColors.sberBlack,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'В каждом блоке выбранные условия работают как множественный фильтр (ИЛИ): '
+                'задача попадает в блок, если подходит хотя бы одно из них — по дате или по приоритету.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: OtterColors.sberGray,
+                  height: 1.35,
+                ),
+              ),
+            ],
           ),
         ),
         ConstrainedBox(

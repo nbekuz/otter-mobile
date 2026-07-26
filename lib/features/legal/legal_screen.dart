@@ -17,12 +17,6 @@ class LegalScreen extends ConsumerStatefulWidget {
 
 class _LegalScreenState extends ConsumerState<LegalScreen> {
   @override
-  void initState() {
-    super.initState();
-    Future.microtask(() => ref.read(legalProvider.notifier).load());
-  }
-
-  @override
   Widget build(BuildContext context) {
     final legal = ref.watch(legalProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -77,16 +71,7 @@ class _LegalScreenState extends ConsumerState<LegalScreen> {
             Expanded(
               child: selected != null
                   ? _DocumentDetail(doc: selected, surface: surface)
-                  : _DocumentsHub(
-                      apiDocuments: legal.documents,
-                      apiLoading: legal.loading,
-                      apiError: legal.error,
-                      surface: surface,
-                      onSelectApi: (index) => ref
-                          .read(legalProvider.notifier)
-                          .selectDocument(index),
-                      onRetryApi: () => ref.read(legalProvider.notifier).load(),
-                    ),
+                  : _DocumentsHub(surface: surface),
             ),
           ],
         ),
@@ -96,28 +81,16 @@ class _LegalScreenState extends ConsumerState<LegalScreen> {
 }
 
 class _DocumentsHub extends StatelessWidget {
-  const _DocumentsHub({
-    required this.apiDocuments,
-    required this.apiLoading,
-    required this.apiError,
-    required this.surface,
-    required this.onSelectApi,
-    required this.onRetryApi,
-  });
+  const _DocumentsHub({required this.surface});
 
-  final List<ApiLegalDocument> apiDocuments;
-  final bool apiLoading;
-  final String? apiError;
   final Color surface;
-  final void Function(int index) onSelectApi;
-  final VoidCallback onRetryApi;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        for (final doc in staticLegalDocuments) ...[
+        for (final doc in staticLegalDocuments)
           Card(
             color: surface,
             margin: const EdgeInsets.only(bottom: 8),
@@ -141,68 +114,6 @@ class _DocumentsHub extends StatelessWidget {
               onTap: () => context.push('/legal/${doc.slug.id}'),
             ),
           ),
-        ],
-        if (apiLoading && apiDocuments.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else if (apiError != null && apiDocuments.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              children: [
-                Text(
-                  apiError!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.red),
-                ),
-                TextButton(
-                  onPressed: onRetryApi,
-                  child: const Text('Повторить'),
-                ),
-              ],
-            ),
-          ),
-        if (apiDocuments.isNotEmpty) ...[
-          const Padding(
-            padding: EdgeInsets.fromLTRB(4, 8, 4, 8),
-            child: Text(
-              'С сервера',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: OtterColors.sberGray,
-              ),
-            ),
-          ),
-          ...List.generate(apiDocuments.length, (index) {
-            final doc = apiDocuments[index];
-            final subtitle = legalDocTypeLabel(doc.docType);
-            return Card(
-              color: surface,
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: const Icon(
-                  LucideIcons.fileText,
-                  color: OtterColors.sberGray,
-                ),
-                title: Text(
-                  doc.title,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: subtitle != doc.docType
-                    ? Text(subtitle, style: const TextStyle(fontSize: 12))
-                    : null,
-                trailing: const Icon(
-                  LucideIcons.chevronRight,
-                  color: OtterColors.sberGray,
-                ),
-                onTap: () => onSelectApi(index),
-              ),
-            );
-          }),
-        ],
       ],
     );
   }

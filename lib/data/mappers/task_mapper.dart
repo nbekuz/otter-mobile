@@ -14,6 +14,12 @@ abstract final class TaskMapper {
         ? parseApiWallClock(task.endAt!)
         : null;
     final scheduleDay = startFields ?? dueFields;
+    final firstAttachment =
+        task.attachments.isNotEmpty ? task.attachments.first : null;
+    final baseRepeat = _repeatToUi(task.repeatUnit);
+    final hasCustomInterval =
+        task.repeatUnit != 'none' && task.repeatInterval > 1;
+    final customUnit = task.repeatUnit == 'month' ? 'month' : 'week';
 
     String? dueTime;
     if (dueFields != null && dueFields.time != '00:00') {
@@ -39,32 +45,77 @@ abstract final class TaskMapper {
               task.completedAt!,
             )?.toIso8601String().split('T').first
           : null,
-      notification: _reminderMinutes(task.dueAt, task.reminderAt),
-      repeat: _repeatToUi(task.repeatUnit),
-      imageUrl: task.image,
+      notification: task.reminderOffsetMinutes != null
+          ? task.reminderOffsetMinutes.toString()
+          : _reminderMinutes(task.dueAt, task.reminderAt),
+      repeat: hasCustomInterval ? RepeatType.custom : baseRepeat,
+      repeatCustom: hasCustomInterval
+          ? RepeatCustom(interval: task.repeatInterval, unit: customUnit)
+          : null,
+      imageUrl: task.imageUrl ??
+          task.image ??
+          firstAttachment?.fileUrl,
+      attachmentId: firstAttachment?.id,
+      attachmentName: firstAttachment?.originalName.isNotEmpty == true
+          ? firstAttachment!.originalName
+          : null,
+      attachmentMimeType: firstAttachment?.contentType.isNotEmpty == true
+          ? firstAttachment!.contentType
+          : null,
+      isAllDay: task.isAllDay,
+      listKey: task.listKey != null
+          ? TaskGroupKeyX.fromApi(task.listKey!)
+          : null,
       matrixBlock: MatrixBlockX.fromApi(task.matrixBlock),
+      seriesId: task.seriesId,
+      parentTaskId: task.parentTask?.toString(),
       createdAt: task.createdAt,
     );
   }
 
   static PartialTask mergePartial(Task existing, PartialTask updates) {
+    final clearDue = updates.clearDueDate;
     return PartialTask(
       title: updates.title ?? existing.title,
-      description: updates.description ?? existing.description,
-      dueDate: updates.dueDate ?? existing.dueDate,
-      dueTime: updates.dueTime ?? existing.dueTime,
-      duration: updates.duration ?? existing.duration,
+      description: updates.clearDescription
+          ? null
+          : (updates.description ?? existing.description),
+      dueDate: clearDue ? null : (updates.dueDate ?? existing.dueDate),
+      dueTime: clearDue || updates.clearDueTime
+          ? null
+          : (updates.dueTime ?? existing.dueTime),
+      duration: clearDue || updates.clearDuration
+          ? null
+          : (updates.duration ?? existing.duration),
       priority: updates.priority ?? existing.priority,
       completed: updates.completed ?? existing.completed,
-      notification: updates.notification ?? existing.notification,
+      notification: updates.clearNotification
+          ? null
+          : (updates.notification ?? existing.notification),
       repeat: updates.repeat ?? existing.repeat,
+      repeatDays: updates.repeat != null
+          ? updates.repeatDays
+          : (updates.repeatDays ?? existing.repeatDays),
+      repeatCustom: updates.repeat != null
+          ? updates.repeatCustom
+          : (updates.repeatCustom ?? existing.repeatCustom),
       matrixBlock: updates.matrixBlock ?? existing.matrixBlock,
+      imagePath: updates.imagePath,
+      clearImage: updates.clearImage,
+      deleteAttachmentId: updates.deleteAttachmentId,
     );
   }
 
   static Map<String, dynamic> uiToApiPayload(PartialTask task) {
     final dueAt = _buildDueAt(task.dueDate, task.dueTime);
     final startEnd = _buildStartEnd(task.dueDate, task.duration);
+    final hasSchedule = dueAt != null || startEnd.$1 != null;
+    final offset = !hasSchedule ||
+            task.notification == null ||
+            task.notification!.isEmpty
+        ? null
+        : int.tryParse(task.notification!);
+    final repeatResolved = _resolveRepeatApi(task);
 
     return {
       'title': task.title,
@@ -72,14 +123,35 @@ abstract final class TaskMapper {
       'due_at': dueAt,
       'start_at': startEnd.$1,
       'end_at': startEnd.$2,
-      'reminder_at': _buildReminderAt(dueAt, task.notification),
-      'repeat_unit': _repeatToApi(task.repeat ?? RepeatType.none),
-      'repeat_interval': 1,
+      // Prefer offset minutes so backend computes reminder_at in user timezone.
+      // Backend rejects reminder_offset_minutes without due_at/start_at.
+      if (offset != null) 'reminder_offset_minutes': offset,
+      if (offset == null) 'reminder_at': null,
+      if (offset == null) 'reminder_offset_minutes': null,
+      'repeat_unit': repeatResolved.$1,
+      'repeat_interval': repeatResolved.$2,
       'priority': _uiPriorityToApi(task.priority ?? Priority.medium),
       'matrix_block':
           (task.matrixBlock ?? MatrixBlock.notUrgentNotImportant).apiValue,
       if (task.completed != null) 'is_completed': task.completed,
     };
+  }
+
+  static (String, int) _resolveRepeatApi(PartialTask task) {
+    final repeat = task.repeat ?? RepeatType.none;
+    if (repeat == RepeatType.custom && task.repeatCustom != null) {
+      final unit =
+          task.repeatCustom!.unit == 'month' ? 'month' : 'week';
+      final interval = task.repeatCustom!.interval.clamp(1, 31);
+      return (unit, interval);
+    }
+    if (repeat != RepeatType.none && task.repeatCustom?.interval != null) {
+      return (
+        _repeatToApi(repeat),
+        task.repeatCustom!.interval.clamp(1, 31),
+      );
+    }
+    return (_repeatToApi(repeat), 1);
   }
 
   static Priority _apiPriorityToUi(String priority) => switch (priority) {
@@ -110,14 +182,6 @@ abstract final class TaskMapper {
     if (dueDate == null) return null;
     final time = dueTime ?? '00:00';
     return DateTime.parse('${dueDate}T$time').toIso8601String();
-  }
-
-  static String? _buildReminderAt(String? dueAt, String? notification) {
-    if (dueAt == null || notification == null) return null;
-    final minutes = int.tryParse(notification);
-    if (minutes == null || minutes < 0) return null;
-    final due = DateTime.parse(dueAt);
-    return due.subtract(Duration(minutes: minutes)).toIso8601String();
   }
 
   static (String?, String?) _buildStartEnd(
@@ -164,7 +228,17 @@ class PartialTask {
     this.completed,
     this.notification,
     this.repeat,
+    this.repeatDays,
+    this.repeatCustom,
     this.matrixBlock,
+    this.imagePath,
+    this.clearImage = false,
+    this.clearDueDate = false,
+    this.clearDueTime = false,
+    this.clearDuration = false,
+    this.clearNotification = false,
+    this.clearDescription = false,
+    this.deleteAttachmentId,
   });
 
   final String? title;
@@ -176,5 +250,15 @@ class PartialTask {
   final bool? completed;
   final String? notification;
   final RepeatType? repeat;
+  final List<int>? repeatDays;
+  final RepeatCustom? repeatCustom;
   final MatrixBlock? matrixBlock;
+  final String? imagePath;
+  final bool clearImage;
+  final bool clearDueDate;
+  final bool clearDueTime;
+  final bool clearDuration;
+  final bool clearNotification;
+  final bool clearDescription;
+  final int? deleteAttachmentId;
 }

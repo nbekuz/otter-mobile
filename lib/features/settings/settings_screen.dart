@@ -1,17 +1,25 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/layout/responsive.dart';
+import '../../core/locale/app_languages.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
 import '../../core/utils/open_url.dart';
+import '../../core/utils/task_export.dart';
+import '../../core/utils/timezone_utils.dart';
 import '../../data/models/ui/ui_models.dart';
 import '../../shared/widgets/bottom_nav.dart';
 import '../../shared/widgets/keyboard_dismisser.dart';
@@ -45,6 +53,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _premiumVisible = widget.openPremium;
     Future.microtask(() async {
       await ref.read(appSettingsProvider.notifier).load();
+      await ref.read(feedbackAudioProvider).ensureLoaded();
+      if (mounted) setState(() {});
       if (widget.openPremium) {
         await ref.read(premiumStateProvider.notifier).loadAll();
       }
@@ -163,6 +173,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ref.read(themeModeProvider.notifier).state = theme;
               },
             ),
+            ListTile(
+              leading: const Icon(LucideIcons.paintbrush),
+              title: const Text('Вид'),
+              subtitle: Text(_calendarViewLabel(settings.calendarDefaultView)),
+              trailing: const Icon(LucideIcons.chevronRight),
+              onTap: () => _openViewSettings(settings),
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.clock),
+              title: const Text('Дата и время'),
+              subtitle: Text(
+                settings.timezone?.isNotEmpty == true
+                    ? settings.timezone!
+                    : 'Не задан',
+              ),
+              trailing: const Icon(LucideIcons.chevronRight),
+              onTap: () => _openDateTimeSettings(settings),
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.download),
+              title: const Text('Интеграции и импорт'),
+              trailing: const Icon(LucideIcons.chevronRight),
+              onTap: _openIntegrationsSettings,
+            ),
           ],
         ),
         _Section(
@@ -183,6 +217,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onChanged: (v) => ref
                   .read(appSettingsProvider.notifier)
                   .update(settings.copyWith(vibration: v)),
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.volume2),
+              title: const Text('Звук уведомления'),
+              subtitle: Text(
+                ref
+                    .watch(feedbackAudioProvider)
+                    .label('notification', settings.notificationSound),
+              ),
+              trailing: const Icon(LucideIcons.chevronRight),
+              onTap: () => _pickSound(
+                title: 'Звук уведомления',
+                category: 'notification',
+                currentKey: settings.notificationSound,
+                onSelected: (key) => ref
+                    .read(appSettingsProvider.notifier)
+                    .update(settings.copyWith(notificationSound: key)),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.circleCheck),
+              title: const Text('Звук подтверждения'),
+              subtitle: Text(
+                ref
+                    .watch(feedbackAudioProvider)
+                    .label('completion', settings.completionSound),
+              ),
+              trailing: const Icon(LucideIcons.chevronRight),
+              onTap: () => _pickSound(
+                title: 'Звук подтверждения',
+                category: 'completion',
+                currentKey: settings.completionSound,
+                onSelected: (key) => ref
+                    .read(appSettingsProvider.notifier)
+                    .update(settings.copyWith(completionSound: key)),
+              ),
             ),
           ],
         ),
@@ -214,6 +284,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
         _Section(
+          title: 'Общее',
+          children: [
+            ListTile(
+              leading: const Icon(LucideIcons.globe),
+              title: const Text('Язык'),
+              subtitle: Text(appLanguageLabel(settings.language)),
+              trailing: const Icon(LucideIcons.chevronRight),
+              onTap: () => _pickLanguage(settings),
+            ),
+          ],
+        ),
+        _Section(
           title: 'Помощь и информация',
           children: [
             ListTile(
@@ -227,6 +309,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               title: const Text('Юридические документы'),
               trailing: const Icon(LucideIcons.chevronRight),
               onTap: () => context.push('/app/legal'),
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.share2),
+              title: const Text('Рекомендовать друзьям'),
+              trailing: const Icon(LucideIcons.chevronRight),
+              onTap: _shareApp,
             ),
             ListTile(
               leading: const Icon(LucideIcons.messageSquare),
@@ -262,7 +350,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
             ],
+            ListTile(
+              leading: const Icon(LucideIcons.info),
+              title: const Text('О приложении'),
+              trailing: const Icon(LucideIcons.chevronRight),
+              onTap: _showAbout,
+            ),
           ],
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: TextButton(
+            onPressed: () => _confirmDeleteAccount(context),
+            child: const Text(
+              'Удалить аккаунт',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+            ),
+          ),
         ),
         SizedBox(height: wide ? 24 : 80),
       ],
@@ -317,6 +421,473 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ).showSnackBar(SnackBar(content: Text(getApiErrorMessage(e))));
       }
     }
+  }
+
+  String _calendarViewLabel(String view) => switch (view) {
+        'week' => 'Неделя',
+        'month' => 'Месяц',
+        'year' => 'Год',
+        _ => 'День',
+      };
+
+  Future<void> _openViewSettings(AppSettings settings) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        return Consumer(
+          builder: (context, ref, _) {
+            final s = ref.watch(appSettingsProvider);
+            const options = <(String, String)>[
+              ('day', 'День'),
+              ('week', 'Неделя'),
+              ('month', 'Месяц'),
+              ('year', 'Год'),
+            ];
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Вид',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Как открывается календарь и какие часы свёрнуты по умолчанию.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: OtterColors.sberGray,
+                          ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'КАЛЕНДАРЬ ПО УМОЛЧАНИЮ',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: OtterColors.sberGray,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final opt in options)
+                          ChoiceChip(
+                            label: Text(opt.$2),
+                            selected: s.calendarDefaultView == opt.$1,
+                            selectedColor: OtterColors.sberGreenLight,
+                            onSelected: (_) {
+                              ref.read(appSettingsProvider.notifier).applyLocal(
+                                    s.copyWith(calendarDefaultView: opt.$1),
+                                  );
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Скрывать ранние часы'),
+                      subtitle: const Text('00:00–06:00 в видах День и Неделя'),
+                      value: s.calendarCollapseEarlyHours,
+                      activeThumbColor: OtterColors.sberGreen,
+                      onChanged: (v) {
+                        ref.read(appSettingsProvider.notifier).applyLocal(
+                              s.copyWith(calendarCollapseEarlyHours: v),
+                            );
+                      },
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Скрывать поздние часы'),
+                      subtitle: const Text('22:00–00:00 в видах День и Неделя'),
+                      value: s.calendarCollapseLateHours,
+                      activeThumbColor: OtterColors.sberGreen,
+                      onChanged: (v) {
+                        ref.read(appSettingsProvider.notifier).applyLocal(
+                              s.copyWith(calendarCollapseLateHours: v),
+                            );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _openDateTimeSettings(AppSettings settings) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        return Consumer(
+          builder: (context, ref, _) {
+            final s = ref.watch(appSettingsProvider);
+            final tz = s.timezone?.isNotEmpty == true ? s.timezone! : '—';
+            final nowLabel = DateFormat('d MMM yyyy, HH:mm:ss', 'ru').format(
+              DateTime.now(),
+            );
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Дата и время',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Часовой пояс используется для напоминаний и группировки «Сегодня» / «Просрочено».',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: OtterColors.sberGray,
+                          ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: OtterColors.grayMid),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'ЧАСОВОЙ ПОЯС',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                  color: OtterColors.sberGray,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            tz,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Сейчас: $nowLabel',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: OtterColors.sberGray),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: () async {
+                        try {
+                          final deviceTz = await deviceTimezone();
+                          await ref.read(appSettingsProvider.notifier).update(
+                                s.copyWith(timezone: deviceTz),
+                              );
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Часовой пояс обновлён'),
+                            ),
+                          );
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(getApiErrorMessage(e))),
+                          );
+                        }
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: OtterColors.sberGreen,
+                      ),
+                      child: const Text('Синхронизировать с устройством'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _openIntegrationsSettings() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Интеграции и импорт',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Экспортируйте задачи в JSON или импортируйте их из файла Otter.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: OtterColors.sberGray,
+                      ),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(LucideIcons.download),
+                  title: const Text('Экспорт задач'),
+                  subtitle: const Text('Поделиться JSON со всеми задачами'),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    await _exportTasks();
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(LucideIcons.upload),
+                  title: const Text('Импорт задач'),
+                  subtitle: const Text('Загрузить JSON-файл Otter'),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    await _importTasks();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _exportTasks() async {
+    try {
+      final tasksState = ref.read(tasksStateProvider);
+      var tasks = tasksState.groups.values.expand((e) => e).toList();
+      if (tasks.isEmpty) {
+        await ref.read(tasksStateProvider.notifier).loadGrouped();
+        tasks = ref
+            .read(tasksStateProvider)
+            .groups
+            .values
+            .expand((e) => e)
+            .toList();
+      }
+      if (tasks.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Нет задач для экспорта')),
+        );
+        return;
+      }
+      final json = encodeTasksExport(tasks);
+      final name =
+          'otter-tasks-${DateFormat('yyyy-MM-dd').format(DateTime.now())}.json';
+      final saved = await FilePicker.platform.saveFile(
+        dialogTitle: 'Экспорт задач',
+        fileName: name,
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+        bytes: utf8.encode(json),
+      );
+      if (saved == null) {
+        await Share.share(json, subject: name);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Экспортировано задач: ${tasks.length}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(getApiErrorMessage(e))),
+      );
+    }
+  }
+
+  Future<void> _importTasks() async {
+    try {
+      final picked = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+        withData: true,
+      );
+      if (picked == null || picked.files.isEmpty) return;
+      final file = picked.files.first;
+      final bytes = file.bytes ??
+          (file.path != null ? await File(file.path!).readAsBytes() : null);
+      if (bytes == null) {
+        throw const FormatException('Не удалось прочитать файл');
+      }
+      final parsed = parseTasksExport(jsonDecode(utf8.decode(bytes)));
+      var created = 0;
+      for (final partial in parsed) {
+        await ref.read(tasksStateProvider.notifier).addTask(partial);
+        created++;
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Импортировано задач: $created')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final message = e is FormatException
+          ? e.message
+          : getApiErrorMessage(e);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
+  }
+
+  Future<void> _pickLanguage(AppSettings settings) async {
+    final current = normalizeAppLanguage(settings.language);
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(8, 8, 8, 12),
+                  child: Text(
+                    'Язык приложения',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                for (final lang in kSupportedAppLanguages)
+                  ListTile(
+                    title: Text(lang.label),
+                    trailing: current == lang.id
+                        ? const Icon(
+                            LucideIcons.check,
+                            color: OtterColors.sberGreen,
+                          )
+                        : null,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(
+                        color: current == lang.id
+                            ? OtterColors.sberGreen
+                            : OtterColors.grayMid,
+                      ),
+                    ),
+                    onTap: () => Navigator.pop(ctx, lang.id),
+                  ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Закрыть'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (picked == null || picked == current) return;
+    await ref.read(appSettingsProvider.notifier).update(
+          settings.copyWith(language: normalizeAppLanguage(picked)),
+        );
+  }
+
+  Future<void> _pickSound({
+    required String title,
+    required String category,
+    required String currentKey,
+    required ValueChanged<String> onSelected,
+  }) async {
+    final feedback = ref.read(feedbackAudioProvider);
+    await feedback.ensureLoaded();
+    final apiSounds = category == 'completion'
+        ? feedback.completion
+        : feedback.notification;
+    final options = apiSounds.isNotEmpty
+        ? apiSounds
+        : feedback.fallbackFor(category);
+
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final sound in options)
+                      ListTile(
+                        leading: Text(
+                          sound.emoji,
+                          style: const TextStyle(fontSize: 20),
+                        ),
+                        title: Text(sound.title),
+                        trailing: currentKey == sound.key
+                            ? const Icon(
+                                LucideIcons.check,
+                                color: OtterColors.sberGreen,
+                              )
+                            : null,
+                        onTap: () {
+                          unawaited(feedback.preview(sound));
+                          Navigator.pop(ctx, sound.key);
+                        },
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked == null) return;
+    onSelected(picked);
   }
 
   Future<void> _startTrial() async {
@@ -476,6 +1047,96 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _shareApp() async {
+    const url = 'https://ottertime.ru';
+    try {
+      await Share.share(
+        'Оттер — планировщик задач: $url',
+        subject: 'Оттер — Планировщик',
+      );
+    } catch (_) {
+      await Clipboard.setData(const ClipboardData(text: url));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ссылка скопирована')),
+      );
+    }
+  }
+
+  Future<void> _showAbout() async {
+    final info = await PackageInfo.fromPlatform();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('О приложении'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Оттер',
+              style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text('Версия ${info.version}'),
+            const SizedBox(height: 16),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(LucideIcons.fileText),
+              title: const Text('Юридические документы'),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push('/app/legal');
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteAccount(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Удалить аккаунт?'),
+        content: const Text(
+          'Аккаунт и связанные данные будут удалены безвозвратно.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    try {
+      await ref.read(authStateProvider.notifier).deleteAccount();
+      if (context.mounted) context.go('/');
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(getApiErrorMessage(e))),
+        );
+      }
+    }
+  }
+
   Future<void> _confirmLogout(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -559,22 +1220,11 @@ class _ProfileCard extends StatelessWidget {
                           ),
                         ),
                         if (isPremium)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Text(
-                              '⭐ ПРЕМИУМ',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.amber,
-                              ),
+                          const Text(
+                            '⭐',
+                            style: TextStyle(
+                              fontSize: 14,
+                              height: 1,
                             ),
                           ),
                       ],
@@ -646,7 +1296,7 @@ class _PremiumPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Otter Premium',
+              'Оттер Premium',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),

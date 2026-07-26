@@ -1,21 +1,26 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/layout/responsive.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
 import '../../core/theme/priority_colors.dart';
+import '../../core/utils/media_url.dart';
 import '../../core/utils/time_utils.dart';
 import '../../data/mappers/task_mapper.dart';
 import '../../data/models/ui/ui_models.dart';
 import '../../features/matrix/matrix_block_setting.dart';
 import '../../features/matrix/matrix_constants.dart';
 import '../../shared/widgets/app_toast.dart';
-import '../../shared/widgets/keyboard_dismisser.dart';
 import '../../shared/widgets/select_field.dart';
 import 'task_time_sync.dart';
 
@@ -52,6 +57,12 @@ class NewTaskScreen extends ConsumerStatefulWidget {
 class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   final _title = TextEditingController();
   final _description = TextEditingController();
+  final _customNotifyCtrl = TextEditingController(text: '10');
+  final _customIntervalCtrl = TextEditingController(text: '1');
+  final _customMonthDayCtrl = TextEditingController(
+    text: '${DateTime.now().day}',
+  );
+  final _titleFocus = FocusNode();
   final _timeSync = TaskTimeSync();
 
   DateTime? _dueDate;
@@ -60,13 +71,43 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   TimeOfDay? _durationEnd;
   Priority _priority = Priority.medium;
   MatrixBlock _matrix = MatrixBlock.notUrgentNotImportant;
-  String? _notification;
+  /// Matches otter-app create default: «В момент срока».
+  String _notification = _defaultNotification;
   RepeatType _repeat = RepeatType.none;
+  int _customNotifyMinutes = 10;
+  int _customRepeatInterval = 1;
+  String _customRepeatUnit = 'week';
+  List<int> _customWeekdays = [1];
+  int _customMonthDay = DateTime.now().day;
+  String? _repeatIntervalError;
+  String? _repeatWeekdaysError;
+  String? _repeatMonthDayError;
   _TaskFormTab _activeTab = _TaskFormTab.date;
   bool _explicitNoDeadline = false;
   bool _loading = false;
   bool _descOpen = false;
+  bool _completed = false;
   String? _error;
+  String? _imagePath;
+  String? _existingImageUrl;
+  String? _attachmentName;
+  String? _attachmentMimeType;
+  int? _attachmentId;
+  bool _clearImage = false;
+
+  /// otter-app `form.notification: '0'` — «В момент срока».
+  static const _defaultNotification = '0';
+
+  static const _notifyPresets = {
+    '',
+    '0',
+    '5',
+    '15',
+    '30',
+    '60',
+    '1440',
+    'custom',
+  };
 
   static const _notifyOptions = [
     (value: '0', label: 'В момент срока'),
@@ -75,6 +116,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
     (value: '30', label: 'За 30 минут'),
     (value: '60', label: 'За 1 час'),
     (value: '1440', label: 'За 1 день'),
+    (value: 'custom', label: 'Своё время…'),
     (value: '', label: 'Без уведомления'),
   ];
 
@@ -84,6 +126,17 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
     (value: RepeatType.weekly, label: 'Каждую неделю'),
     (value: RepeatType.monthly, label: 'Каждый месяц'),
     (value: RepeatType.yearly, label: 'Каждый год'),
+    (value: RepeatType.custom, label: 'Настроить повторение'),
+  ];
+
+  static const _weekDays = [
+    (value: 1, label: 'Пн'),
+    (value: 2, label: 'Вт'),
+    (value: 3, label: 'Ср'),
+    (value: 4, label: 'Чт'),
+    (value: 5, label: 'Пт'),
+    (value: 6, label: 'Сб'),
+    (value: 7, label: 'Вс'),
   ];
 
   @override
@@ -94,11 +147,20 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
     }
     _dueTime = _parseTime(widget.initialDueTime);
     _durationStart = _parseTime(widget.initialDurationStart) ?? _dueTime;
-    _durationEnd =
-        _parseTime(widget.initialDurationEnd) ??
-        (_dueTime != null
-            ? _parseTime(addMinutesToTime(_formatTime(_dueTime)!, 60))
-            : null);
+    final initialEnd = _parseTime(widget.initialDurationEnd);
+    if (initialEnd != null) {
+      _durationEnd = initialEnd;
+    } else if (_durationStart != null) {
+      _durationEnd = _parseTime(
+        defaultDurationEnd(_formatTime(_durationStart)!),
+      );
+    } else {
+      _durationEnd = null;
+    }
+    _timeSync.adoptLoadedDuration(
+      _formatTime(_durationStart),
+      _formatTime(_durationEnd),
+    );
 
     if (widget.initialMatrixBlock != null &&
         widget.initialMatrixBlock!.isNotEmpty) {
@@ -119,9 +181,28 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
     if (widget.isEditMode) {
       _descOpen = true;
       Future.microtask(_loadTask);
+    } else {
+      _notification = _defaultNotification;
+      _scheduleTitleFocus();
     }
 
     Future.microtask(() => ref.read(matrixSettingsProvider.notifier).load());
+  }
+
+  /// Match otter-app: focus the title field when opening create mode.
+  /// Retry after the route transition — a single autofocus often loses on Android.
+  void _scheduleTitleFocus() {
+    void attempt() {
+      if (!mounted || widget.isEditMode) return;
+      _titleFocus.requestFocus();
+      // Soft keyboard (Android); on Windows this still ensures the caret is active.
+      SystemChannels.textInput.invokeMethod('TextInput.show');
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      attempt();
+      Future<void>.delayed(const Duration(milliseconds: 350), attempt);
+    });
   }
 
   Future<void> _loadTask() async {
@@ -135,7 +216,29 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       _priority = task.priority;
       _matrix = task.matrixBlock ?? MatrixBlock.notUrgentNotImportant;
       _repeat = task.repeat;
-      _notification = task.notification;
+      final notify = task.notification ?? '';
+      if (notify.isNotEmpty && !_notifyPresets.contains(notify)) {
+        _notification = 'custom';
+        _customNotifyMinutes = int.tryParse(notify) ?? 10;
+      } else {
+        _notification = notify;
+      }
+      _completed = task.completed;
+      _customRepeatInterval = task.repeatCustom?.interval ?? 1;
+      _customRepeatUnit = task.repeatCustom?.unit ??
+          (task.repeatDays?.isNotEmpty == true ? 'week' : 'week');
+      _customWeekdays = task.repeatCustom?.weekdays?.isNotEmpty == true
+          ? List<int>.from(task.repeatCustom!.weekdays!)
+          : (task.repeatDays?.isNotEmpty == true
+              ? List<int>.from(task.repeatDays!)
+              : [1]);
+      _customMonthDay =
+          task.repeatCustom?.monthDay ?? DateTime.now().day;
+      _customIntervalCtrl.text = '$_customRepeatInterval';
+      _customMonthDayCtrl.text = '$_customMonthDay';
+      if (_notification == 'custom') {
+        _customNotifyCtrl.text = '$_customNotifyMinutes';
+      }
       if (task.dueDate != null) {
         _dueDate = DateTime.tryParse(task.dueDate!);
       } else {
@@ -144,6 +247,21 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       _dueTime = _parseTime(task.dueTime);
       _durationStart = _parseTime(task.duration?.start);
       _durationEnd = _parseTime(task.duration?.end);
+      if (_durationStart != null && _durationEnd == null) {
+        _durationEnd = _parseTime(
+          defaultDurationEnd(_formatTime(_durationStart)!),
+        );
+      }
+      _timeSync.adoptLoadedDuration(
+        _formatTime(_durationStart),
+        _formatTime(_durationEnd),
+      );
+      _existingImageUrl = task.imageUrl;
+      _attachmentId = task.attachmentId;
+      _attachmentName = task.attachmentName;
+      _attachmentMimeType = task.attachmentMimeType;
+      _clearImage = false;
+      _imagePath = null;
       setState(() {});
     } catch (e) {
       if (mounted) showAppToast(context, getApiErrorMessage(e));
@@ -176,7 +294,145 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   void dispose() {
     _title.dispose();
     _description.dispose();
+    _customNotifyCtrl.dispose();
+    _customIntervalCtrl.dispose();
+    _customMonthDayCtrl.dispose();
+    _titleFocus.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAttachment() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.any,
+      withData: false,
+    );
+    final file = result?.files.single;
+    if (file == null || file.path == null) return;
+    setState(() {
+      _imagePath = file.path;
+      _attachmentName = file.name;
+      _attachmentMimeType = null;
+      _clearImage = false;
+    });
+  }
+
+  void _clearAttachment() {
+    setState(() {
+      _imagePath = null;
+      _existingImageUrl = null;
+      _attachmentName = null;
+      _attachmentMimeType = null;
+      _clearImage = true;
+    });
+  }
+
+  Future<void> _openExistingAttachment() async {
+    final url = resolveMediaUrl(_existingImageUrl);
+    if (url.isEmpty) return;
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _toggleComplete() async {
+    if (!widget.isEditMode || _loading) return;
+    setState(() => _loading = true);
+    try {
+      final stub = Task(
+        id: widget.taskId!,
+        title: _title.text.trim().isEmpty ? 'Задача' : _title.text.trim(),
+        priority: _priority,
+        completed: _completed,
+        repeat: _repeat,
+        createdAt: DateTime.now().toIso8601String(),
+        notification: _notification,
+        dueDate: _formatDate(_dueDate),
+        dueTime: _formatTime(_dueTime),
+        matrixBlock: _matrix,
+      );
+      await ref.read(tasksStateProvider.notifier).completeTask(stub);
+      if (!mounted) return;
+      setState(() => _completed = !_completed);
+      showAppToast(
+        context,
+        _completed ? 'Задача отмечена выполненной' : 'Задача восстановлена',
+        type: AppToastType.success,
+      );
+    } catch (e) {
+      if (mounted) showAppToast(context, getApiErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _deleteTask() async {
+    if (!widget.isEditMode || _loading) return;
+    final taskId = widget.taskId!;
+    final recurring = _repeat != RepeatType.none;
+
+    String? scope;
+    if (recurring) {
+      scope = await showModalBottomSheet<String>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Удалить повторяющуюся задачу?',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Выберите, что именно удалить.',
+                  style: TextStyle(fontSize: 13, color: OtterColors.sberGray),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, 'this'),
+                  child: const Text('Удалить только этот повтор'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, 'series'),
+                  child: const Text('Удалить все повторения'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Отмена'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      if (scope == null) return;
+    }
+
+    setState(() => _loading = true);
+    try {
+      final notifier = ref.read(tasksStateProvider.notifier);
+      if (scope == 'series') {
+        await notifier.deleteSeries(taskId);
+      } else if (scope == 'this') {
+        final existing = notifier.findTaskById(taskId);
+        if (existing != null) {
+          await notifier.deleteOccurrence(existing);
+        } else {
+          await notifier.deleteTask(taskId, scope: 'this');
+        }
+      } else {
+        await notifier.deleteTask(taskId);
+      }
+      if (mounted) _goBack();
+    } catch (e) {
+      if (mounted) showAppToast(context, getApiErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   void _goBack() {
@@ -216,14 +472,18 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
 
   void _applyDueTimeSync(TimeOfDay time) {
     final formatted = _formatTime(time)!;
-    _timeSync.onDueTimeChanged(formatted, (start, end) {
-      setState(() {
-        _dueTime = time;
-        _durationStart = _parseTime(start);
-        _durationEnd = _parseTime(end);
-        _error = null;
-      });
-    });
+    _timeSync.onDueTimeChanged(
+      formatted,
+      _formatTime(_durationEnd),
+      (start, end) {
+        setState(() {
+          _dueTime = time;
+          _durationStart = _parseTime(start);
+          _durationEnd = _parseTime(end);
+          _error = null;
+        });
+      },
+    );
   }
 
   void _applyStartSync(TimeOfDay time) {
@@ -243,6 +503,14 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
     );
   }
 
+  void _applyEndManual(TimeOfDay time) {
+    setState(() {
+      _durationEnd = time;
+      _timeSync.markEndEdited();
+      _error = null;
+    });
+  }
+
   void _setQuickDate(String id) {
     final now = DateTime.now();
     setState(() {
@@ -259,6 +527,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
         _durationStart = null;
         _durationEnd = null;
         _explicitNoDeadline = true;
+        _timeSync.resetEndEdited();
       }
     });
   }
@@ -295,6 +564,33 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       return;
     }
 
+    _repeatIntervalError = null;
+    _repeatWeekdaysError = null;
+    _repeatMonthDayError = null;
+    if (_repeat == RepeatType.custom) {
+      _customRepeatInterval = int.tryParse(_customIntervalCtrl.text) ?? 1;
+      _customMonthDay = int.tryParse(_customMonthDayCtrl.text) ?? 1;
+      final intervalError = validateRepeatInterval(_customRepeatInterval);
+      var hasError = false;
+      if (intervalError != null) {
+        _repeatIntervalError = intervalError;
+        hasError = true;
+      }
+      if (_customRepeatUnit == 'week' && _customWeekdays.isEmpty) {
+        _repeatWeekdaysError = 'Выберите хотя бы один день недели';
+        hasError = true;
+      }
+      if (_customRepeatUnit == 'month' &&
+          (_customMonthDay < 1 || _customMonthDay > 31)) {
+        _repeatMonthDayError = 'День месяца должен быть от 1 до 31';
+        hasError = true;
+      }
+      if (hasError) {
+        setState(() => _activeTab = _TaskFormTab.repeat);
+        return;
+      }
+    }
+
     TaskDuration? duration;
     if (_durationStart != null && _durationEnd != null) {
       duration = TaskDuration(
@@ -305,20 +601,53 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
 
     setState(() => _loading = true);
     try {
+      final dueDate = _explicitNoDeadline
+          ? (_repeat != RepeatType.none
+              ? _formatDate(DateTime.now())
+              : null)
+          : _formatDate(_dueDate);
+      final noDeadline = _explicitNoDeadline && _repeat == RepeatType.none;
+      final notifyValue = _notification == 'custom'
+          ? '${(int.tryParse(_customNotifyCtrl.text) ?? 0).clamp(0, 999999)}'
+          : _notification;
+      final clearNotify = notifyValue.isEmpty || noDeadline;
       final partial = PartialTask(
         title: _title.text.trim(),
         description: _description.text.trim().isEmpty
             ? null
             : _description.text.trim(),
-        dueDate: _explicitNoDeadline ? null : _formatDate(_dueDate),
-        dueTime: _formatTime(_dueTime),
-        duration: duration,
+        clearDescription: _description.text.trim().isEmpty,
+        dueDate: dueDate,
+        dueTime: noDeadline ? null : _formatTime(_dueTime),
+        duration: noDeadline ? null : duration,
+        clearDueDate: noDeadline,
+        clearDueTime: noDeadline || _formatTime(_dueTime) == null,
+        clearDuration: noDeadline || duration == null,
         priority: _priority,
         matrixBlock: _matrix,
-        notification: (_notification == null || _notification!.isEmpty)
-            ? null
-            : _notification,
+        notification: clearNotify ? null : notifyValue,
+        clearNotification: clearNotify,
         repeat: _repeat,
+        repeatDays: _repeat == RepeatType.custom && _customRepeatUnit == 'week'
+            ? List<int>.from(_customWeekdays)
+            : null,
+        repeatCustom: _repeat == RepeatType.custom
+            ? RepeatCustom(
+                interval: _customRepeatInterval,
+                unit: _customRepeatUnit,
+                weekdays: _customRepeatUnit == 'week'
+                    ? List<int>.from(_customWeekdays)
+                    : null,
+                monthDay:
+                    _customRepeatUnit == 'month' ? _customMonthDay : null,
+              )
+            : null,
+        imagePath: _imagePath,
+        clearImage: _clearImage && _imagePath == null,
+        deleteAttachmentId: (_attachmentId != null &&
+                (_clearImage || _imagePath != null))
+            ? _attachmentId
+            : null,
       );
 
       if (widget.isEditMode) {
@@ -430,7 +759,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
           const Text(
             'Название задачи',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 14,
               fontWeight: FontWeight.w600,
               color: OtterColors.sberBlack,
             ),
@@ -438,15 +767,17 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
           const SizedBox(height: 6),
           TextField(
             controller: _title,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            onTapOutside: dismissKeyboardOnTapOutside,
+            focusNode: _titleFocus,
+            autofocus: !widget.isEditMode,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            textInputAction: TextInputAction.next,
             decoration: InputDecoration(
               hintText: 'Например: отчёт, созвон, встреча…',
               filled: true,
               fillColor: OtterColors.grayLight,
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 12,
+                horizontal: 14,
+                vertical: 14,
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -480,7 +811,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   textStyle: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -496,15 +827,14 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             const SizedBox(height: 8),
             TextField(
               controller: _description,
-              maxLines: 2,
-              onTapOutside: dismissKeyboardOnTapOutside,
+              maxLines: 3,
               decoration: InputDecoration(
                 hintText: 'Детали, ссылки…',
                 filled: true,
                 fillColor: OtterColors.grayLight,
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 12,
-                  vertical: 10,
+                  vertical: 12,
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -513,14 +843,17 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           OutlinedButton.icon(
-            onPressed: () =>
-                showAppToast(context, 'Вложения скоро будут доступны'),
-            icon: const Icon(LucideIcons.paperclip, size: 14),
-            label: const Text(
-              'Файл / фото',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+            onPressed: _pickAttachment,
+            icon: const Icon(LucideIcons.paperclip, size: 16),
+            label: Text(
+              _imagePath != null
+                  ? 'Файл выбран'
+                  : (_existingImageUrl != null && !_clearImage)
+                      ? 'Изменить файл / фото'
+                      : 'Файл / фото',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             ),
             style: OutlinedButton.styleFrom(
               foregroundColor: OtterColors.sberGreen,
@@ -528,13 +861,138 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
               side: BorderSide(
                 color: OtterColors.sberGreen.withValues(alpha: 0.4),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
+          ),
+          if (_imagePath != null ||
+              (_existingImageUrl != null && !_clearImage)) ...[
+            const SizedBox(height: 8),
+            _buildAttachmentPreview(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  bool get _attachmentIsImage {
+    final mime = _attachmentMimeType ?? '';
+    if (mime.startsWith('image/')) return true;
+    final name = (_attachmentName ?? _imagePath ?? _existingImageUrl ?? '')
+        .toLowerCase();
+    return name.endsWith('.png') ||
+        name.endsWith('.jpg') ||
+        name.endsWith('.jpeg') ||
+        name.endsWith('.gif') ||
+        name.endsWith('.webp') ||
+        name.endsWith('.heic');
+  }
+
+  Widget _buildAttachmentPreview() {
+    final name = _attachmentName ??
+        _imagePath?.split('/').last ??
+        'Вложение';
+    Widget? thumb;
+    if (_imagePath != null && _attachmentIsImage) {
+      thumb = Image.file(
+        File(_imagePath!),
+        width: 56,
+        height: 56,
+        fit: BoxFit.cover,
+      );
+    } else if (_existingImageUrl != null &&
+        !_clearImage &&
+        _attachmentIsImage) {
+      final url = resolveMediaUrl(_existingImageUrl);
+      if (url.isNotEmpty) {
+        thumb = Image.network(
+          url,
+          width: 56,
+          height: 56,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const Icon(
+            LucideIcons.file,
+            size: 28,
+            color: OtterColors.sberGray,
+          ),
+        );
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: OtterColors.grayLight.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: OtterColors.grayLight),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: thumb ??
+                Container(
+                  width: 56,
+                  height: 56,
+                  color: Colors.white,
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    LucideIcons.file,
+                    size: 24,
+                    color: OtterColors.sberGray,
+                  ),
+                ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: InkWell(
+              onTap: _imagePath == null &&
+                      _existingImageUrl != null &&
+                      !_clearImage
+                  ? _openExistingAttachment
+                  : null,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _imagePath == null &&
+                              _existingImageUrl != null &&
+                              !_clearImage
+                          ? OtterColors.sberGreen
+                          : OtterColors.sberBlack,
+                      decoration: _imagePath == null &&
+                              _existingImageUrl != null &&
+                              !_clearImage
+                          ? TextDecoration.underline
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _attachmentIsImage
+                        ? 'Изображение прикреплено'
+                        : 'Файл прикреплен',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: OtterColors.sberGray,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: _clearAttachment,
+            icon: const Icon(LucideIcons.x, size: 16),
+            visualDensity: VisualDensity.compact,
           ),
         ],
       ),
@@ -542,6 +1000,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   Widget _buildTabBar() {
+    // Match otter-app: labels for Дата/Приоритет; icon-only for the rest.
     const tabs = [
       (_TaskFormTab.date, LucideIcons.calendar, 'Дата', false),
       (_TaskFormTab.priority, LucideIcons.flag, 'Приоритет', false),
@@ -555,59 +1014,60 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: OtterColors.grayLight)),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Row(
           children: tabs.map((t) {
-            final active = _activeTab == t.$1;
-            return Padding(
-              padding: const EdgeInsets.only(right: 2),
-              child: InkWell(
-                onTap: () => setState(() => _activeTab = t.$1),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(8),
-                ),
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: t.$4 ? 10 : 8,
-                    vertical: 8,
+            final tab = t.$1;
+            final icon = t.$2;
+            final label = t.$3;
+            final iconOnly = t.$4;
+            final active = _activeTab == tab;
+            final color =
+                active ? OtterColors.sberGreen : OtterColors.sberGray;
+
+            return Expanded(
+              child: Tooltip(
+                message: label,
+                child: InkWell(
+                  onTap: () => setState(() => _activeTab = tab),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(8),
                   ),
-                  decoration: BoxDecoration(
-                    color: active ? OtterColors.sberGreenLight : null,
-                    border: Border(
-                      bottom: BorderSide(
-                        color: active
-                            ? OtterColors.sberGreen
-                            : Colors.transparent,
-                        width: 2,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: active ? OtterColors.sberGreenLight : null,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: active
+                              ? OtterColors.sberGreen
+                              : Colors.transparent,
+                          width: 2,
+                        ),
                       ),
                     ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        t.$2,
-                        size: 14,
-                        color: active
-                            ? OtterColors.sberGreen
-                            : OtterColors.sberGray,
-                      ),
-                      if (!t.$4) ...[
-                        const SizedBox(width: 4),
-                        Text(
-                          t.$3,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                            color: active
-                                ? OtterColors.sberGreen
-                                : OtterColors.sberGray,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(icon, size: 24, color: color),
+                        if (!iconOnly) ...[
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: color,
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -638,24 +1098,30 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       children: [
         const _SectionLabel('Дата выполнения'),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
+        Row(
           children: [
-            _QuickChip(
-              label: 'Сегодня',
-              selected: _isQuickDateActive('today'),
-              onTap: () => _setQuickDate('today'),
+            Expanded(
+              child: _QuickChip(
+                label: 'Сегодня',
+                selected: _isQuickDateActive('today'),
+                onTap: () => _setQuickDate('today'),
+              ),
             ),
-            _QuickChip(
-              label: 'Завтра',
-              selected: _isQuickDateActive('tomorrow'),
-              onTap: () => _setQuickDate('tomorrow'),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _QuickChip(
+                label: 'Завтра',
+                selected: _isQuickDateActive('tomorrow'),
+                onTap: () => _setQuickDate('tomorrow'),
+              ),
             ),
-            _QuickChip(
-              label: 'Без срока',
-              selected: _isQuickDateActive('none'),
-              onTap: () => _setQuickDate('none'),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _QuickChip(
+                label: 'Без срока',
+                selected: _isQuickDateActive('none'),
+                onTap: () => _setQuickDate('none'),
+              ),
             ),
           ],
         ),
@@ -705,10 +1171,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                   icon: LucideIcons.clock,
                   onTap: () => _pickTime(
                     initial: _durationEnd,
-                    onPicked: (t) => setState(() {
-                      _durationEnd = t;
-                      _error = null;
-                    }),
+                    onPicked: _applyEndManual,
                   ),
                 ),
               ),
@@ -790,7 +1253,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
         const _SectionLabel('Уведомление'),
         const SizedBox(height: 8),
         ..._notifyOptions.map((n) {
-          final selected = (_notification ?? '') == n.value;
+          final selected = _notification == n.value;
           return Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: _SelectCard(
@@ -832,6 +1295,22 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             ),
           );
         }),
+        if (_notification == 'custom') ...[
+          const SizedBox(height: 8),
+          TextField(
+            controller: _customNotifyCtrl,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: 'Минут до срока',
+              filled: true,
+              fillColor: OtterColors.grayLight,
+              border: OutlineInputBorder(
+                borderSide: BorderSide.none,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -849,7 +1328,12 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             child: _SelectCard(
               selected: selected,
               selectedColor: OtterColors.sberGreen,
-              onTap: () => setState(() => _repeat = r.value),
+              onTap: () => setState(() {
+                _repeat = r.value;
+                _repeatIntervalError = null;
+                _repeatWeekdaysError = null;
+                _repeatMonthDayError = null;
+              }),
               child: Row(
                 children: [
                   Icon(
@@ -885,6 +1369,140 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             ),
           );
         }),
+        if (_repeat == RepeatType.custom) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: OtterColors.sberGreenLight.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: OtterColors.sberGreen.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _customIntervalCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'Интервал',
+                          errorText: _repeatIntervalError,
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onChanged: (_) =>
+                            setState(() => _repeatIntervalError = null),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _UnitChip(
+                      label: 'Нед.',
+                      selected: _customRepeatUnit == 'week',
+                      onTap: () => setState(() {
+                        _customRepeatUnit = 'week';
+                        _repeatIntervalError = null;
+                      }),
+                    ),
+                    const SizedBox(width: 6),
+                    _UnitChip(
+                      label: 'Мес.',
+                      selected: _customRepeatUnit == 'month',
+                      onTap: () => setState(() {
+                        _customRepeatUnit = 'month';
+                        _repeatIntervalError = null;
+                      }),
+                    ),
+                  ],
+                ),
+                if (_customRepeatUnit == 'week') ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: _weekDays.map((day) {
+                      final selected = _customWeekdays.contains(day.value);
+                      return InkWell(
+                        onTap: () {
+                          setState(() {
+                            if (selected) {
+                              _customWeekdays = _customWeekdays
+                                  .where((d) => d != day.value)
+                                  .toList();
+                            } else {
+                              _customWeekdays = [..._customWeekdays, day.value]
+                                ..sort();
+                            }
+                            _repeatWeekdaysError = null;
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          width: 40,
+                          height: 36,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? OtterColors.sberGreen
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: selected
+                                  ? OtterColors.sberGreen
+                                  : OtterColors.grayMid,
+                            ),
+                          ),
+                          child: Text(
+                            day.label,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: selected
+                                  ? Colors.white
+                                  : OtterColors.sberBlack,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  if (_repeatWeekdaysError != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      _repeatWeekdaysError!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ],
+                ],
+                if (_customRepeatUnit == 'month') ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _customMonthDayCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'День месяца',
+                      errorText: _repeatMonthDayError,
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onChanged: (_) =>
+                        setState(() => _repeatMonthDayError = null),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -903,7 +1521,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
           physics: const NeverScrollableScrollPhysics(),
           mainAxisSpacing: 8,
           crossAxisSpacing: 8,
-          childAspectRatio: 2.2,
+          // Slightly taller so larger labels can wrap without shrinking.
+          childAspectRatio: 1.5,
           children: kMatrixBlockThemes.map((theme) {
             final selected = _matrix == theme.block;
             final title = settings[theme.block]?.title ?? theme.defaultTitle;
@@ -938,12 +1557,13 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                       const Spacer(),
                       Text(
                         title,
-                        maxLines: 2,
+                        softWrap: true,
+                        maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
-                          height: 1.2,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          height: 1.3,
                           color: OtterColors.sberBlack,
                         ),
                       ),
@@ -959,60 +1579,165 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   Widget _buildFooter() {
+    if (!widget.isEditMode) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: OtterColors.grayLight)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _loading ? null : _goBack,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: OtterColors.sberBlack,
+                  backgroundColor: OtterColors.grayLight,
+                  side: BorderSide.none,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: const Text(
+                  'Отмена',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 2,
+              child: FilledButton(
+                onPressed: _loading ? null : _save,
+                style: FilledButton.styleFrom(
+                  backgroundColor: OtterColors.sberGreen,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: _loading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'Добавить задачу',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: OtterColors.grayLight)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: OutlinedButton(
-              onPressed: _loading ? null : _goBack,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: OtterColors.sberBlack,
-                backgroundColor: OtterColors.grayLight,
-                side: BorderSide.none,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              child: const Text(
-                'Отмена',
-                style: TextStyle(fontWeight: FontWeight.w600),
+          FilledButton.icon(
+            onPressed: _loading ? null : _toggleComplete,
+            icon: const Icon(LucideIcons.check, size: 16),
+            label: Text(_completed ? 'Восстановить' : 'Выполнено'),
+            style: FilledButton.styleFrom(
+              foregroundColor:
+                  _completed ? OtterColors.sberGray : OtterColors.sberGreen,
+              backgroundColor: _completed
+                  ? OtterColors.grayLight
+                  : OtterColors.sberGreenLight,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 2,
-            child: FilledButton(
-              onPressed: _loading ? null : _save,
-              style: FilledButton.styleFrom(
-                backgroundColor: OtterColors.sberGreen,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _loading ? null : _goBack,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: OtterColors.sberBlack,
+                    backgroundColor: OtterColors.grayLight,
+                    side: BorderSide.none,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text(
+                    'Отмена',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                  ),
                 ),
               ),
-              child: _loading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text(
-                      widget.isEditMode ? 'Сохранить' : 'Добавить задачу',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _loading ? null : _deleteTask,
+                  icon: const Icon(LucideIcons.trash2, size: 14),
+                  label: const Text('Удалить'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFFF3B30),
+                    backgroundColor: const Color(0xFFFFF0EE),
+                    side: BorderSide.none,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
                     ),
-            ),
+                    textStyle: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                flex: 1,
+                child: FilledButton(
+                  onPressed: _loading ? null : _save,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: OtterColors.sberGreen,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: _loading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Сохранить',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                            color: Colors.white,
+                          ),
+                        ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1028,12 +1753,12 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text.toUpperCase(),
-      style: const TextStyle(
-        fontSize: 10,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0.4,
-        color: OtterColors.sberGray,
-      ),
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.5,
+          color: OtterColors.sberGray,
+        ),
     );
   }
 }
@@ -1058,9 +1783,11 @@ class _QuickChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          width: double.infinity,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: selected ? OtterColors.sberGreen : OtterColors.grayMid,
             ),
@@ -1068,8 +1795,50 @@ class _QuickChip extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: selected ? Colors.white : OtterColors.sberBlack,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UnitChip extends StatelessWidget {
+  const _UnitChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? OtterColors.sberGreen : Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? OtterColors.sberGreen : OtterColors.grayMid,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
               color: selected ? Colors.white : OtterColors.sberBlack,
             ),
           ),
@@ -1102,22 +1871,23 @@ class _DateTimeField extends StatelessWidget {
         Text(
           label.toUpperCase(),
           style: const TextStyle(
-            fontSize: 9,
+            fontSize: 11,
             fontWeight: FontWeight.w600,
             color: OtterColors.sberGray,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Material(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              constraints: const BoxConstraints(minHeight: 52),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: OtterColors.sberGreen.withValues(alpha: 0.5),
                   width: 2,
@@ -1129,7 +1899,7 @@ class _DateTimeField extends StatelessWidget {
                     child: Text(
                       value,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 16,
                         fontWeight: FontWeight.w500,
                         color: hasValue
                             ? OtterColors.sberBlack
@@ -1137,7 +1907,7 @@ class _DateTimeField extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Icon(icon, size: 14, color: OtterColors.sberGray),
+                  Icon(icon, size: 20, color: OtterColors.sberGray),
                 ],
               ),
             ),

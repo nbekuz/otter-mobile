@@ -51,13 +51,22 @@ abstract final class Env {
       dotenv.env['FIREBASE_GOOGLE_WEB_CLIENT_ID'] ??
       firebaseGoogleServerClientId;
 
-  /// OAuth Desktop client used only by Windows system-browser PKCE sign-in.
+  /// OAuth Desktop ("installed") client for Windows loopback PKCE sign-in.
   ///
-  /// A desktop client secret is intentionally not used: an installed
-  /// application cannot keep it confidential, and PKCE protects the code.
+  /// Must match Google Cloud Console → Credentials → Desktop client.
+  /// Public identifier (safe to embed); override via .env when needed.
   static String get firebaseGoogleDesktopClientId =>
       dotenv.env['FIREBASE_GOOGLE_DESKTOP_CLIENT_ID'] ??
       '911773858551-bbjtglnabr6hcakovna9qbvm9c0tegr9.apps.googleusercontent.com';
+
+  /// Desktop client secret from Google Cloud Console (no source default).
+  ///
+  /// Google's native-app docs mark `client_secret` Optional, but Desktop
+  /// clients created in Cloud Console are issued with a secret and the token
+  /// endpoint returns `client_secret is missing` if it is omitted. Load only
+  /// from `.env` — never hardcode in Dart sources.
+  static String get firebaseGoogleDesktopClientSecret =>
+      dotenv.env['FIREBASE_GOOGLE_DESKTOP_CLIENT_SECRET'] ?? '';
 
   static String? get firebaseMeasurementId =>
       dotenv.env['FIREBASE_MEASUREMENT_ID'];

@@ -8,25 +8,35 @@ class InputField extends StatelessWidget {
   const InputField({
     super.key,
     required this.controller,
+    this.focusNode,
     this.label,
     this.hint,
     this.obscure = false,
     this.icon,
     this.keyboardType,
+    this.textInputAction,
     this.error,
     this.onToggleObscure,
     this.obscureVisible = false,
+    this.onSubmitted,
+    this.autofocus = false,
+    this.maxLength,
   });
 
   final TextEditingController controller;
+  final FocusNode? focusNode;
   final String? label;
   final String? hint;
   final bool obscure;
   final IconData? icon;
   final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
   final String? error;
   final VoidCallback? onToggleObscure;
   final bool obscureVisible;
+  final ValueChanged<String>? onSubmitted;
+  final bool autofocus;
+  final int? maxLength;
 
   @override
   Widget build(BuildContext context) {
@@ -47,14 +57,22 @@ class InputField extends StatelessWidget {
         ],
         TextField(
           controller: controller,
+          focusNode: focusNode,
+          autofocus: autofocus,
           obscureText: obscure && !obscureVisible,
           keyboardType: keyboardType,
-          textInputAction: TextInputAction.done,
+          maxLength: maxLength,
+          textInputAction: textInputAction ??
+              (obscure ? TextInputAction.done : TextInputAction.next),
+          onSubmitted: onSubmitted,
+          // Mouse/stylus only — touch outside is handled by KeyboardDismissOnTap.
+          // Always-unfocus onTapOutside kills the keyboard after the 1st char on Android.
           onTapOutside: dismissKeyboardOnTapOutside,
-          onEditingComplete: KeyboardDismisser.dismiss,
           decoration: InputDecoration(
             hintText: hint,
             errorText: error,
+            errorMaxLines: 3,
+            counterText: maxLength != null ? '' : null,
             prefixIcon: icon != null
                 ? Icon(icon, color: OtterColors.sberGray, size: 20)
                 : null,

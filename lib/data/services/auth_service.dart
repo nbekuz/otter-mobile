@@ -121,4 +121,9 @@ class AuthService {
       data: {'new_password': newPassword},
     );
   }
+
+  /// Permanently deletes the current user account.
+  Future<void> deleteAccount() async {
+    await _client.delete('profile/');
+  }
 }

@@ -1,5 +1,5 @@
 name: otter_mobile
-description: Otter — планировщик задач (Android + Windows)
+description: Оттер — планировщик задач (Android + Windows)
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -22,6 +22,10 @@ dependencies:
   flutter_slidable: ^4.0.0
   firebase_core: ^3.13.0
   firebase_auth: ^5.5.2
+  firebase_messaging: ^15.2.5
+  flutter_local_notifications: ^19.0.0
+  package_info_plus: ^8.3.0
+  flutter_timezone: ^4.1.0
   google_sign_in: ^6.3.0
   crypto: ^3.0.7
   shared_preferences: ^2.5.3
@@ -29,12 +33,29 @@ dependencies:
   audioplayers: ^6.4.0
   flutter_svg: ^2.3.0
   lucide_icons_flutter: ^3.1.14+2
+  share_plus: ^10.1.4
   url_launcher: ^6.3.1
+  # 11.0.x breaks AGP 9 + android.builtInKotlin=false (FilePickerPlugin missing).
+  # 12.x-beta conflicts with share_plus 10 / win32 5. Revisit after share_plus upgrade.
+  file_picker: 10.3.10
+  permission_handler: ^12.0.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  windows:
+    generate: true
+    image_path: app.png
+    icon_size: 256
+  image_path: app.png
+  adaptive_icon_background: "#21A038"
+  adaptive_icon_foreground: app.png
 
 flutter:
   uses-material-design: true

@@ -32,9 +32,6 @@ abstract final class Responsive {
 }
 
 /// Centers public/auth page content with a readable max width on desktop.
-///
-/// Provides a single scroll surface and dismisses keyboard via [Listener]
-/// (safe for Windows mouse clicks on buttons).
 class ResponsivePage extends StatelessWidget {
   const ResponsivePage({
     super.key,
@@ -65,6 +62,9 @@ class ResponsivePage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: backgroundColor,
+      // No page-level GestureDetector for keyboard dismiss: on Android, IME
+      // close + layout shift can re-target the tap onto the back button and
+      // pop the auth screen instead of showing field errors.
       body: SafeArea(
         child: Align(
           alignment: wide ? Alignment.center : Alignment.topCenter,

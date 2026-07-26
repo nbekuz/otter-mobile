@@ -52,7 +52,7 @@ class BrandLogo extends StatelessWidget {
         if (showName) ...[
           const SizedBox(width: 8),
           Text(
-            'Otter',
+            'Оттер',
             style: TextStyle(
               fontSize: textSize,
               fontWeight: FontWeight.bold,

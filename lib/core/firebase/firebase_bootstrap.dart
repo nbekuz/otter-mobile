@@ -25,6 +25,7 @@ abstract final class FirebaseBootstrap {
       _ensureWindowsFirebaseConfigured();
       return signInWithGoogleDesktop(
         clientId: Env.firebaseGoogleDesktopClientId,
+        clientSecret: Env.firebaseGoogleDesktopClientSecret,
       );
     }
 
@@ -70,10 +71,12 @@ abstract final class FirebaseBootstrap {
         'FIREBASE_APP_ID in .env (Firebase Console → Web app).',
       );
     }
-    if (Env.firebaseGoogleDesktopClientId.isEmpty) {
+    if (Env.firebaseGoogleDesktopClientId.isEmpty ||
+        Env.firebaseGoogleDesktopClientSecret.isEmpty) {
       throw StateError(
         'Windows Google Sign-In is not configured. Set '
-        'FIREBASE_GOOGLE_DESKTOP_CLIENT_ID in .env '
+        'FIREBASE_GOOGLE_DESKTOP_CLIENT_ID and '
+        'FIREBASE_GOOGLE_DESKTOP_CLIENT_SECRET in .env '
         '(Google Cloud → Desktop OAuth client).',
       );
     }

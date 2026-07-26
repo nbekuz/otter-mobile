@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "Otter" "\0"
-            VALUE "FileDescription", "Otter — планировщик задач" "\0"
+            VALUE "CompanyName", "Оттер" "\0"
+            VALUE "FileDescription", "Оттер — планировщик задач" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "otter_mobile" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 Otter. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Оттер. All rights reserved." "\0"
             VALUE "OriginalFilename", "otter_mobile.exe" "\0"
-            VALUE "ProductName", "Otter" "\0"
+            VALUE "ProductName", "Оттер" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

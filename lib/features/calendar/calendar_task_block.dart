@@ -17,6 +17,9 @@ class CalendarTaskBlock extends StatelessWidget {
     required this.onDragStart,
     required this.onDragUpdate,
     required this.onDragEnd,
+    this.pad = 4,
+    this.gap = 3,
+    this.cornerRadius,
   });
 
   final CalendarTimelineTask item;
@@ -28,22 +31,28 @@ class CalendarTaskBlock extends StatelessWidget {
   final void Function(DragUpdateDetails details, CalendarTaskDragMode mode)
   onDragUpdate;
   final VoidCallback onDragEnd;
+  final double pad;
+  final double gap;
+  /// When set, overrides the compact/regular radius (web week uses ~4).
+  final double? cornerRadius;
 
   @override
   Widget build(BuildContext context) {
     final color = priorityColor(item.task.priority);
-    final leftFraction = item.layoutCol / item.layoutCols;
-    const pad = 4.0;
-    const gap = 3.0;
-    final innerWidth = timelineWidth - pad * 2;
-    final colWidth = item.layoutCols <= 1
-        ? innerWidth
-        : (innerWidth - gap * (item.layoutCols - 1)) / item.layoutCols;
-    final left = pad + colWidth * leftFraction + gap * item.layoutCol;
+    final style = timelineTaskHorizontalStyle(
+      layoutCols: item.layoutCols,
+      layoutCol: item.layoutCol,
+      timelineWidth: timelineWidth,
+      pad: pad,
+      gap: gap,
+    );
+    final left = style.left;
+    final colWidth = style.width;
 
-    final blockHeight = item.heightPx;
+    final blockHeight = item.heightPx.clamp(28.0, double.infinity);
     final compact = blockHeight < 52;
     final medium = blockHeight < 76;
+    final radius = cornerRadius ?? (compact ? 8.0 : 12.0);
 
     Widget dragHandle(CalendarTaskDragMode mode, {required bool isTop}) {
       final handleHeight = compact ? 12.0 : 18.0;
@@ -103,6 +112,10 @@ class CalendarTaskBlock extends StatelessWidget {
     }
 
     Widget bodyContent() {
+      if (item.isContinuation) {
+        return const SizedBox.expand();
+      }
+
       if (compact) {
         return Center(
           child: Text(
@@ -110,7 +123,7 @@ class CalendarTaskBlock extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 10,
+              fontSize: 14,
               fontWeight: FontWeight.w600,
               color: color,
             ),
@@ -127,11 +140,13 @@ class CalendarTaskBlock extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  '${item.labelTime} · ${item.task.title}',
+                  item.continuesAfter
+                      ? '${item.task.title} ↓'
+                      : '${item.labelTime} · ${item.task.title}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: color,
                     decoration: item.task.completed
@@ -157,22 +172,23 @@ class CalendarTaskBlock extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    item.labelTime,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: color,
+                  if (!item.continuesAfter)
+                    Text(
+                      item.labelTime,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: color,
+                      ),
                     ),
-                  ),
                   Text(
                     item.task.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: FontWeight.w500,
                       color: OtterColors.sberBlack,
                       decoration: item.task.completed
@@ -180,6 +196,16 @@ class CalendarTaskBlock extends StatelessWidget {
                           : null,
                     ),
                   ),
+                  if (item.continuesAfter)
+                    const Text(
+                      'продолжается ↓',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: OtterColors.sberGray,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -193,6 +219,7 @@ class CalendarTaskBlock extends StatelessWidget {
       left: left,
       width: colWidth,
       height: blockHeight,
+      // Match web: zIndex = (dragging ? 35 : 1) + layoutCol
       child: MouseRegion(
         cursor: isDragging
             ? SystemMouseCursors.grabbing
@@ -202,9 +229,11 @@ class CalendarTaskBlock extends StatelessWidget {
           opacity: isDragging ? 0.92 : 1,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),
+            width: colWidth,
+            height: blockHeight,
             decoration: BoxDecoration(
               color: color.withValues(alpha: isDragging ? 0.18 : 0.12),
-              borderRadius: BorderRadius.circular(compact ? 8 : 12),
+              borderRadius: BorderRadius.circular(radius),
               border: Border(
                 left: BorderSide(color: color, width: compact ? 2 : 3),
               ),
@@ -222,6 +251,19 @@ class CalendarTaskBlock extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
+                if (item.isContinuation)
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: Container(
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(radius),
+                        ),
+                      ),
+                    ),
+                  ),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: onTap,
@@ -233,7 +275,8 @@ class CalendarTaskBlock extends StatelessWidget {
                   onVerticalDragCancel: onDragEnd,
                   child: bodyContent(),
                 ),
-                dragHandle(CalendarTaskDragMode.resizeStart, isTop: true),
+                if (!item.isContinuation)
+                  dragHandle(CalendarTaskDragMode.resizeStart, isTop: true),
                 dragHandle(CalendarTaskDragMode.resizeEnd, isTop: false),
               ],
             ),

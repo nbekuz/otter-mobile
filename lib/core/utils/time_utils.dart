@@ -14,14 +14,24 @@ int parseTimeToMinutes(String time) {
 }
 
 String formatMinutesToTime(int totalMinutes) {
+  // Never roll into the next day — clamp to 23:59.
   final clamped = totalMinutes.clamp(0, 23 * 60 + 59);
   final hours = clamped ~/ 60;
   final minutes = clamped % 60;
   return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
 }
 
+/// Add minutes to HH:mm; results past 23:59 are clamped to 23:59 (no day rollover).
 String addMinutesToTime(String time, int deltaMinutes) =>
     formatMinutesToTime(parseTimeToMinutes(time) + deltaMinutes);
+
+/// Default duration end = start + 1 hour (clamped to 23:59).
+String defaultDurationEnd(String start) => addMinutesToTime(start, 60);
+
+bool isDefaultDurationEnd(String start, String end) =>
+    start.trim().isNotEmpty &&
+    end.trim().isNotEmpty &&
+    end == defaultDurationEnd(start);
 
 const durationEndAfterStartMessage =
     'Время окончания должно быть позже времени начала.';
@@ -65,3 +75,17 @@ int snapMinutes(int minutes) =>
     ((minutes / 5).round() * 5).clamp(0, 23 * 60 + 59);
 
 const calendarMinDurationMinutes = 10;
+
+const repeatIntervalMax = 31;
+const repeatIntervalMaxMessage =
+    'Интервал повторения должен быть не больше 31';
+
+String? validateRepeatInterval(int interval) {
+  if (interval < 1) {
+    return 'Интервал повторения должен быть не меньше 1';
+  }
+  if (interval > repeatIntervalMax) {
+    return repeatIntervalMaxMessage;
+  }
+  return null;
+}

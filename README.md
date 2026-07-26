@@ -1,6 +1,6 @@
-# Otter Mobile
+# Оттер Mobile
 
-Flutter-клиент планировщика Otter для **Android** и **Windows**. UI/UX и API совпадают с [otter-app](../otter-app/) (Nuxt). Папка `otter-app` не изменяется.
+Flutter-клиент планировщика **Оттер** для **Android** и **Windows**. UI/UX и API совпадают с [otter-app](../otter-app/) (Nuxt). Папка `otter-app` не изменяется.
 
 ## Стек
 

@@ -29,7 +29,7 @@ class MatrixService {
     required String block,
     String? title,
     List<String>? allowedPriorities,
-    String? dateFilter,
+    List<String>? dateFilters,
   }) async {
     await _client.patch(
       'matrix/settings/',
@@ -37,7 +37,7 @@ class MatrixService {
         'block': block,
         'title': ?title,
         'allowed_priorities': ?allowedPriorities,
-        'date_filter': ?dateFilter,
+        'date_filters': ?dateFilters,
       },
     );
   }

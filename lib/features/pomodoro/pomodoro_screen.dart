@@ -189,57 +189,69 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                 )
                 .toList();
             final selectedId = ref.read(pomodoroStateProvider).selectedTaskId;
+            // Fixed height so Column+Expanded works (only the list scrolls).
+            final sheetH = MediaQuery.sizeOf(ctx).height * 0.75;
 
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
-                top: 16,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Выбрать задачу',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: searchController,
-                      onTapOutside: dismissKeyboardOnTapOutside,
-                      onEditingComplete: KeyboardDismisser.dismiss,
-                      decoration: InputDecoration(
-                        hintText: 'Поиск...',
-                        prefixIcon: const Icon(LucideIcons.search, size: 18),
-                        filled: true,
-                        fillColor: OtterColors.grayLight,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
+            return SizedBox(
+              height: sheetH,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Fixed header: title + search + «Без задачи».
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'Выбрать задачу',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                      onChanged: (_) => setModalState(() {}),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: searchController,
+                          onTapOutside: dismissKeyboardOnTapOutside,
+                          onEditingComplete: KeyboardDismisser.dismiss,
+                          decoration: InputDecoration(
+                            hintText: 'Поиск...',
+                            prefixIcon: const Icon(
+                              LucideIcons.search,
+                              size: 18,
+                            ),
+                            filled: true,
+                            fillColor: OtterColors.grayLight,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          onChanged: (_) => setModalState(() {}),
+                        ),
+                        const SizedBox(height: 8),
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(LucideIcons.x, size: 18),
+                          title: const Text('Без задачи'),
+                          onTap: () {
+                            ref
+                                .read(pomodoroStateProvider.notifier)
+                                .selectTask(null);
+                            Navigator.pop(context);
+                          },
+                        ),
+                        const Divider(height: 1),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    ListTile(
-                      leading: const Icon(LucideIcons.x, size: 18),
-                      title: const Text('Без задачи'),
-                      onTap: () {
-                        ref
-                            .read(pomodoroStateProvider.notifier)
-                            .selectTask(null);
-                        Navigator.pop(context);
-                      },
-                    ),
-                    ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
+                  ),
+                  // Only the task list scrolls.
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
                       itemCount: tasks.length,
                       itemBuilder: (_, i) {
                         final task = tasks[i];
@@ -274,8 +286,8 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                         );
                       },
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             );
           },
@@ -491,7 +503,9 @@ class _PomodoroTimerCard extends StatelessWidget {
                         value: progress,
                         strokeWidth: 10,
                         backgroundColor: OtterColors.grayMid,
-                        color: OtterColors.sberGreen,
+                        color: state.isBreak
+                            ? OtterColors.sberBlue
+                            : OtterColors.sberGreen,
                       ),
                     ),
                     Column(
@@ -508,12 +522,19 @@ class _PomodoroTimerCard extends StatelessWidget {
                         Text(
                           state.timerState == 'paused'
                               ? 'На паузе'
+                              : state.isBreak
+                              ? 'Перерыв'
                               : state.timerState == 'running'
                               ? 'Фокус'
                               : 'Готов',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
-                            color: OtterColors.sberGray,
+                            color: state.isBreak
+                                ? OtterColors.sberBlue
+                                : OtterColors.sberGray,
+                            fontWeight: state.isBreak
+                                ? FontWeight.w600
+                                : FontWeight.w400,
                           ),
                         ),
                       ],

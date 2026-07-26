@@ -1,10 +1,10 @@
-# Otter — Windows release bundle (run on Windows with Flutter desktop enabled).
+# Оттер — Windows release bundle (run on Windows with Flutter desktop enabled).
 # Usage: powershell -ExecutionPolicy Bypass -File scripts/build_windows.ps1
 
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 
-Write-Host "==> Otter Windows release build" -ForegroundColor Cyan
+Write-Host "==> Оттер Windows release build" -ForegroundColor Cyan
 
 if (-not (Get-Command flutter -ErrorAction SilentlyContinue)) {
     throw "Flutter not found in PATH. Install: https://docs.flutter.dev/get-started/install/windows"

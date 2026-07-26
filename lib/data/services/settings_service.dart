@@ -28,12 +28,15 @@ class SettingsService {
       bottomNavItems: data.bottomTabs.isNotEmpty
           ? data.bottomTabs
           : AppSettings.defaults().bottomNavItems,
+      timezone: data.timezone,
       isPremium: data.isPremium,
     );
   }
 
   Map<String, dynamic> _uiToPatch(AppSettings settings) => {
     'language': settings.language,
+    if (settings.timezone != null && settings.timezone!.isNotEmpty)
+      'timezone': settings.timezone,
     'vibration_enabled': settings.vibration,
     'notification_sound': settings.notificationSound,
     'completion_sound': settings.completionSound,
@@ -59,8 +62,13 @@ class SettingsService {
     return _apiToUi(ApiAppSettings.fromJson(data));
   }
 
-  Future<List<ApiHelpItem>> fetchHelp() async {
-    final data = await _client.get<List<dynamic>>('help/');
+  Future<List<ApiHelpItem>> fetchHelp({String? search}) async {
+    final data = await _client.get<List<dynamic>>(
+      'help/',
+      queryParameters: search != null && search.trim().isNotEmpty
+          ? {'search': search.trim()}
+          : null,
+    );
     return data
         .map((e) => ApiHelpItem.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -71,6 +79,14 @@ class SettingsService {
       // multipart if needed
     }
     await _client.post('help/', data: {'message': message});
+  }
+
+  Future<String> callStubAction() async {
+    final data = await _client.post<Map<String, dynamic>>(
+      'settings/stub-action/',
+    );
+    return data['detail'] as String? ??
+        'Уже разрабатываем, скоро будет готово :)';
   }
 
   Future<List<ApiPremiumFeature>> fetchPremiumFeatures() async {

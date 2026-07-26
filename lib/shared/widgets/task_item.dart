@@ -176,7 +176,8 @@ class _Content extends StatelessWidget {
       final d = DateTime.tryParse(task.dueDate!);
       if (d != null) {
         dateTimeLabel = DateFormat('d MMM', 'ru').format(d);
-        if (task.dueTime != null) {
+        // Avoid duplicating time when duration already shows start–end.
+        if (task.dueTime != null && task.duration == null) {
           dateTimeLabel = '$dateTimeLabel, ${task.dueTime}';
         }
       }

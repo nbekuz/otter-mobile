@@ -93,8 +93,13 @@ class ApiClient {
     return response.data as T;
   }
 
-  Future<T> delete<T>(String path) async {
-    final response = await _request(() => _dio.delete<T>(path));
+  Future<T> delete<T>(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
+    final response = await _request(
+      () => _dio.delete<T>(path, queryParameters: queryParameters),
+    );
     return response.data as T;
   }
 
@@ -109,15 +114,29 @@ class ApiClient {
   ApiException _mapError(DioException e) {
     final status = e.response?.statusCode;
     final data = e.response?.data;
-    if (data is Map<String, dynamic>) {
-      if (data['detail'] is String) {
-        return ApiException(data['detail'] as String, statusCode: status);
+    if (data is Map) {
+      final map = Map<String, dynamic>.from(data);
+      final detail = map['detail'];
+      if (detail is String && detail.trim().isNotEmpty) {
+        return ApiException(detail, statusCode: status);
+      }
+      if (detail is List) {
+        final msg = detail.whereType<String>().join(' ').trim();
+        if (msg.isNotEmpty) {
+          return ApiException(msg, statusCode: status);
+        }
       }
       final fieldErrors = <String, String>{};
-      for (final entry in data.entries) {
+      for (final entry in map.entries) {
+        if (entry.key == 'detail') continue;
         final v = entry.value;
-        if (v is List && v.isNotEmpty && v.first is String) {
-          fieldErrors[entry.key] = v.first as String;
+        if (v is List && v.isNotEmpty) {
+          final first = v.first;
+          if (first is String) {
+            fieldErrors[entry.key] = first;
+          } else if (first is Map && first['message'] is String) {
+            fieldErrors[entry.key] = first['message'] as String;
+          }
         } else if (v is String) {
           fieldErrors[entry.key] = v;
         }
