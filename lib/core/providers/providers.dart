@@ -23,6 +23,7 @@ import '../../data/models/api/api_models.dart';
 import '../../data/models/ui/ui_models.dart';
 import '../audio/pomodoro_audio.dart';
 import '../audio/feedback_audio.dart';
+import '../billing/premium_billing.dart';
 import '../push/push_notifications.dart';
 import '../utils/premium_tariffs.dart';
 import '../utils/recurrence.dart';
@@ -381,6 +382,10 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   }
 
   Future<String> checkout({bool recurringConsent = false}) async {
+    // Defensive: Android Coming Soon must never hit Robokassa checkout.
+    if (isAndroidPremiumPurchaseBlocked) {
+      throw StateError('Подписка скоро будет доступна');
+    }
     state = state.copyWith(actionLoading: true, clearError: true);
     try {
       final response = await _ref

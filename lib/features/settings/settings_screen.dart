@@ -12,6 +12,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../core/billing/android_premium_coming_soon.dart';
+import '../../core/billing/premium_billing.dart';
 import '../../core/layout/responsive.dart';
 import '../../core/locale/app_languages.dart';
 import '../../core/network/api_exception.dart';
@@ -920,6 +922,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _purchasePremium() async {
+    // Android: keep plan UI, block Robokassa until RuStore Billing is wired.
+    if (isAndroidPremiumPurchaseBlocked) {
+      if (!mounted) return;
+      await showAndroidPremiumComingSoon(context);
+      return;
+    }
+
     final tariff = ref.read(premiumStateProvider).selectedTariff;
     if (tariff?.isRecurring == true && !_recurringConsent) {
       if (!mounted) return;
