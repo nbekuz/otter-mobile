@@ -95,6 +95,8 @@ final pushNotificationsProvider = Provider<PushNotifications>((ref) {
             settings.notificationSound,
           );
     },
+    onInboxChanged: () =>
+        ref.read(notificationsInboxProvider.notifier).fetchUnreadCount(),
   );
 });
 
@@ -222,6 +224,23 @@ class NotificationsInboxNotifier
           ? (state.unreadCount - 1).clamp(0, 1 << 30)
           : state.unreadCount,
     );
+  }
+
+  /// GET by id (server auto-marks unread as read) and sync local inbox.
+  Future<ApiNotificationItem> fetchById(int id) async {
+    final item = await _ref.read(notificationsServiceProvider).getById(id);
+    final prev = state.items.where((n) => n.id == id).firstOrNull;
+    final others = state.items.where((n) => n.id != id).toList();
+    state = state.copyWith(
+      items: [item, ...others],
+      unreadCount: prev != null && !prev.isRead && item.isRead
+          ? (state.unreadCount - 1).clamp(0, 1 << 30)
+          : state.unreadCount,
+    );
+    if (prev == null || (prev.isRead == item.isRead)) {
+      await fetchUnreadCount();
+    }
+    return item;
   }
 }
 

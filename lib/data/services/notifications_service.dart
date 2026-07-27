@@ -21,6 +21,13 @@ class NotificationsService {
     return ApiNotificationsPage.fromJson(data);
   }
 
+  Future<ApiNotificationItem> getById(int id) async {
+    final data = await _client.get<Map<String, dynamic>>(
+      'notifications/$id/',
+    );
+    return ApiNotificationItem.fromJson(data);
+  }
+
   Future<int> unreadCount() async {
     final data = await _client.get<Map<String, dynamic>>(
       'notifications/unread-count/',

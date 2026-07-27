@@ -17,6 +17,7 @@ import '../../features/settings/settings_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/faq/faq_screen.dart';
 import '../../features/notifications/notifications_screen.dart';
+import '../../features/notifications/notification_detail_screen.dart';
 import '../../features/legal/legal_screen.dart';
 import '../../features/legal/static_legal_screen.dart';
 
@@ -120,6 +121,15 @@ GoRouter createAppRouter(Ref ref, Listenable refreshListenable) {
               GoRoute(
                 path: 'notifications',
                 builder: (_, _) => const NotificationsScreen(),
+                routes: [
+                  GoRoute(
+                    path: ':id',
+                    builder: (context, state) {
+                      final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+                      return NotificationDetailScreen(notificationId: id);
+                    },
+                  ),
+                ],
               ),
               GoRoute(path: 'legal', builder: (_, _) => const LegalScreen()),
               GoRoute(

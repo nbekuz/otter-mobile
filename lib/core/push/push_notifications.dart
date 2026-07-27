@@ -98,22 +98,33 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 class PushNotifications {
   PushNotifications({
-    required this._devices,
-    required this._reminders,
-    this._onTasksChanged,
-    this._onOpenTask,
-    this._onReminderSound,
-  });
+    required DevicesService devices,
+    required RemindersService reminders,
+    PushTaskReload? onTasksChanged,
+    PushOpenTask? onOpenTask,
+    PushReminderSound? onReminderSound,
+    PushTaskReload? onInboxChanged,
+    void Function(int notificationId)? onOpenNotification,
+  })  : _devices = devices,
+        _reminders = reminders,
+        _onTasksChanged = onTasksChanged,
+        _onOpenTask = onOpenTask,
+        _onReminderSound = onReminderSound,
+        _onInboxChanged = onInboxChanged,
+        _onOpenNotification = onOpenNotification;
 
   final DevicesService _devices;
   final RemindersService _reminders;
   final PushTaskReload? _onTasksChanged;
   PushOpenTask? _onOpenTask;
   final PushReminderSound? _onReminderSound;
+  final PushTaskReload? _onInboxChanged;
+  void Function(int notificationId)? _onOpenNotification;
   final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();
   bool _initialized = false;
   String? _pendingOpenTaskId;
+  int? _pendingOpenNotificationId;
 
   bool get _supported {
     if (kIsWeb) return false;
@@ -136,6 +147,15 @@ class PushNotifications {
     }
   }
 
+  void setOpenNotificationHandler(void Function(int id)? handler) {
+    _onOpenNotification = handler;
+    final pending = _pendingOpenNotificationId;
+    if (pending != null && handler != null) {
+      _pendingOpenNotificationId = null;
+      handler(pending);
+    }
+  }
+
   void _openTask(String taskId) {
     if (taskId.isEmpty) return;
     final handler = _onOpenTask;
@@ -143,6 +163,16 @@ class PushNotifications {
       handler(taskId);
     } else {
       _pendingOpenTaskId = taskId;
+    }
+  }
+
+  void _openNotification(int id) {
+    if (id <= 0) return;
+    final handler = _onOpenNotification;
+    if (handler != null) {
+      handler(id);
+    } else {
+      _pendingOpenNotificationId = id;
     }
   }
 
@@ -276,9 +306,10 @@ class PushNotifications {
         message.notification?.body ?? message.data['body']?.toString() ?? '';
     final taskId = message.data['task_id']?.toString() ?? '';
 
-    // Use Settings → notification sound instead of the channel default.
     // ignore: discarded_futures
     _onReminderSound?.call();
+    // ignore: discarded_futures
+    _onInboxChanged?.call();
 
     await _local.show(
       message.hashCode,
@@ -317,6 +348,12 @@ class PushNotifications {
   }
 
   void _handleMessageOpen(RemoteMessage message) {
+    final notificationIdRaw = message.data['notification_id']?.toString();
+    final notificationId = int.tryParse(notificationIdRaw ?? '');
+    if (notificationId != null && notificationId > 0) {
+      _openNotification(notificationId);
+      return;
+    }
     final taskId = message.data['task_id']?.toString();
     if (taskId == null || taskId.isEmpty) return;
     final id = int.tryParse(taskId);

@@ -6,7 +6,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
 import '../../data/models/api/api_models.dart';
-import '../tasks/task_detail_sheet.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -26,22 +25,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   }
 
   Future<void> _open(ApiNotificationItem item) async {
-    if (!item.isRead) {
-      try {
-        await ref.read(notificationsInboxProvider.notifier).markRead(item.id);
-      } catch (_) {}
-    }
-    final taskId =
-        item.data['task_id'] ??
-        (item.task != null ? item.task.toString() : '');
-    if (taskId.isEmpty || !mounted) return;
-    final task = ref.read(tasksStateProvider.notifier).findTaskById(taskId);
-    if (task != null) {
-      await showTaskDetailSheet(context, task);
-      return;
-    }
     if (!mounted) return;
-    context.push('/app/new-task?taskId=$taskId&returnTo=/app/notifications');
+    context.push('/app/notifications/${item.id}');
   }
 
   @override

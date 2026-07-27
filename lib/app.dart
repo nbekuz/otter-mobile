@@ -23,18 +23,26 @@ class OtterApp extends ConsumerWidget {
       authStateProvider.select((s) => s.isBootstrapping),
     );
 
-    // Bind FCM / local-notification taps → task screen (no provider cycle).
+    // Bind FCM / local-notification taps → task / notification screens.
     ref.listen(routerProvider, (_, next) {
-      ref.read(pushNotificationsProvider).setOpenTaskHandler((taskId) {
+      final push = ref.read(pushNotificationsProvider);
+      push.setOpenTaskHandler((taskId) {
         next.go(
           '/app/new-task?taskId=${Uri.encodeComponent(taskId)}&returnTo=/app',
         );
       });
+      push.setOpenNotificationHandler((id) {
+        next.go('/app/notifications/$id');
+      });
     });
-    ref.read(pushNotificationsProvider).setOpenTaskHandler((taskId) {
+    final push = ref.read(pushNotificationsProvider);
+    push.setOpenTaskHandler((taskId) {
       router.go(
         '/app/new-task?taskId=${Uri.encodeComponent(taskId)}&returnTo=/app',
       );
+    });
+    push.setOpenNotificationHandler((id) {
+      router.go('/app/notifications/$id');
     });
 
     return MaterialApp.router(
