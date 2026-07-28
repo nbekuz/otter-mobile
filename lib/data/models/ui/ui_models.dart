@@ -191,8 +191,8 @@ class AppSettings {
     this.timezone,
     this.isPremium = false,
     this.calendarDefaultView = 'day',
-    this.calendarCollapseEarlyHours = true,
-    this.calendarCollapseLateHours = true,
+    this.calendarCollapseEarlyHours = false,
+    this.calendarCollapseLateHours = false,
   });
 
   final String language;

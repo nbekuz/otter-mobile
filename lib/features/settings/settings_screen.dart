@@ -494,30 +494,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Скрывать ранние часы'),
-                      subtitle: const Text('00:00–06:00 в видах День и Неделя'),
-                      value: s.calendarCollapseEarlyHours,
-                      activeThumbColor: OtterColors.sberGreen,
-                      onChanged: (v) {
-                        ref.read(appSettingsProvider.notifier).applyLocal(
-                              s.copyWith(calendarCollapseEarlyHours: v),
-                            );
-                      },
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Скрывать поздние часы'),
-                      subtitle: const Text('22:00–00:00 в видах День и Неделя'),
-                      value: s.calendarCollapseLateHours,
-                      activeThumbColor: OtterColors.sberGreen,
-                      onChanged: (v) {
-                        ref.read(appSettingsProvider.notifier).applyLocal(
-                              s.copyWith(calendarCollapseLateHours: v),
-                            );
-                      },
-                    ),
                   ],
                 ),
               ),

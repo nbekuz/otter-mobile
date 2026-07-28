@@ -1492,8 +1492,8 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
     final s = _ref.read(appSettingsProvider);
     state = state.copyWith(
       view: _parseView(s.calendarDefaultView),
-      collapsedEarlyHours: s.calendarCollapseEarlyHours,
-      collapsedLateHours: s.calendarCollapseLateHours,
+      collapsedEarlyHours: false,
+      collapsedLateHours: false,
     );
   }
 
@@ -1509,8 +1509,8 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
   }) async {
     final v = view ?? state.view;
     final d = date ?? state.date ?? DateTime.now();
-    var collapsedEarly = state.collapsedEarlyHours;
-    var collapsedLate = state.collapsedLateHours;
+    const collapsedEarly = false;
+    const collapsedLate = false;
     if (!silent) {
       state = state.copyWith(view: v, date: d, loading: true);
     }
@@ -1518,11 +1518,6 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
       final fetched = await _ref
           .read(calendarServiceProvider)
           .fetchCalendar(view: v, date: _formatDate(d));
-      // Auto-expand when tasks fall outside the main 06–22 band (web parity).
-      if (v == CalendarView.day || v == CalendarView.week) {
-        if (_calendarHasEarlyTasks(fetched)) collapsedEarly = false;
-        if (_calendarHasLateTasks(fetched)) collapsedLate = false;
-      }
       // Merge like web fetchCalendar: keep prior object when schedule unchanged.
       final prevById = {for (final t in state.tasks) t.id: t};
       final merged = [
@@ -1554,11 +1549,11 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
   }
 
   void toggleEarlyHours() {
-    state = state.copyWith(collapsedEarlyHours: !state.collapsedEarlyHours);
+    /* no-op: full day timeline is always visible */
   }
 
   void toggleLateHours() {
-    state = state.copyWith(collapsedLateHours: !state.collapsedLateHours);
+    /* no-op: full day timeline is always visible */
   }
 
   static bool _calendarHasEarlyTasks(List<Task> tasks) {

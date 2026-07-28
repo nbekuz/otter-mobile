@@ -6,6 +6,10 @@ const mainHours = [
   6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
 ];
 const lateHours = [22, 23];
+const dayHours = [
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+  12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+];
 
 const earlyStartMinutes = 0;
 const earlyEndMinutes = 6 * 60;
@@ -13,6 +17,8 @@ const mainStartMinutes = 6 * 60;
 const mainEndMinutes = 22 * 60;
 const lateStartMinutes = 22 * 60;
 const lateEndMinutes = 24 * 60;
+const dayStartMinutes = 0;
+const dayEndMinutes = 24 * 60;
 
 const hourHeightPx = 60.0;
 const minuteHeightPx = hourHeightPx / 60;
@@ -291,6 +297,21 @@ List<CalendarTimelineTask> buildLateTimelineTasks(
     rangeEnd: lateEndMinutes,
     hourFilter: (h) => h >= 22,
     dragPreview: dragPreview,
+  );
+}
+
+/// Full-day band 00:00–24:00 (no early/late split).
+List<CalendarTimelineTask> buildDayTimelineTasks(
+  List<Task> tasks, {
+  CalendarDragPreview? dragPreview,
+}) {
+  return buildSectionTimelineTasks(
+    tasks,
+    rangeStart: dayStartMinutes,
+    rangeEnd: dayEndMinutes,
+    hourFilter: (_) => true,
+    dragPreview: dragPreview,
+    markContinuesAfter: false,
   );
 }
 

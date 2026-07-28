@@ -180,8 +180,9 @@ abstract final class TaskMapper {
 
   static String? _buildDueAt(String? dueDate, String? dueTime) {
     if (dueDate == null) return null;
-    final time = dueTime ?? '00:00';
-    return DateTime.parse('${dueDate}T$time').toIso8601String();
+    final time = (dueTime == null || dueTime.isEmpty) ? '00:00' : dueTime;
+    final hhmm = time.length >= 5 ? time.substring(0, 5) : time;
+    return _toApiDateTime(dueDate, hhmm);
   }
 
   static (String?, String?) _buildStartEnd(
@@ -194,9 +195,21 @@ abstract final class TaskMapper {
       return (null, null);
     }
     return (
-      DateTime.parse('${dueDate}T${duration.start}').toIso8601String(),
-      DateTime.parse('${dueDate}T${duration.end}').toIso8601String(),
+      _toApiDateTime(dueDate, duration.start),
+      _toApiDateTime(dueDate, duration.end),
     );
+  }
+
+  /// Wall-clock date+time with local timezone offset (e.g. +05:00).
+  static String _toApiDateTime(String dueDate, String time) {
+    final hhmm = time.length >= 5 ? time.substring(0, 5) : time;
+    final local = DateTime.parse('${dueDate}T$hhmm:00');
+    final offset = local.timeZoneOffset;
+    final sign = offset.isNegative ? '-' : '+';
+    final abs = offset.abs();
+    final oh = abs.inHours.toString().padLeft(2, '0');
+    final om = (abs.inMinutes % 60).toString().padLeft(2, '0');
+    return '${dueDate}T$hhmm:00.000$sign$oh:$om';
   }
 
   static RepeatType _repeatToUi(String unit) => switch (unit) {

@@ -259,7 +259,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   }
 }
 
-class _Header extends StatelessWidget {
+class _Header extends ConsumerWidget {
   const _Header({
     required this.state,
     required this.date,
@@ -279,28 +279,91 @@ class _Header extends StatelessWidget {
   final void Function(DateTime date) onPickDate;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDay = state.view == CalendarView.day;
     final title = state.displayLabel;
+    final inbox = ref.watch(notificationsInboxProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? OtterColors.darkSurface : Colors.white;
+    final chipBg = isDark ? OtterColors.darkSurfaceAlt : OtterColors.grayLight;
 
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      color: surface,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       child: Column(
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _viewLabel(state.view) == 'День'
+                          ? 'Календарь'
+                          : _viewLabel(state.view),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: isDark
+                            ? OtterColors.darkText
+                            : OtterColors.sberBlack,
+                      ),
+                    ),
+                    if (isDay) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: isDark
+                              ? Colors.white54
+                              : OtterColors.sberGray,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: () => context.push('/app/notifications'),
+                style: IconButton.styleFrom(
+                  backgroundColor: chipBg,
+                  foregroundColor: isDark
+                      ? OtterColors.darkText
+                      : OtterColors.sberGray,
+                ),
+                icon: Badge(
+                  isLabelVisible: inbox.unreadCount > 0,
+                  smallSize: 8,
+                  backgroundColor: Colors.red,
+                  child: const Icon(LucideIcons.bell, size: 20),
+                ),
+              ),
+              const SizedBox(width: 4),
               TextButton(
                 onPressed: onToday,
                 style: TextButton.styleFrom(
                   backgroundColor: OtterColors.sberGreenLight,
                   foregroundColor: OtterColors.sberGreen,
+                  minimumSize: const Size(0, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  shape: const StadiumBorder(),
                 ),
-                child: const Text('Сегодня', style: TextStyle(fontSize: 12)),
+                child: const Text(
+                  'Сегодня',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
               ),
               PopupMenuButton<CalendarView>(
-                icon: const Icon(LucideIcons.layoutGrid),
+                icon: Icon(
+                  LucideIcons.layoutGrid,
+                  color: isDark ? OtterColors.darkText : OtterColors.sberGray,
+                ),
+                style: IconButton.styleFrom(backgroundColor: chipBg),
                 onSelected: onSetView,
                 itemBuilder: (context) => CalendarView.values
                     .map(
@@ -311,24 +374,36 @@ class _Header extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 10),
           Row(
             children: [
               IconButton(
                 onPressed: onPrev,
                 icon: const Icon(LucideIcons.chevronLeft),
                 style: IconButton.styleFrom(
-                  backgroundColor: OtterColors.grayLight,
+                  backgroundColor: chipBg,
+                  foregroundColor: isDark
+                      ? OtterColors.darkText
+                      : OtterColors.sberBlack,
                 ),
               ),
               Expanded(
                 child: isDay
                     ? _WeekStrip(date: date, onPickDate: onPickDate)
-                    : Text(
-                        title,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                    : Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          title,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: isDark
+                                ? OtterColors.darkText
+                                : OtterColors.sberBlack,
+                          ),
                         ),
                       ),
               ),
@@ -336,7 +411,10 @@ class _Header extends StatelessWidget {
                 onPressed: onNext,
                 icon: const Icon(LucideIcons.chevronRight),
                 style: IconButton.styleFrom(
-                  backgroundColor: OtterColors.grayLight,
+                  backgroundColor: chipBg,
+                  foregroundColor: isDark
+                      ? OtterColors.darkText
+                      : OtterColors.sberBlack,
                 ),
               ),
             ],
@@ -380,48 +458,54 @@ class _WeekStrip extends StatelessWidget {
 
             return Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: InkWell(
-                  onTap: () => onPickDate(d),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    height: 48,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? OtterColors.sberGreen
-                          : isToday
-                          ? OtterColors.sberGreenLight
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          DateFormat('E', 'ru').format(d).substring(0, 1),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isSelected
-                                ? Colors.white
-                                : isToday
-                                ? OtterColors.sberGreen
-                                : OtterColors.sberGray,
+                padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => onPickDate(d),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Ink(
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? OtterColors.sberGreen
+                            : isToday
+                            ? OtterColors.sberGreenLight
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            DateFormat('E', 'ru').format(d).substring(0, 1),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                              color: isSelected
+                                  ? Colors.white.withValues(alpha: 0.85)
+                                  : isToday
+                                  ? OtterColors.sberGreen
+                                  : OtterColors.sberGray,
+                            ),
                           ),
-                        ),
-                        Text(
-                          '${d.day}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: isSelected
-                                ? Colors.white
-                                : isToday
-                                ? OtterColors.sberGreen
-                                : OtterColors.sberBlack,
+                          const SizedBox(height: 3),
+                          Text(
+                            '${d.day}',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              height: 1,
+                              color: isSelected
+                                  ? Colors.white
+                                  : isToday
+                                  ? OtterColors.sberGreen
+                                  : OtterColors.sberBlack,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -759,26 +843,15 @@ class _DayViewState extends State<_DayView> {
     final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final dayTasks = expandTasksForDate(widget.tasks, dateKey);
     final untimed = untimedTasksForDate(dayTasks, dateKey: dateKey);
-    final earlyTimeline = buildEarlyTimelineTasks(
-      dayTasks,
-      dragPreview: _dragPreview,
-    );
-    final mainTimeline = buildMainTimelineTasks(
-      dayTasks,
-      dragPreview: _dragPreview,
-    );
-    final lateTimeline = buildLateTimelineTasks(
+    final dayTimeline = buildDayTimelineTasks(
       dayTasks,
       dragPreview: _dragPreview,
     );
 
     final now = DateTime.now();
     final nowMinutes = now.hour * 60 + now.minute;
-    final showNowInMain = dateKey == todayKey &&
-        nowMinutes >= mainStartMinutes &&
-        nowMinutes <= mainEndMinutes;
-    final nowOffsetPx =
-        showNowInMain ? (nowMinutes - mainStartMinutes) * minuteHeightPx : null;
+    final showNow = dateKey == todayKey;
+    final nowOffsetPx = showNow ? nowMinutes * minuteHeightPx : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -911,45 +984,13 @@ class _DayViewState extends State<_DayView> {
             padding: const EdgeInsets.only(bottom: 100),
             child: ColoredBox(
               color: Colors.white,
-              child: Column(
+                  child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _hoursToggle(
-                    label: '00–06',
-                    collapsed: widget.collapsedEarlyHours,
-                    onTap: widget.onToggleEarlyHours,
-                  ),
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeInOut,
-                    alignment: Alignment.topCenter,
-                    child: widget.collapsedEarlyHours
-                        ? const SizedBox(width: double.infinity)
-                        : _hourRows(
-                            earlyHours,
-                            timeline: earlyTimeline,
-                          ),
-                  ),
                   _hourRows(
-                    mainHours,
-                    timeline: mainTimeline,
+                    dayHours,
+                    timeline: dayTimeline,
                     nowOffsetPx: nowOffsetPx,
-                  ),
-                  _hoursToggle(
-                    label: '22–00',
-                    collapsed: widget.collapsedLateHours,
-                    onTap: widget.onToggleLateHours,
-                  ),
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeInOut,
-                    alignment: Alignment.topCenter,
-                    child: widget.collapsedLateHours
-                        ? const SizedBox(width: double.infinity)
-                        : _hourRows(
-                            lateHours,
-                            timeline: lateTimeline,
-                          ),
                   ),
                 ],
               ),
@@ -1777,8 +1818,8 @@ class _WeekViewState extends State<_WeekView> {
       ).isNotEmpty;
     });
     final hours = visibleWeekHours(
-      collapsedEarly: widget.collapsedEarlyHours,
-      collapsedLate: widget.collapsedLateHours,
+      collapsedEarly: false,
+      collapsedLate: false,
     );
 
     return Column(
@@ -1946,18 +1987,7 @@ class _WeekViewState extends State<_WeekView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _weekHoursToggle(
-                      label: '00–06',
-                      collapsed: widget.collapsedEarlyHours,
-                      onTap: widget.onToggleEarlyHours,
-                    ),
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeInOut,
-                      alignment: Alignment.topCenter,
-                      child: hours.isEmpty
-                          ? const SizedBox(width: double.infinity)
-                          : _weekHourBlock(
+                    _weekHourBlock(
                               days: days,
                               hours: hours,
                               buildTimeline: (dayTasks) =>
@@ -1967,12 +1997,6 @@ class _WeekViewState extends State<_WeekView> {
                                 dragPreview: _dragPreview,
                               ),
                             ),
-                    ),
-                    _weekHoursToggle(
-                      label: '22–00',
-                      collapsed: widget.collapsedLateHours,
-                      onTap: widget.onToggleLateHours,
-                    ),
                   ],
                 ),
               ),
