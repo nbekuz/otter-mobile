@@ -5,6 +5,35 @@
   return (date: match.group(1)!, time: '${match.group(2)}:${match.group(3)}');
 }
 
+/// Local UTC offset as ISO suffix, e.g. `+05:00` / `-07:00`.
+///
+/// Uses [DateTime.now] so we never depend on how [DateTime.parse] treats
+/// timezone-less strings on a given platform.
+String formatLocalTimezoneOffset([DateTime? at]) {
+  final offset = (at ?? DateTime.now()).timeZoneOffset;
+  final sign = offset.isNegative ? '-' : '+';
+  final abs = offset.abs();
+  final oh = abs.inHours.toString().padLeft(2, '0');
+  final om = (abs.inMinutes % 60).toString().padLeft(2, '0');
+  return '$sign$oh:$om';
+}
+
+/// Wall-clock `dueDate` + `HH:mm` with the device timezone offset.
+///
+/// Example: `2026-07-28T16:30:00.000+05:00`
+String toApiDateTime(String dueDate, String time) {
+  final day = dueDate.trim();
+  if (day.isEmpty || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(day)) {
+    throw ArgumentError.value(dueDate, 'dueDate', 'Expected yyyy-MM-dd');
+  }
+  final raw = time.trim();
+  final hhmm = raw.length >= 5 ? raw.substring(0, 5) : raw;
+  if (!RegExp(r'^\d{2}:\d{2}$').hasMatch(hhmm)) {
+    throw ArgumentError.value(time, 'time', 'Expected HH:mm');
+  }
+  return '${day}T$hhmm:00.000${formatLocalTimezoneOffset()}';
+}
+
 int parseTimeToMinutes(String time) {
   final parts = time.split(':');
   if (parts.length < 2) return 0;

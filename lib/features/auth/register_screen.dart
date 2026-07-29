@@ -10,6 +10,7 @@ import '../../core/theme/otter_colors.dart';
 import '../../core/utils/email_policy.dart';
 import '../../core/utils/password_policy.dart';
 import '../../shared/widgets/input_field.dart';
+import '../../shared/widgets/keyboard_dismisser.dart';
 import '../../shared/widgets/legal_acceptance_text.dart';
 import '../../shared/widgets/primary_button.dart';
 
@@ -51,6 +52,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   void _goBack() {
     if (_loading) return;
+    KeyboardDismisser.dismiss();
     context.go('/');
   }
 
@@ -84,6 +86,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (!_validate()) return;
 
     setState(() => _loading = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      KeyboardDismisser.dismiss();
+    });
     try {
       await ref
           .read(authStateProvider.notifier)

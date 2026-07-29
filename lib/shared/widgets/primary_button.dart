@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/otter_colors.dart';
+import 'keyboard_dismisser.dart';
 
 class PrimaryButton extends StatelessWidget {
   const PrimaryButton({
@@ -9,12 +10,24 @@ class PrimaryButton extends StatelessWidget {
     required this.onPressed,
     this.loading = false,
     this.outline = false,
+    /// When false, caller must dismiss the keyboard itself (e.g. auth screens
+    /// set [loading] first so a layout-shift cannot re-target the tap onto Back).
+    this.dismissOnPress = true,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool loading;
   final bool outline;
+  final bool dismissOnPress;
+
+  VoidCallback? get _wrappedOnPressed {
+    if (loading || onPressed == null) return null;
+    return () {
+      if (dismissOnPress) KeyboardDismisser.dismiss();
+      onPressed!();
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +35,7 @@ class PrimaryButton extends StatelessWidget {
       return SizedBox(
         width: double.infinity,
         child: OutlinedButton(
-          onPressed: loading ? null : onPressed,
+          onPressed: _wrappedOnPressed,
           style: OutlinedButton.styleFrom(
             foregroundColor: OtterColors.sberGreen,
             side: const BorderSide(color: OtterColors.sberGreen, width: 2),
@@ -39,7 +52,7 @@ class PrimaryButton extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       child: FilledButton(
-        onPressed: loading ? null : onPressed,
+        onPressed: _wrappedOnPressed,
         style: FilledButton.styleFrom(
           backgroundColor: OtterColors.sberGreen,
           disabledBackgroundColor: OtterColors.grayMid,

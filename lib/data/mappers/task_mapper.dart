@@ -16,6 +16,27 @@ abstract final class TaskMapper {
     final scheduleDay = startFields ?? dueFields;
     final firstAttachment =
         task.attachments.isNotEmpty ? task.attachments.first : null;
+    final uiAttachments = task.attachments
+        .map(
+          (a) => TaskAttachmentItem(
+            id: a.id,
+            name: a.originalName.isNotEmpty
+                ? a.originalName
+                : (a.fileUrl.split('/').last),
+            url: a.fileUrl,
+            mimeType: a.contentType.isNotEmpty ? a.contentType : null,
+          ),
+        )
+        .toList();
+    // Legacy single image_url without attachments[] entry.
+    if (uiAttachments.isEmpty) {
+      final legacyUrl = task.imageUrl ?? task.image;
+      if (legacyUrl != null && legacyUrl.isNotEmpty) {
+        uiAttachments.add(
+          TaskAttachmentItem(name: 'Вложение', url: legacyUrl, mimeType: null),
+        );
+      }
+    }
     final baseRepeat = _repeatToUi(task.repeatUnit);
     final hasCustomInterval =
         task.repeatUnit != 'none' && task.repeatInterval > 1;
@@ -62,6 +83,7 @@ abstract final class TaskMapper {
       attachmentMimeType: firstAttachment?.contentType.isNotEmpty == true
           ? firstAttachment!.contentType
           : null,
+      attachments: uiAttachments,
       isAllDay: task.isAllDay,
       listKey: task.listKey != null
           ? TaskGroupKeyX.fromApi(task.listKey!)
@@ -101,8 +123,10 @@ abstract final class TaskMapper {
           : (updates.repeatCustom ?? existing.repeatCustom),
       matrixBlock: updates.matrixBlock ?? existing.matrixBlock,
       imagePath: updates.imagePath,
+      imagePaths: updates.imagePaths,
       clearImage: updates.clearImage,
       deleteAttachmentId: updates.deleteAttachmentId,
+      deleteAttachmentIds: updates.deleteAttachmentIds,
     );
   }
 
@@ -179,37 +203,26 @@ abstract final class TaskMapper {
   }
 
   static String? _buildDueAt(String? dueDate, String? dueTime) {
-    if (dueDate == null) return null;
+    if (dueDate == null || dueDate.trim().isEmpty) return null;
     final time = (dueTime == null || dueTime.isEmpty) ? '00:00' : dueTime;
-    final hhmm = time.length >= 5 ? time.substring(0, 5) : time;
-    return _toApiDateTime(dueDate, hhmm);
+    return toApiDateTime(dueDate, time);
   }
 
   static (String?, String?) _buildStartEnd(
     String? dueDate,
     TaskDuration? duration,
   ) {
-    if (dueDate == null || duration == null) return (null, null);
+    if (dueDate == null || dueDate.trim().isEmpty || duration == null) {
+      return (null, null);
+    }
     if (parseTimeToMinutes(duration.end) <=
         parseTimeToMinutes(duration.start)) {
       return (null, null);
     }
     return (
-      _toApiDateTime(dueDate, duration.start),
-      _toApiDateTime(dueDate, duration.end),
+      toApiDateTime(dueDate, duration.start),
+      toApiDateTime(dueDate, duration.end),
     );
-  }
-
-  /// Wall-clock date+time with local timezone offset (e.g. +05:00).
-  static String _toApiDateTime(String dueDate, String time) {
-    final hhmm = time.length >= 5 ? time.substring(0, 5) : time;
-    final local = DateTime.parse('${dueDate}T$hhmm:00');
-    final offset = local.timeZoneOffset;
-    final sign = offset.isNegative ? '-' : '+';
-    final abs = offset.abs();
-    final oh = abs.inHours.toString().padLeft(2, '0');
-    final om = (abs.inMinutes % 60).toString().padLeft(2, '0');
-    return '${dueDate}T$hhmm:00.000$sign$oh:$om';
   }
 
   static RepeatType _repeatToUi(String unit) => switch (unit) {
@@ -245,6 +258,7 @@ class PartialTask {
     this.repeatCustom,
     this.matrixBlock,
     this.imagePath,
+    this.imagePaths,
     this.clearImage = false,
     this.clearDueDate = false,
     this.clearDueTime = false,
@@ -252,6 +266,7 @@ class PartialTask {
     this.clearNotification = false,
     this.clearDescription = false,
     this.deleteAttachmentId,
+    this.deleteAttachmentIds,
   });
 
   final String? title;
@@ -267,6 +282,7 @@ class PartialTask {
   final RepeatCustom? repeatCustom;
   final MatrixBlock? matrixBlock;
   final String? imagePath;
+  final List<String>? imagePaths;
   final bool clearImage;
   final bool clearDueDate;
   final bool clearDueTime;
@@ -274,4 +290,21 @@ class PartialTask {
   final bool clearNotification;
   final bool clearDescription;
   final int? deleteAttachmentId;
+  final List<int>? deleteAttachmentIds;
+
+  List<String> get resolvedImagePaths {
+    final paths = <String>[
+      ...?imagePaths,
+      if (imagePath != null && imagePath!.isNotEmpty) imagePath!,
+    ];
+    return paths.toSet().toList();
+  }
+
+  List<int> get resolvedDeleteAttachmentIds {
+    final ids = <int>[
+      ...?deleteAttachmentIds,
+      if (deleteAttachmentId != null) deleteAttachmentId!,
+    ];
+    return ids.toSet().toList();
+  }
 }

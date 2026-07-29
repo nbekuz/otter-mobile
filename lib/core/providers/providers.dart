@@ -1338,13 +1338,20 @@ class TasksNotifier extends StateNotifier<TasksState> {
     String id,
     PartialTask partial, {
     bool refreshGrouped = true,
+    bool refreshCalendar = true,
+    bool refreshMatrix = true,
   }) async {
     var existing = findTaskById(id);
     existing ??= await _ref.read(tasksServiceProvider).fetchTask(id);
 
     final merged = TaskMapper.mergePartial(existing, partial);
     final payload = TaskMapper.uiToApiPayload(merged);
-    debugPrint('[Tasks] PATCH tasks/$id/ payload=$payload');
+    debugPrint(
+      '[Tasks] PATCH tasks/$id/ '
+      'due_at=${payload['due_at']} '
+      'start_at=${payload['start_at']} '
+      'end_at=${payload['end_at']}',
+    );
 
     final task = await _ref.read(tasksServiceProvider).updateTask(id, merged);
     upsertLocalTask(task);
@@ -1353,13 +1360,19 @@ class TasksNotifier extends StateNotifier<TasksState> {
       await loadGrouped();
     }
     // Keep Eisenhower matrix in sync with priority/date changes.
-    try {
-      await _ref.read(matrixStateProvider.notifier).load();
-    } catch (_) {}
-    try {
-      await _ref.read(calendarStateProvider.notifier).load(silent: true);
-    } catch (_) {}
-    _ref.read(calendarStateProvider.notifier).upsertTask(task);
+    if (refreshMatrix) {
+      try {
+        await _ref.read(matrixStateProvider.notifier).load();
+      } catch (_) {}
+    }
+    // Calendar drag/reschedule keeps an optimistic block on screen; a silent
+    // refetch here flashes the old slot until the response is merged back.
+    if (refreshCalendar) {
+      try {
+        await _ref.read(calendarStateProvider.notifier).load(silent: true);
+      } catch (_) {}
+      _ref.read(calendarStateProvider.notifier).upsertTask(task);
+    }
     return task;
   }
 }
@@ -1642,10 +1655,18 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
     final realId = resolveRealTaskId(task.id);
     final start = formatMinutesToTime(startMinutes);
     final end = formatMinutesToTime(endMinutes);
-    debugPrint('[Calendar] reschedule $realId $start – $end');
+    // Prefer the occurrence's dueDate; fall back to any cached copy so
+    // start_at/end_at are always built with a real yyyy-MM-dd + TZ offset.
+    final dueDate = (task.dueDate != null && task.dueDate!.trim().isNotEmpty)
+        ? task.dueDate!.trim()
+        : _ref.read(tasksStateProvider.notifier).findTaskById(realId)?.dueDate;
+    debugPrint(
+      '[Calendar] reschedule $realId dueDate=$dueDate $start – $end',
+    );
 
     final optimistic = task.copyWith(
       id: realId,
+      dueDate: dueDate ?? task.dueDate,
       dueTime: start,
       duration: TaskDuration(start: start, end: end),
     );
@@ -1662,13 +1683,23 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
           .updateTask(
             realId,
             PartialTask(
-              dueDate: task.dueDate,
+              dueDate: dueDate,
               dueTime: start,
               duration: TaskDuration(start: start, end: end),
             ),
             refreshGrouped: false,
+            refreshCalendar: false,
+            refreshMatrix: false,
           );
-      applyTaskUpdate(updated);
+      // PATCH response already upserted in updateTask; keep calendar pinned
+      // to the saved schedule (covers any parse differences).
+      applyTaskUpdate(
+        updated.copyWith(
+          dueDate: dueDate ?? updated.dueDate,
+          dueTime: start,
+          duration: TaskDuration(start: start, end: end),
+        ),
+      );
       _ref.read(tasksStateProvider.notifier).upsertLocalTask(updated);
     } catch (e) {
       applyTaskUpdate(task.copyWith(id: realId));

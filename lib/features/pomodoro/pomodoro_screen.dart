@@ -412,7 +412,10 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                     ),
                     const SizedBox(height: 20),
                     FilledButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () {
+                        KeyboardDismisser.dismiss();
+                        Navigator.pop(context);
+                      },
                       style: FilledButton.styleFrom(
                         backgroundColor: OtterColors.sberGreen,
                         minimumSize: const Size.fromHeight(48),

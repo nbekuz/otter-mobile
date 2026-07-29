@@ -17,6 +17,7 @@ import '../../data/mappers/task_mapper.dart';
 import '../../data/models/ui/ui_models.dart';
 import '../../features/matrix/matrix_constants.dart';
 import '../../shared/widgets/app_bottom_sheet.dart';
+import '../../shared/widgets/keyboard_dismisser.dart';
 import '../../shared/widgets/primary_button.dart';
 import '../../shared/widgets/select_field.dart';
 import 'task_time_sync.dart';
@@ -458,6 +459,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
             TextField(
               controller: _title,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              onTapOutside: dismissKeyboardOnTapOutside,
               decoration: const InputDecoration(
                 labelText: 'Название',
                 border: OutlineInputBorder(),
@@ -467,6 +469,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
             TextField(
               controller: _description,
               maxLines: 3,
+              onTapOutside: dismissKeyboardOnTapOutside,
               decoration: const InputDecoration(
                 labelText: 'Описание',
                 border: OutlineInputBorder(),

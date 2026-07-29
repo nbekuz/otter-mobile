@@ -21,6 +21,7 @@ import '../../data/models/ui/ui_models.dart';
 import '../../features/matrix/matrix_block_setting.dart';
 import '../../features/matrix/matrix_constants.dart';
 import '../../shared/widgets/app_toast.dart';
+import '../../shared/widgets/keyboard_dismisser.dart';
 import '../../shared/widgets/select_field.dart';
 import 'task_time_sync.dart';
 
@@ -302,6 +303,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   Future<void> _pickAttachment() async {
+    KeyboardDismisser.dismiss();
     final result = await FilePicker.platform.pickFiles(
       type: FileType.any,
       withData: false,
@@ -317,6 +319,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   void _clearAttachment() {
+    KeyboardDismisser.dismiss();
     setState(() {
       _imagePath = null;
       _existingImageUrl = null;
@@ -336,6 +339,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
 
   Future<void> _toggleComplete() async {
     if (!widget.isEditMode || _loading) return;
+    KeyboardDismisser.dismiss();
     setState(() => _loading = true);
     try {
       final stub = Task(
@@ -367,6 +371,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
 
   Future<void> _deleteTask() async {
     if (!widget.isEditMode || _loading) return;
+    KeyboardDismisser.dismiss();
     final taskId = widget.taskId!;
     final recurring = _repeat != RepeatType.none;
 
@@ -436,6 +441,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   void _goBack() {
+    KeyboardDismisser.dismiss();
     final returnTo = widget.returnTo;
     if (returnTo != null && returnTo.isNotEmpty) {
       context.go(Uri.decodeComponent(returnTo));
@@ -445,6 +451,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   Future<void> _pickDate() async {
+    KeyboardDismisser.dismiss();
     final picked = await showDatePicker(
       context: context,
       initialDate: _dueDate ?? DateTime.now(),
@@ -463,6 +470,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
     required void Function(TimeOfDay) onPicked,
     TimeOfDay? initial,
   }) async {
+    KeyboardDismisser.dismiss();
     final picked = await showTimePicker(
       context: context,
       initialTime: initial ?? TimeOfDay.now(),
@@ -512,6 +520,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   void _setQuickDate(String id) {
+    KeyboardDismisser.dismiss();
     final now = DateTime.now();
     setState(() {
       if (id == 'today') {
@@ -547,6 +556,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   Future<void> _save() async {
+    KeyboardDismisser.dismiss();
     if (_title.text.trim().isEmpty) {
       showAppToast(context, 'Введите название');
       return;
@@ -671,44 +681,84 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: OtterColors.grayLight,
       body: SafeArea(
-        child: ResponsiveContent(
-          maxWidth: Responsive.isWide(context) ? 720 : double.infinity,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildHeader(),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.04),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildTitleSection(),
-                        _buildTabBar(),
-                        Expanded(child: _buildTabContent()),
-                        _buildFooter(),
-                      ],
+        bottom: keyboardInset == 0,
+        child: Padding(
+          // Lift entire screen (sticky footer included) above the IME.
+          padding: EdgeInsets.only(bottom: keyboardInset),
+          child: ResponsiveContent(
+            maxWidth: Responsive.isWide(context) ? 720 : double.infinity,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeader(),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Scroll title/tabs/fields; keep footer pinned above keyboard.
+                          Expanded(
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                return SingleChildScrollView(
+                                  keyboardDismissBehavior:
+                                      ScrollViewKeyboardDismissBehavior.onDrag,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      minHeight: constraints.maxHeight,
+                                    ),
+                                    child: Stack(
+                                      children: [
+                                        Positioned.fill(
+                                          child: GestureDetector(
+                                            onTap: KeyboardDismisser.dismiss,
+                                            behavior: HitTestBehavior.opaque,
+                                          ),
+                                        ),
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            _buildTitleSection(),
+                                            _buildTabBar(),
+                                            _buildTabContent(),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          _buildFooter(),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -771,6 +821,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             autofocus: !widget.isEditMode,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
             textInputAction: TextInputAction.next,
+            onTapOutside: dismissKeyboardOnTapOutside,
             decoration: InputDecoration(
               hintText: 'Например: отчёт, созвон, встреча…',
               filled: true,
@@ -801,7 +852,10 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton(
-                onPressed: () => setState(() => _descOpen = !_descOpen),
+                onPressed: () {
+                  KeyboardDismisser.dismiss();
+                  setState(() => _descOpen = !_descOpen);
+                },
                 style: TextButton.styleFrom(
                   foregroundColor: OtterColors.sberGreen,
                   padding: const EdgeInsets.symmetric(
@@ -828,6 +882,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             TextField(
               controller: _description,
               maxLines: 3,
+              onTapOutside: dismissKeyboardOnTapOutside,
               decoration: InputDecoration(
                 hintText: 'Детали, ссылки…',
                 filled: true,
@@ -1001,6 +1056,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
 
   Widget _buildTabBar() {
     // Match otter-app: labels for Дата/Приоритет; icon-only for the rest.
+    // Icon-only tabs keep intrinsic width so labeled tabs get enough room
+    // for full words (no "Прио..." truncation).
     const tabs = [
       (_TaskFormTab.date, LucideIcons.calendar, 'Дата', false),
       (_TaskFormTab.priority, LucideIcons.flag, 'Приоритет', false),
@@ -1015,73 +1072,93 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
         border: Border(bottom: BorderSide(color: OtterColors.grayLight)),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Row(
-          children: tabs.map((t) {
-            final tab = t.$1;
-            final icon = t.$2;
-            final label = t.$3;
-            final iconOnly = t.$4;
-            final active = _activeTab == tab;
-            final color =
-                active ? OtterColors.sberGreen : OtterColors.sberGray;
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 360;
+            final iconSize = compact ? 20.0 : 22.0;
+            final fontSize = compact ? 12.0 : 13.0;
 
-            return Expanded(
-              child: Tooltip(
-                message: label,
-                child: InkWell(
-                  onTap: () => setState(() => _activeTab = tab),
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(8),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: active ? OtterColors.sberGreenLight : null,
-                      border: Border(
-                        bottom: BorderSide(
-                          color: active
-                              ? OtterColors.sberGreen
-                              : Colors.transparent,
-                          width: 2,
+            return Row(
+              children: tabs.map((t) {
+                final tab = t.$1;
+                final icon = t.$2;
+                final label = t.$3;
+                final iconOnly = t.$4;
+                final active = _activeTab == tab;
+                final color =
+                    active ? OtterColors.sberGreen : OtterColors.sberGray;
+
+                final child = Tooltip(
+                  message: label,
+                  child: InkWell(
+                    onTap: () {
+                      KeyboardDismisser.dismiss();
+                      setState(() => _activeTab = tab);
+                    },
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(8),
+                    ),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: iconOnly ? (compact ? 8 : 10) : 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: active ? OtterColors.sberGreenLight : null,
+                        border: Border(
+                          bottom: BorderSide(
+                            color: active
+                                ? OtterColors.sberGreen
+                                : Colors.transparent,
+                            width: 2,
+                          ),
                         ),
                       ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(icon, size: 24, color: color),
-                        if (!iconOnly) ...[
-                          const SizedBox(width: 5),
-                          Flexible(
-                            child: Text(
-                              label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: color,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize:
+                            iconOnly ? MainAxisSize.min : MainAxisSize.max,
+                        children: [
+                          Icon(icon, size: iconSize, color: color),
+                          if (!iconOnly) ...[
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  label,
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: TextStyle(
+                                    fontSize: fontSize,
+                                    fontWeight: FontWeight.w600,
+                                    color: color,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ),
+                );
+
+                if (iconOnly) return child;
+                return Expanded(child: child);
+              }).toList(),
             );
-          }).toList(),
+          },
         ),
       ),
     );
   }
 
   Widget _buildTabContent() {
-    return SingleChildScrollView(
+    return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: switch (_activeTab) {
         _TaskFormTab.date => _buildDateTab(),
         _TaskFormTab.priority => _buildPriorityTab(),
@@ -1300,6 +1377,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
           TextField(
             controller: _customNotifyCtrl,
             keyboardType: TextInputType.number,
+            onTapOutside: dismissKeyboardOnTapOutside,
             decoration: InputDecoration(
               labelText: 'Минут до срока',
               filled: true,
@@ -1389,6 +1467,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                       child: TextField(
                         controller: _customIntervalCtrl,
                         keyboardType: TextInputType.number,
+                        onTapOutside: dismissKeyboardOnTapOutside,
                         decoration: InputDecoration(
                           labelText: 'Интервал',
                           errorText: _repeatIntervalError,
@@ -1431,6 +1510,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                       final selected = _customWeekdays.contains(day.value);
                       return InkWell(
                         onTap: () {
+                          KeyboardDismisser.dismiss();
                           setState(() {
                             if (selected) {
                               _customWeekdays = _customWeekdays
@@ -1486,6 +1566,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                   TextField(
                     controller: _customMonthDayCtrl,
                     keyboardType: TextInputType.number,
+                    onTapOutside: dismissKeyboardOnTapOutside,
                     decoration: InputDecoration(
                       labelText: 'День месяца',
                       errorText: _repeatMonthDayError,
@@ -1532,7 +1613,10 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                   : Colors.white,
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
-                onTap: () => setState(() => _matrix = theme.block),
+                onTap: () {
+                  KeyboardDismisser.dismiss();
+                  setState(() => _matrix = theme.block);
+                },
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
                   padding: const EdgeInsets.all(10),
@@ -1780,7 +1864,10 @@ class _QuickChip extends StatelessWidget {
       color: selected ? OtterColors.sberGreen : Colors.white,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          KeyboardDismisser.dismiss();
+          onTap();
+        },
         borderRadius: BorderRadius.circular(8),
         child: Container(
           width: double.infinity,
@@ -1823,7 +1910,10 @@ class _UnitChip extends StatelessWidget {
       color: selected ? OtterColors.sberGreen : Colors.white,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          KeyboardDismisser.dismiss();
+          onTap();
+        },
         borderRadius: BorderRadius.circular(8),
         child: Container(
           alignment: Alignment.center,
@@ -1881,7 +1971,10 @@ class _DateTimeField extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           child: InkWell(
-            onTap: onTap,
+            onTap: () {
+              KeyboardDismisser.dismiss();
+              onTap();
+            },
             borderRadius: BorderRadius.circular(12),
             child: Container(
               constraints: const BoxConstraints(minHeight: 52),
@@ -1937,7 +2030,10 @@ class _SelectCard extends StatelessWidget {
       color: selected ? selectedColor.withValues(alpha: 0.08) : Colors.white,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          KeyboardDismisser.dismiss();
+          onTap();
+        },
         borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

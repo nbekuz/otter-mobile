@@ -45,6 +45,37 @@ class TaskDuration {
   final String end;
 }
 
+/// Server or local file attachment shown in task forms.
+class TaskAttachmentItem {
+  const TaskAttachmentItem({
+    required this.name,
+    this.id,
+    this.url,
+    this.mimeType,
+    this.localPath,
+  });
+
+  final int? id;
+  final String name;
+  final String? url;
+  final String? mimeType;
+  final String? localPath;
+
+  bool get isLocal => localPath != null && localPath!.isNotEmpty;
+
+  bool get isImage {
+    final mime = mimeType ?? '';
+    if (mime.startsWith('image/')) return true;
+    final n = (localPath ?? url ?? name).toLowerCase();
+    return n.endsWith('.png') ||
+        n.endsWith('.jpg') ||
+        n.endsWith('.jpeg') ||
+        n.endsWith('.gif') ||
+        n.endsWith('.webp') ||
+        n.endsWith('.heic');
+  }
+}
+
 class RepeatCustom {
   const RepeatCustom({
     required this.interval,
@@ -79,6 +110,7 @@ class Task {
     this.attachmentId,
     this.attachmentName,
     this.attachmentMimeType,
+    this.attachments = const [],
     this.isAllDay = false,
     this.listKey,
     this.matrixBlock,
@@ -104,6 +136,7 @@ class Task {
   final int? attachmentId;
   final String? attachmentName;
   final String? attachmentMimeType;
+  final List<TaskAttachmentItem> attachments;
   final bool isAllDay;
   final TaskGroupKey? listKey;
   final MatrixBlock? matrixBlock;
@@ -129,6 +162,7 @@ class Task {
     int? attachmentId,
     String? attachmentName,
     String? attachmentMimeType,
+    List<TaskAttachmentItem>? attachments,
     bool? isAllDay,
     TaskGroupKey? listKey,
     MatrixBlock? matrixBlock,
@@ -153,6 +187,7 @@ class Task {
     attachmentId: attachmentId ?? this.attachmentId,
     attachmentName: attachmentName ?? this.attachmentName,
     attachmentMimeType: attachmentMimeType ?? this.attachmentMimeType,
+    attachments: attachments ?? this.attachments,
     isAllDay: isAllDay ?? this.isAllDay,
     listKey: listKey ?? this.listKey,
     matrixBlock: matrixBlock ?? this.matrixBlock,

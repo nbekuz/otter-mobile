@@ -162,12 +162,13 @@ List<CalendarYearMonth> buildYearMonths({
         ),
     ];
 
-/// Port of otter-app `getMonthCellTasks` — dated tasks only, max 3.
-List<Task> monthCellTasks(List<Task> pool, String dateKey, {int limit = 3}) {
-  return expandTasksForDate(pool, dateKey)
+/// Dated tasks for a month cell. Pass [limit] to cap (year dots); omit for all.
+List<Task> monthCellTasks(List<Task> pool, String dateKey, {int? limit}) {
+  final list = expandTasksForDate(pool, dateKey)
       .where((t) => t.dueDate != null && t.dueDate!.isNotEmpty)
-      .take(limit)
       .toList(growable: false);
+  if (limit == null) return list;
+  return list.take(limit).toList(growable: false);
 }
 
 /// Expand [pool] across [startKey]–[endKey] and group by due date.

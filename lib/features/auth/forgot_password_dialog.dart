@@ -236,6 +236,7 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
   }
 
   Future<void> _submit() async {
+    KeyboardDismisser.dismiss();
     switch (_step) {
       case _ForgotStep.email:
         await _sendCode();

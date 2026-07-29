@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -280,7 +281,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final user = auth.user;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Профиль')),
+      appBar: AppBar(
+        title: const Text('Профиль'),
+        leading: IconButton(
+          icon: const Icon(LucideIcons.chevronLeft),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/app/settings');
+            }
+          },
+        ),
+      ),
       body: ResponsiveContent(
         maxWidth: 640,
         child: ListView(

@@ -407,6 +407,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _sendContact() async {
     final message = _contactController.text.trim();
     if (message.isEmpty) return;
+    KeyboardDismisser.dismiss();
     try {
       await ref.read(settingsServiceProvider).sendHelpMessage(message);
       _contactController.clear();
@@ -630,7 +631,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Экспортируйте задачи в JSON или импортируйте их из файла Otter.',
+                  'Экспортируйте задачи в JSON или импортируйте их из файла Оттер.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: OtterColors.sberGray,
                       ),
@@ -650,7 +651,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(LucideIcons.upload),
                   title: const Text('Импорт задач'),
-                  subtitle: const Text('Загрузить JSON-файл Otter'),
+                  subtitle: const Text('Загрузить JSON-файл Оттер'),
                   onTap: () async {
                     Navigator.pop(ctx);
                     await _importTasks();
@@ -1163,72 +1164,121 @@ class _ProfileCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = auth.user;
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => context.go('/app/profile'),
         borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 32,
-                backgroundColor: OtterColors.sberGreen,
-                backgroundImage: user?.avatar != null
-                    ? NetworkImage(user!.avatar!)
-                    : null,
-                child: user?.avatar == null
-                    ? Text(
-                        (user?.name.isNotEmpty == true ? user!.name[0] : 'A')
-                            .toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            user?.name ?? 'Пользователь',
+        child: Stack(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, isPremium ? 44 : 16, 16),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 32,
+                    backgroundColor: OtterColors.sberGreen,
+                    backgroundImage: user?.avatar != null
+                        ? NetworkImage(user!.avatar!)
+                        : null,
+                    child: user?.avatar == null
+                        ? Text(
+                            (user?.name.isNotEmpty == true
+                                    ? user!.name[0]
+                                    : 'A')
+                                .toUpperCase(),
                             style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
                               fontWeight: FontWeight.bold,
-                              fontSize: 16,
                             ),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user?.name ?? 'Пользователь',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
                           ),
                         ),
-                        if (isPremium)
-                          const Text(
-                            '⭐',
-                            style: TextStyle(
-                              fontSize: 14,
-                              height: 1,
+                        if (user?.email != null)
+                          Text(
+                            user!.email,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: OtterColors.sberGray,
                             ),
                           ),
                       ],
                     ),
-                    if (user?.email != null)
-                      Text(
-                        user!.email,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: OtterColors.sberGray,
-                        ),
-                      ),
-                  ],
-                ),
+                  ),
+                  const Icon(
+                    LucideIcons.chevronRight,
+                    color: OtterColors.sberGray,
+                  ),
+                ],
               ),
-              const Icon(LucideIcons.chevronRight, color: OtterColors.sberGray),
-            ],
-          ),
+            ),
+            if (isPremium)
+              Positioned(
+                top: 10,
+                right: 10,
+                child: _PremiumStarBadge(isDark: isDark),
+              ),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+class _PremiumStarBadge extends StatelessWidget {
+  const _PremiumStarBadge({required this.isDark});
+
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? const [
+                  Color(0xFF3D3420),
+                  Color(0xFF5C4A1F),
+                ]
+              : const [
+                  Color(0xFFFFF6D6),
+                  Color(0xFFFFE08A),
+                ],
+        ),
+        border: Border.all(
+          color: isDark ? const Color(0xFFC9A227) : const Color(0xFFF0C94A),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFFC107).withValues(alpha: isDark ? 0.2 : 0.35),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      alignment: Alignment.center,
+      child: Icon(
+        Icons.star_rounded,
+        size: 18,
+        color: isDark ? const Color(0xFFFFD54F) : const Color(0xFFE8A100),
       ),
     );
   }

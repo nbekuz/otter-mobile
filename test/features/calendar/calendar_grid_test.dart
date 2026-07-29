@@ -53,7 +53,7 @@ void main() {
   });
 
   group('monthCellTasks / dateTaskDots', () {
-    test('returns dated tasks only, max 3, with priority dots', () {
+    test('returns all dated tasks by default; dots still capped at 3', () {
       final pool = [
         _task(id: 'a', dueDate: '2026-07-24'),
         _task(id: 'b', dueDate: '2026-07-24', dueTime: '10:00'),
@@ -63,7 +63,12 @@ void main() {
         _task(id: 'other', dueDate: '2026-07-25'),
       ];
       final cell = monthCellTasks(pool, '2026-07-24');
-      expect(cell.map((t) => t.id), ['a', 'b', 'c']);
+      expect(cell.map((t) => t.id), ['a', 'b', 'c', 'd']);
+      expect(monthCellTasks(pool, '2026-07-24', limit: 3).map((t) => t.id), [
+        'a',
+        'b',
+        'c',
+      ]);
       expect(dateTaskDots(pool, '2026-07-24').length, 3);
       expect(dateTaskDots(pool, '2026-07-25').length, 1);
       expect(dateTaskDots(pool, '2026-07-26'), isEmpty);

@@ -11,6 +11,7 @@ import '../../core/theme/otter_colors.dart';
 import '../../core/utils/email_policy.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../../shared/widgets/input_field.dart';
+import '../../shared/widgets/keyboard_dismisser.dart';
 import '../../shared/widgets/legal_acceptance_text.dart';
 import '../../shared/widgets/otter_checkbox.dart';
 import '../../shared/widgets/primary_button.dart';
@@ -43,6 +44,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   void _goBack() {
     if (_loading) return;
+    KeyboardDismisser.dismiss();
     context.go('/');
   }
 
@@ -95,9 +97,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (_loading) return;
     if (!_validate()) return;
 
-    // Enable loading BEFORE any focus/IME changes so the back button is
-    // disabled if a layout-shift retargets the same tap.
+    // Loading BEFORE keyboard dismiss: disables Back / PopScope so an Android
+    // IME layout-shift cannot re-target the same tap onto the chevron.
     setState(() => _loading = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      KeyboardDismisser.dismiss();
+    });
 
     try {
       await ref
@@ -133,6 +138,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _googleLogin() async {
     if (_loading) return;
     setState(() => _loading = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      KeyboardDismisser.dismiss();
+    });
     try {
       final token = await FirebaseBootstrap.signInWithGoogle();
       if (token == null) {
@@ -155,6 +163,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _openForgotPassword() async {
+    KeyboardDismisser.dismiss();
     final message = await showForgotPasswordDialog(
       context,
       ref,
@@ -245,7 +254,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ],
             ),
             const SizedBox(height: 24),
-            PrimaryButton(label: 'Войти', loading: _loading, onPressed: _login),
+            PrimaryButton(
+              label: 'Войти',
+              loading: _loading,
+              dismissOnPress: false,
+              onPressed: _login,
+            ),
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: _loading ? null : _googleLogin,

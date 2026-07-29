@@ -306,6 +306,8 @@ class _MatrixQuadrantState extends State<_MatrixQuadrant> {
             border: Border.all(color: borderColor),
           ),
           clipBehavior: Clip.antiAlias,
+          // Inset content from the rounded border (not padding on task cards).
+          padding: const EdgeInsets.only(bottom: 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -317,7 +319,7 @@ class _MatrixQuadrantState extends State<_MatrixQuadrant> {
               ),
               Expanded(
                 child: ListView(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
                   children: [
                     _DropZone(
                       accent: widget.accent,
@@ -520,20 +522,28 @@ class _MatrixTaskCard extends StatelessWidget {
       onComplete: onComplete,
     );
 
+    // Gap outside Material so the white card doesn't paint over spacing
+    // (matches web matrix `mb-1.5`).
+    final Widget draggable;
     if (defaultTargetPlatform == TargetPlatform.windows) {
-      return Draggable<Task>(
+      draggable = Draggable<Task>(
         data: task,
         feedback: _dragFeedback(card),
         childWhenDragging: Opacity(opacity: 0.35, child: card),
         child: MouseRegion(cursor: SystemMouseCursors.grab, child: card),
       );
+    } else {
+      draggable = LongPressDraggable<Task>(
+        data: task,
+        feedback: _dragFeedback(card),
+        childWhenDragging: Opacity(opacity: 0.35, child: card),
+        child: card,
+      );
     }
 
-    return LongPressDraggable<Task>(
-      data: task,
-      feedback: _dragFeedback(card),
-      childWhenDragging: Opacity(opacity: 0.35, child: card),
-      child: card,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: draggable,
     );
   }
 
@@ -570,7 +580,6 @@ class _MatrixTaskCardBody extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          margin: const EdgeInsets.only(bottom: 6, top: 2),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),

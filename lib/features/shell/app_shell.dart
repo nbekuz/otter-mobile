@@ -28,6 +28,8 @@ class AppShell extends ConsumerWidget {
       data: Theme.of(context),
       child: Scaffold(
         backgroundColor: bg,
+        // Form routes need raw IME viewInsets so footers can pad above the keyboard.
+        resizeToAvoidBottomInset: !_hideBottomNav(path),
         body: wide
             ? Padding(
                 padding: const EdgeInsets.all(24),
@@ -68,7 +70,7 @@ class AppShell extends ConsumerWidget {
                     ),
                 ],
               ),
-        bottomNavigationBar: wide
+        bottomNavigationBar: wide || _hideBottomNav(path)
             ? null
             : OtterBottomNav(order: settings.bottomNavItems, currentPath: path),
       ),
@@ -80,6 +82,12 @@ class AppShell extends ConsumerWidget {
       path.contains('/profile') ||
       path.endsWith('/settings') ||
       path.contains('/settings?');
+
+  bool _hideBottomNav(String path) =>
+      path.contains('new-task') ||
+      path.contains('/profile') ||
+      path.contains('/notifications/') ||
+      path.contains('/faq');
 }
 
 class _Sidebar extends ConsumerWidget {

@@ -28,14 +28,16 @@ class TasksService {
 
   Future<Object> _payloadFor(PartialTask partial) async {
     final json = TaskMapper.uiToApiPayload(partial);
-    if (partial.imagePath == null && !partial.clearImage) return json;
+    final paths = partial.resolvedImagePaths;
+    if (paths.isEmpty && !partial.clearImage) return json;
 
     final form = FormData.fromMap({
       for (final e in json.entries)
         if (e.value != null) e.key: e.value is bool ? e.value : '${e.value}',
-      if (partial.imagePath != null)
-        'image': await MultipartFile.fromFile(partial.imagePath!),
-      if (partial.clearImage) 'image': '',
+      // Keep legacy single `image` field for first file (older API paths).
+      if (paths.isNotEmpty)
+        'image': await MultipartFile.fromFile(paths.first),
+      if (partial.clearImage && paths.isEmpty) 'image': '',
     });
     return form;
   }
@@ -46,9 +48,13 @@ class TasksService {
       data: await _payloadFor(partial),
     );
     var task = TaskMapper.apiToUi(ApiTask.fromJson(data));
-    if (partial.imagePath != null) {
+    for (final path in partial.resolvedImagePaths) {
       try {
-        await uploadAttachment(task.id, partial.imagePath!);
+        await uploadAttachment(task.id, path);
+      } catch (_) {}
+    }
+    if (partial.resolvedImagePaths.isNotEmpty) {
+      try {
         task = await fetchTask(task.id);
       } catch (_) {}
     }
@@ -62,16 +68,21 @@ class TasksService {
     );
     var task = TaskMapper.apiToUi(ApiTask.fromJson(data));
 
-    if (partial.deleteAttachmentId != null) {
+    for (final attachmentId in partial.resolvedDeleteAttachmentIds) {
       try {
-        await deleteAttachment(id, partial.deleteAttachmentId!);
-        task = await fetchTask(id);
+        await deleteAttachment(id, attachmentId);
       } catch (_) {}
     }
 
-    if (partial.imagePath != null) {
+    for (final path in partial.resolvedImagePaths) {
       try {
-        await uploadAttachment(id, partial.imagePath!);
+        await uploadAttachment(id, path);
+      } catch (_) {}
+    }
+
+    if (partial.resolvedImagePaths.isNotEmpty ||
+        partial.resolvedDeleteAttachmentIds.isNotEmpty) {
+      try {
         task = await fetchTask(id);
       } catch (_) {}
     }
