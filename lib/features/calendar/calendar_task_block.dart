@@ -56,31 +56,38 @@ class CalendarTaskBlock extends StatelessWidget {
 
     Widget dragHandle(CalendarTaskDragMode mode, {required bool isTop}) {
       final handleHeight = compact ? 12.0 : 18.0;
+      final handleWidth = (colWidth * 0.55).clamp(28.0, 56.0);
       return Positioned(
         top: isTop ? 0 : null,
         bottom: isTop ? null : 0,
         left: 0,
         right: 0,
         height: handleHeight,
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onVerticalDragStart: (_) => onDragStart(mode),
-          onVerticalDragUpdate: (d) => onDragUpdate(d, mode),
-          onVerticalDragEnd: (_) => onDragEnd(),
-          onVerticalDragCancel: onDragEnd,
-          child: Align(
-            alignment: isTop ? Alignment.topCenter : Alignment.bottomCenter,
-            child: Padding(
-              padding: EdgeInsets.only(
-                top: isTop ? 2 : 0,
-                bottom: isTop ? 0 : 2,
-              ),
-              child: Container(
-                width: compact ? 32 : 44,
-                height: 3,
-                decoration: BoxDecoration(
-                  color: OtterColors.sberGray.withValues(alpha: 0.45),
-                  borderRadius: BorderRadius.circular(2),
+        child: Center(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragStart: (_) => onDragStart(mode),
+            onVerticalDragUpdate: (d) => onDragUpdate(d, mode),
+            onVerticalDragEnd: (_) => onDragEnd(),
+            onVerticalDragCancel: onDragEnd,
+            child: SizedBox(
+              width: handleWidth,
+              height: handleHeight,
+              child: Align(
+                alignment: isTop ? Alignment.topCenter : Alignment.bottomCenter,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    top: isTop ? 2 : 0,
+                    bottom: isTop ? 0 : 2,
+                  ),
+                  child: Container(
+                    width: compact ? 32 : 44,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: OtterColors.sberGray.withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -89,24 +96,32 @@ class CalendarTaskBlock extends StatelessWidget {
       );
     }
 
-    Widget checkbox() {
+    Widget checkbox({bool expandTap = false}) {
       final size = compact ? 12.0 : 14.0;
+      final box = Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          border: Border.all(color: color, width: compact ? 1.5 : 2),
+          color: item.task.completed ? color : Colors.transparent,
+          borderRadius: BorderRadius.circular(compact ? 3 : 4),
+        ),
+        child: item.task.completed
+            ? Icon(Icons.check, size: compact ? 8 : 10, color: Colors.white)
+            : null,
+      );
       return MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: onToggleComplete,
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              border: Border.all(color: color, width: compact ? 1.5 : 2),
-              color: item.task.completed ? color : Colors.transparent,
-              borderRadius: BorderRadius.circular(compact ? 3 : 4),
-            ),
-            child: item.task.completed
-                ? Icon(Icons.check, size: compact ? 8 : 10, color: Colors.white)
-                : null,
-          ),
+          child: expandTap
+              ? SizedBox(
+                  width: size + 12,
+                  height: size + 12,
+                  child: Align(alignment: Alignment.topLeft, child: box),
+                )
+              : box,
         ),
       );
     }
@@ -133,11 +148,9 @@ class CalendarTaskBlock extends StatelessWidget {
 
       if (medium) {
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          padding: const EdgeInsets.fromLTRB(22, 0, 8, 0),
           child: Row(
             children: [
-              checkbox(),
-              const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   item.continuesAfter
@@ -161,12 +174,10 @@ class CalendarTaskBlock extends StatelessWidget {
       }
 
       return Padding(
-        padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+        padding: const EdgeInsets.fromLTRB(22, 6, 8, 6),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(padding: const EdgeInsets.only(top: 2), child: checkbox()),
-            const SizedBox(width: 6),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -267,17 +278,24 @@ class CalendarTaskBlock extends StatelessWidget {
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: onTap,
-                  onVerticalDragStart: (_) =>
+                  onPanStart: (_) =>
                       onDragStart(CalendarTaskDragMode.move),
-                  onVerticalDragUpdate: (d) =>
+                  onPanUpdate: (d) =>
                       onDragUpdate(d, CalendarTaskDragMode.move),
-                  onVerticalDragEnd: (_) => onDragEnd(),
-                  onVerticalDragCancel: onDragEnd,
+                  onPanEnd: (_) => onDragEnd(),
+                  onPanCancel: onDragEnd,
                   child: bodyContent(),
                 ),
                 if (!item.isContinuation)
                   dragHandle(CalendarTaskDragMode.resizeStart, isTop: true),
                 dragHandle(CalendarTaskDragMode.resizeEnd, isTop: false),
+                // Above resize handles so complete taps are not swallowed.
+                if (!item.isContinuation && !compact)
+                  Positioned(
+                    top: medium ? 6 : 4,
+                    left: 2,
+                    child: checkbox(expandTap: true),
+                  ),
               ],
             ),
           ),

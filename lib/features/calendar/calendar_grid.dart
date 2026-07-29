@@ -186,7 +186,7 @@ Map<String, List<Task>> groupTasksByDate(
   return map;
 }
 
-/// Priority-colored dots for a date (max 3) from a pre-grouped map.
+/// Priority-colored dots for a date from a pre-grouped map (year view uses limit: 1).
 List<Color> dotsForDate(
   Map<String, List<Task>> byDate,
   String dateKey, {

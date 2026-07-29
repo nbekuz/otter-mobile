@@ -1,5 +1,18 @@
-/// API datetime as wall-clock (no TZ shift), e.g. `2026-06-12T10:19:00+03:00` → 10:19.
+/// API datetime → date/time in the device local timezone.
+///
+/// Server often returns UTC (`…Z`) even when we sent `+05:00`; reading the
+/// raw digits would shift the calendar after save/resize.
 ({String date, String time})? parseApiWallClock(String iso) {
+  final parsed = DateTime.tryParse(iso);
+  if (parsed != null) {
+    final local = parsed.toLocal();
+    final y = local.year.toString().padLeft(4, '0');
+    final mo = local.month.toString().padLeft(2, '0');
+    final d = local.day.toString().padLeft(2, '0');
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return (date: '$y-$mo-$d', time: '$hh:$mm');
+  }
   final match = RegExp(r'^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})').firstMatch(iso);
   if (match == null) return null;
   return (date: match.group(1)!, time: '${match.group(2)}:${match.group(3)}');

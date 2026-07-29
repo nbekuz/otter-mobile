@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -20,6 +19,7 @@ import '../../shared/widgets/app_bottom_sheet.dart';
 import '../../shared/widgets/keyboard_dismisser.dart';
 import '../../shared/widgets/primary_button.dart';
 import '../../shared/widgets/select_field.dart';
+import 'task_attachment_picker.dart';
 import 'task_time_sync.dart';
 
 Future<void> showTaskDetailSheet(BuildContext context, Task task) {
@@ -54,6 +54,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   String? _attachmentName;
   String? _attachmentMimeType;
   int? _attachmentId;
+  final List<int> _serverAttachmentIds = [];
   bool _clearImage = false;
   bool _saving = false;
   String? _error;
@@ -96,6 +97,16 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
     _attachmentId = task.attachmentId;
     _attachmentName = task.attachmentName;
     _attachmentMimeType = task.attachmentMimeType;
+    _serverAttachmentIds
+      ..clear()
+      ..addAll([
+        for (final a in task.attachments)
+          if (a.id != null) a.id!,
+      ]);
+    if (_attachmentId != null &&
+        !_serverAttachmentIds.contains(_attachmentId)) {
+      _serverAttachmentIds.add(_attachmentId!);
+    }
     _clearImage = false;
     _imagePath = null;
     if (task.dueDate != null) {
@@ -261,9 +272,8 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
               matrixBlock: _matrix,
               imagePath: _imagePath,
               clearImage: _clearImage && _imagePath == null,
-              deleteAttachmentId: (_attachmentId != null &&
-                      (_clearImage || _imagePath != null))
-                  ? _attachmentId
+              deleteAttachmentIds: (_clearImage || _imagePath != null)
+                  ? List<int>.from(_serverAttachmentIds)
                   : null,
             ),
           );
@@ -281,16 +291,13 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   }
 
   Future<void> _pickAttachment() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.any,
-      withData: false,
-    );
-    final file = result?.files.single;
-    if (file == null || file.path == null) return;
+    KeyboardDismisser.dismiss();
+    final picked = await pickTaskAttachment(context);
+    if (picked == null || !mounted) return;
     setState(() {
-      _imagePath = file.path;
-      _attachmentName = file.name;
-      _attachmentMimeType = null;
+      _imagePath = picked.path;
+      _attachmentName = picked.name;
+      _attachmentMimeType = picked.mimeType;
       _clearImage = false;
     });
   }
@@ -388,6 +395,10 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceAlt = isDark ? OtterColors.darkSurfaceAlt : Colors.white;
+    final borderSubtle =
+        isDark ? OtterColors.darkBorder : OtterColors.grayLight;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 20, 20, bottom + 20),
@@ -604,7 +615,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                     return Material(
                       color: selected
                           ? theme.accent.withValues(alpha: 0.08)
-                          : Colors.white,
+                          : surfaceAlt,
                       borderRadius: BorderRadius.circular(12),
                       child: InkWell(
                         onTap: () => setState(() => _matrix = theme.block),
@@ -616,7 +627,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                             border: Border.all(
                               color: selected
                                   ? theme.accent
-                                  : OtterColors.grayLight,
+                                  : borderSubtle,
                               width: selected ? 2 : 1,
                             ),
                           ),
@@ -675,9 +686,10 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: OtterColors.grayLight.withValues(alpha: 0.6),
+                  color: (isDark ? OtterColors.darkSurfaceAlt : OtterColors.grayLight)
+                      .withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: OtterColors.grayLight),
+                  border: Border.all(color: borderSubtle),
                 ),
                 child: Row(
                   children: [
@@ -704,7 +716,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                               : Container(
                                   width: 48,
                                   height: 48,
-                                  color: Colors.white,
+                                  color: surfaceAlt,
                                   alignment: Alignment.center,
                                   child: const Icon(
                                     LucideIcons.file,

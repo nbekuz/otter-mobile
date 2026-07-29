@@ -114,12 +114,21 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                           final task = tasks.firstWhere(
                             (t) => resolveRealTaskId(t.id) == realId,
                           );
-                          await ref
-                              .read(tasksStateProvider.notifier)
-                              .completeTask(task);
-                          await ref
-                              .read(calendarStateProvider.notifier)
-                              .load();
+                          try {
+                            await ref
+                                .read(tasksStateProvider.notifier)
+                                .completeTask(task);
+                          } catch (e) {
+                            if (context.mounted) {
+                              showAppToast(
+                                context,
+                                getApiErrorMessage(
+                                  e,
+                                  'Не удалось обновить задачу',
+                                ),
+                              );
+                            }
+                          }
                         },
                         onReschedule: (task, start, end) async {
                           try {
@@ -167,18 +176,32 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                           final task = tasks.firstWhere(
                             (t) => resolveRealTaskId(t.id) == realId,
                           );
-                          await ref
-                              .read(tasksStateProvider.notifier)
-                              .completeTask(task);
-                          await ref
-                              .read(calendarStateProvider.notifier)
-                              .load();
+                          try {
+                            await ref
+                                .read(tasksStateProvider.notifier)
+                                .completeTask(task);
+                          } catch (e) {
+                            if (context.mounted) {
+                              showAppToast(
+                                context,
+                                getApiErrorMessage(
+                                  e,
+                                  'Не удалось обновить задачу',
+                                ),
+                              );
+                            }
+                          }
                         },
-                        onReschedule: (task, start, end) async {
+                        onReschedule: (task, start, end, {dueDate}) async {
                           try {
                             await ref
                                 .read(calendarStateProvider.notifier)
-                                .rescheduleTask(task, start, end);
+                                .rescheduleTask(
+                                  task,
+                                  start,
+                                  end,
+                                  dueDate: dueDate,
+                                );
                           } catch (e) {
                             if (context.mounted) {
                               showAppToast(
@@ -1289,8 +1312,8 @@ class _YearView extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 100),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // 3 columns like web
-          const gap = 12.0;
+          // 3 columns like web — tighter gaps so month cards fit on phones.
+          const gap = 8.0;
           final cardW = (constraints.maxWidth - gap * 2) / 3;
           return Wrap(
             spacing: gap,
@@ -1306,19 +1329,23 @@ class _YearView extends StatelessWidget {
                       onTap: () => onMonthTap(month.index),
                       borderRadius: BorderRadius.circular(16),
                       child: Padding(
-                        padding: const EdgeInsets.all(12),
+                        // Was 12 — reduced so title + 6 week rows fit comfortably.
+                        padding: const EdgeInsets.all(8),
                         child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             Text(
                               month.name,
                               style: const TextStyle(
                                 fontSize: 12,
+                                height: 1.0,
                                 fontWeight: FontWeight.w700,
                                 color: OtterColors.sberBlack,
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            // Was 8 — less space under month title.
+                            const SizedBox(height: 4),
                             for (var row = 0; row < 6; row++)
                               Row(
                                 children: [
@@ -1330,6 +1357,7 @@ class _YearView extends StatelessWidget {
                                           byDate,
                                           month.cells[row * 7 + col].dateKey ??
                                               '',
+                                          limit: 1,
                                         ),
                                         onDayTap: onDayTap,
                                       ),
@@ -1361,24 +1389,30 @@ class _YearDayCell extends StatelessWidget {
   final List<Color> dots;
   final void Function(DateTime day) onDayTap;
 
+  static const double _dayDisc = 16;
+  static const double _dotsSlot = 5;
+  static const double _cellHeight = _dayDisc + _dotsSlot;
+
   @override
   Widget build(BuildContext context) {
     final day = cell.day;
     final dateKey = cell.dateKey;
 
-    return AspectRatio(
-      aspectRatio: 1,
+    // Fixed height + Stack avoids Column sub-pixel RenderFlex overflow (~0.97px)
+    // that appeared under denser months (e.g. July with task dots).
+    return SizedBox(
+      height: _cellHeight,
       child: InkWell(
         onTap: dateKey == null
             ? null
             : () => onDayTap(DateTime.parse(dateKey)),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Stack(
+          alignment: Alignment.topCenter,
           children: [
             if (day != null)
               Container(
-                width: 16,
-                height: 16,
+                width: _dayDisc,
+                height: _dayDisc,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: cell.isToday
@@ -1388,8 +1422,10 @@ class _YearDayCell extends StatelessWidget {
                 ),
                 child: Text(
                   '$day',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 9,
+                    height: 1.0,
                     fontWeight:
                         cell.isToday ? FontWeight.w600 : FontWeight.w400,
                     color: cell.isToday
@@ -1399,8 +1435,11 @@ class _YearDayCell extends StatelessWidget {
                 ),
               ),
             if (dots.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 1),
+              Positioned(
+                top: _dayDisc + 1,
+                left: 0,
+                right: 0,
+                height: 4,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -1449,7 +1488,12 @@ class _WeekView extends StatefulWidget {
   final void Function(DateTime day) onDayTap;
   final void Function(DateTime day, int hour) onHourTap;
   final Future<void> Function(String id) onToggleComplete;
-  final Future<void> Function(Task task, int start, int end) onReschedule;
+  final Future<void> Function(
+    Task task,
+    int start,
+    int end, {
+    String? dueDate,
+  }) onReschedule;
 
   @override
   State<_WeekView> createState() => _WeekViewState();
@@ -1465,23 +1509,42 @@ class _WeekViewState extends State<_WeekView> {
   CalendarTimelineTask? _dragTask;
   CalendarTaskDragMode? _dragMode;
   double _dragStartDy = 0;
+  double _dragStartDx = 0;
   int _initialStart = 0;
   int _initialEnd = 0;
+  DateTime? _sourceDay;
+  double _colWidth = 0;
   bool _didDrag = false;
   bool _ignoreNextTap = false;
 
-  void _beginDrag(CalendarTimelineTask item, CalendarTaskDragMode mode) {
+  String _dayKey(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
+
+  List<DateTime> _weekDays() {
+    final weekStart = widget.date.subtract(
+      Duration(days: widget.date.weekday - 1),
+    );
+    return List.generate(7, (i) => weekStart.add(Duration(days: i)));
+  }
+
+  void _beginDrag(
+    CalendarTimelineTask item,
+    CalendarTaskDragMode mode,
+    DateTime day,
+  ) {
     setState(() {
       _dragTask = item;
       _dragMode = mode;
       _dragStartDy = 0;
+      _dragStartDx = 0;
       _initialStart = item.rawStart;
       _initialEnd = item.rawEnd;
+      _sourceDay = DateTime(day.year, day.month, day.day);
       _didDrag = false;
       _dragPreview = CalendarDragPreview(
         taskId: item.task.id,
         start: item.rawStart,
         end: item.rawEnd,
+        date: _dayKey(_sourceDay!),
       );
     });
   }
@@ -1490,9 +1553,14 @@ class _WeekViewState extends State<_WeekView> {
     if (_dragTask == null || _dragMode != mode) return;
 
     _dragStartDy += details.delta.dy;
+    if (mode == CalendarTaskDragMode.move) {
+      _dragStartDx += details.delta.dx;
+    }
     final deltaMinutes = _dragStartDy / minuteHeightPx;
 
-    if (deltaMinutes.abs() >= 1.5) _didDrag = true;
+    if (deltaMinutes.abs() >= 1.5 || _dragStartDx.abs() >= 12) {
+      _didDrag = true;
+    }
 
     var nextStart = _initialStart;
     var nextEnd = _initialEnd;
@@ -1518,11 +1586,30 @@ class _WeekViewState extends State<_WeekView> {
       );
     }
 
+    String? nextDate = _sourceDay != null ? _dayKey(_sourceDay!) : null;
+    if (mode == CalendarTaskDragMode.move &&
+        _sourceDay != null &&
+        _colWidth > 0) {
+      final days = _weekDays();
+      final srcIndex = days.indexWhere(
+        (d) =>
+            d.year == _sourceDay!.year &&
+            d.month == _sourceDay!.month &&
+            d.day == _sourceDay!.day,
+      );
+      if (srcIndex >= 0) {
+        final dayDelta = (_dragStartDx / _colWidth).round();
+        final nextIndex = (srcIndex + dayDelta).clamp(0, days.length - 1);
+        nextDate = _dayKey(days[nextIndex]);
+      }
+    }
+
     setState(() {
       _dragPreview = CalendarDragPreview(
         taskId: _dragTask!.task.id,
         start: nextStart,
         end: nextEnd,
+        date: nextDate,
       );
     });
   }
@@ -1531,22 +1618,29 @@ class _WeekViewState extends State<_WeekView> {
     final task = _dragTask;
     final preview = _dragPreview;
     final didDrag = _didDrag;
+    final sourceKey = _sourceDay != null ? _dayKey(_sourceDay!) : null;
 
     if (!didDrag || task == null || preview == null) {
       setState(() {
         _dragTask = null;
         _dragMode = null;
         _dragPreview = null;
+        _sourceDay = null;
         _didDrag = false;
       });
       return;
     }
 
-    if (preview.start == task.rawStart && preview.end == task.rawEnd) {
+    final dateChanged =
+        preview.date != null && sourceKey != null && preview.date != sourceKey;
+    if (preview.start == task.rawStart &&
+        preview.end == task.rawEnd &&
+        !dateChanged) {
       setState(() {
         _dragTask = null;
         _dragMode = null;
         _dragPreview = null;
+        _sourceDay = null;
         _didDrag = false;
       });
       return;
@@ -1555,12 +1649,16 @@ class _WeekViewState extends State<_WeekView> {
     final savedTask = task.task;
     final savedStart = preview.start;
     final savedEnd = preview.end;
+    final savedDate = dateChanged ? preview.date : null;
 
-    // Keep drag preview until save finishes (matches web) so the block does
-    // not snap back to the old slot while the PATCH is in flight.
     _ignoreNextTap = true;
     try {
-      await widget.onReschedule(savedTask, savedStart, savedEnd);
+      await widget.onReschedule(
+        savedTask,
+        savedStart,
+        savedEnd,
+        dueDate: savedDate,
+      );
     } catch (_) {
       // Toast shown by parent; optimistic state reverted in rescheduleTask.
     } finally {
@@ -1569,6 +1667,7 @@ class _WeekViewState extends State<_WeekView> {
           _dragTask = null;
           _dragMode = null;
           _dragPreview = null;
+          _sourceDay = null;
           _didDrag = false;
         });
         Future.delayed(const Duration(milliseconds: 400), () {
@@ -1641,7 +1740,30 @@ class _WeekViewState extends State<_WeekView> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final colW = constraints.maxWidth;
-                  final dayTasks = _timedDayTasks(d);
+                  if (_colWidth != colW && colW > 0) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted && _colWidth != colW) {
+                        setState(() => _colWidth = colW);
+                      }
+                    });
+                  }
+                  final dayKey = _dayKey(d);
+                  var dayTasks = _timedDayTasks(d);
+                  final preview = _dragPreview;
+                  if (preview?.date != null && _dragTask != null) {
+                    final previewId = resolveRealTaskId(preview!.taskId);
+                    if (preview.date != dayKey) {
+                      dayTasks = dayTasks
+                          .where(
+                            (t) => resolveRealTaskId(t.id) != previewId,
+                          )
+                          .toList();
+                    } else if (!dayTasks.any(
+                      (t) => resolveRealTaskId(t.id) == previewId,
+                    )) {
+                      dayTasks = [...dayTasks, _dragTask!.task];
+                    }
+                  }
                   final timeline = buildTimeline(dayTasks);
                   final items = [...timeline]..sort((a, b) {
                     final az =
@@ -1687,7 +1809,8 @@ class _WeekViewState extends State<_WeekView> {
                           onTap: () => _handleTaskTap(item.task),
                           onToggleComplete: () =>
                               widget.onToggleComplete(item.task.id),
-                          onDragStart: (mode) => _beginDrag(item, mode),
+                          onDragStart: (mode) =>
+                              _beginDrag(item, mode, d),
                           onDragUpdate: _updateDrag,
                           onDragEnd: _endDrag,
                         );

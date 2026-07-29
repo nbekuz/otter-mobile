@@ -35,12 +35,18 @@ Future<T?> showAppBottomSheet<T>({
   ShapeBorder? shape,
   double dialogMaxWidth = 520,
 }) {
+  final theme = Theme.of(context);
+  final surface =
+      backgroundColor ??
+      theme.dialogTheme.backgroundColor ??
+      theme.colorScheme.surface;
+
   if (Responsive.isWide(context)) {
     return showDialog<T>(
       context: context,
       builder: (ctx) {
         return Dialog(
-          backgroundColor: backgroundColor ?? Colors.white,
+          backgroundColor: surface,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
           ),
@@ -73,7 +79,7 @@ Future<T?> showAppBottomSheet<T>({
       return appBottomSheetWrap(
         ctx,
         Material(
-          color: backgroundColor ?? Colors.white,
+          color: surface,
           borderRadius: radius,
           clipBehavior: Clip.antiAlias,
           child: builder(ctx),

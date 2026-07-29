@@ -61,11 +61,7 @@ abstract final class TaskMapper {
       duration: duration,
       priority: _apiPriorityToUi(task.priority),
       completed: task.isCompleted,
-      completedAt: task.completedAt != null
-          ? DateTime.tryParse(
-              task.completedAt!,
-            )?.toIso8601String().split('T').first
-          : null,
+      completedAt: _completedAtLocalDate(task.completedAt),
       notification: task.reminderOffsetMinutes != null
           ? task.reminderOffsetMinutes.toString()
           : _reminderMinutes(task.dueAt, task.reminderAt),
@@ -93,6 +89,27 @@ abstract final class TaskMapper {
       parentTaskId: task.parentTask?.toString(),
       createdAt: task.createdAt,
     );
+  }
+
+  /// Keep the schedule the client just wrote when the API echoes UTC/`Z`.
+  /// Uses [Task.copyWith] non-null wins: omitted client fields keep [fromApi].
+  static Task preferClientSchedule(Task fromApi, PartialTask client) {
+    return fromApi.copyWith(
+      dueDate: client.dueDate,
+      dueTime: client.dueTime,
+      duration: client.duration,
+    );
+  }
+
+  static String? _completedAtLocalDate(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    final dt = DateTime.tryParse(raw);
+    if (dt == null) return null;
+    final local = dt.toLocal();
+    final y = local.year.toString().padLeft(4, '0');
+    final m = local.month.toString().padLeft(2, '0');
+    final d = local.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
   }
 
   static PartialTask mergePartial(Task existing, PartialTask updates) {

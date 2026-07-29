@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,6 +22,7 @@ import '../../features/matrix/matrix_constants.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../../shared/widgets/keyboard_dismisser.dart';
 import '../../shared/widgets/select_field.dart';
+import 'task_attachment_picker.dart';
 import 'task_time_sync.dart';
 
 enum _TaskFormTab { date, priority, notify, repeat, matrix }
@@ -94,6 +94,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   String? _attachmentName;
   String? _attachmentMimeType;
   int? _attachmentId;
+  final List<int> _serverAttachmentIds = [];
   bool _clearImage = false;
 
   /// otter-app `form.notification: '0'` — «В момент срока».
@@ -261,6 +262,16 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       _attachmentId = task.attachmentId;
       _attachmentName = task.attachmentName;
       _attachmentMimeType = task.attachmentMimeType;
+      _serverAttachmentIds
+        ..clear()
+        ..addAll([
+          for (final a in task.attachments)
+            if (a.id != null) a.id!,
+        ]);
+      if (_attachmentId != null &&
+          !_serverAttachmentIds.contains(_attachmentId)) {
+        _serverAttachmentIds.add(_attachmentId!);
+      }
       _clearImage = false;
       _imagePath = null;
       setState(() {});
@@ -304,16 +315,12 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
 
   Future<void> _pickAttachment() async {
     KeyboardDismisser.dismiss();
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.any,
-      withData: false,
-    );
-    final file = result?.files.single;
-    if (file == null || file.path == null) return;
+    final picked = await pickTaskAttachment(context);
+    if (picked == null || !mounted) return;
     setState(() {
-      _imagePath = file.path;
-      _attachmentName = file.name;
-      _attachmentMimeType = null;
+      _imagePath = picked.path;
+      _attachmentName = picked.name;
+      _attachmentMimeType = picked.mimeType;
       _clearImage = false;
     });
   }
@@ -654,9 +661,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             : null,
         imagePath: _imagePath,
         clearImage: _clearImage && _imagePath == null,
-        deleteAttachmentId: (_attachmentId != null &&
-                (_clearImage || _imagePath != null))
-            ? _attachmentId
+        deleteAttachmentIds: (_clearImage || _imagePath != null)
+            ? List<int>.from(_serverAttachmentIds)
             : null,
       );
 

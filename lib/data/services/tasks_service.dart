@@ -68,10 +68,22 @@ class TasksService {
     );
     var task = TaskMapper.apiToUi(ApiTask.fromJson(data));
 
-    for (final attachmentId in partial.resolvedDeleteAttachmentIds) {
+    final deleteIds = <int>{...partial.resolvedDeleteAttachmentIds};
+    // When clearing the attachment, also drop any ids still present on the
+    // PATCH response (e.g. only legacy image_url was tracked in the form).
+    if (partial.clearImage && partial.resolvedImagePaths.isEmpty) {
+      for (final a in task.attachments) {
+        if (a.id != null) deleteIds.add(a.id!);
+      }
+    }
+
+    Object? deleteError;
+    for (final attachmentId in deleteIds) {
       try {
         await deleteAttachment(id, attachmentId);
-      } catch (_) {}
+      } catch (e) {
+        deleteError ??= e;
+      }
     }
 
     for (final path in partial.resolvedImagePaths) {
@@ -80,12 +92,28 @@ class TasksService {
       } catch (_) {}
     }
 
-    if (partial.resolvedImagePaths.isNotEmpty ||
-        partial.resolvedDeleteAttachmentIds.isNotEmpty) {
+    if (partial.resolvedImagePaths.isNotEmpty || deleteIds.isNotEmpty) {
       try {
         task = await fetchTask(id);
       } catch (_) {}
     }
+
+    // Clearing must not leave a stale file behind — surface delete failures.
+    if (partial.clearImage &&
+        partial.resolvedImagePaths.isEmpty &&
+        (task.attachments.isNotEmpty ||
+            (task.imageUrl != null && task.imageUrl!.isNotEmpty))) {
+      for (final a in task.attachments) {
+        if (a.id == null) continue;
+        await deleteAttachment(id, a.id!);
+      }
+      task = await fetchTask(id);
+    } else if (deleteError != null &&
+        partial.clearImage &&
+        partial.resolvedImagePaths.isEmpty) {
+      throw deleteError;
+    }
+
     return task;
   }
 

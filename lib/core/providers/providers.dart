@@ -1,7 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../firebase/firebase_bootstrap.dart';
 import '../network/api_client.dart';
 import '../network/api_exception.dart';
@@ -22,6 +23,7 @@ import '../../data/mappers/task_mapper.dart';
 import '../../data/models/api/api_models.dart';
 import '../../data/models/ui/ui_models.dart';
 import '../audio/pomodoro_audio.dart';
+import '../audio/pomodoro_notifications.dart';
 import '../audio/feedback_audio.dart';
 import '../billing/premium_billing.dart';
 import '../push/push_notifications.dart';
@@ -30,8 +32,6 @@ import '../utils/recurrence.dart';
 import '../utils/time_utils.dart';
 import '../utils/timezone_utils.dart';
 import '../locale/app_languages.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 
 final apiClientProvider = Provider<ApiClient>((ref) {
@@ -1251,13 +1251,46 @@ class TasksNotifier extends StateNotifier<TasksState> {
   final Set<String> _completeInFlight = {};
 
   Future<void> completeTask(Task task) async {
-    if (_completeInFlight.contains(task.id)) return;
-    _completeInFlight.add(task.id);
+    final realId = resolveRealTaskId(task.id);
+    if (_completeInFlight.contains(realId)) return;
+    _completeInFlight.add(realId);
+    final calendar = _ref.read(calendarStateProvider.notifier);
+    final willComplete = !task.completed;
+    final optimistic = task.copyWith(
+      id: realId,
+      completed: willComplete,
+      completedAt: willComplete
+          ? DateTime.now().toIso8601String().split('T').first
+          : null,
+    );
+    // Instant UI feedback — do not wait for a full calendar reload.
+    upsertLocalTask(optimistic);
+    calendar.upsertTask(optimistic);
+    if (task.id != realId) {
+      calendar.applyTaskUpdate(task.copyWith(
+        completed: willComplete,
+        completedAt: optimistic.completedAt,
+      ));
+    }
+
     try {
-      final willComplete = !task.completed;
       final result = await _ref
           .read(tasksServiceProvider)
-          .toggleComplete(task.id, wasCompleted: task.completed);
+          .toggleComplete(realId, wasCompleted: task.completed);
+
+      final pinned = TaskMapper.preferClientSchedule(
+        result.task,
+        PartialTask(
+          dueDate: task.dueDate,
+          dueTime: task.dueTime,
+          duration: task.duration,
+        ),
+      );
+      upsertLocalTask(pinned);
+      calendar.upsertTask(pinned);
+      if (task.id != realId) {
+        calendar.applyTaskUpdate(pinned.copyWith(id: task.id));
+      }
 
       if (willComplete) {
         final settings = _ref.read(appSettingsProvider);
@@ -1270,12 +1303,21 @@ class TasksNotifier extends StateNotifier<TasksState> {
         // Backend spawn-on-complete: upsert nested next_task only — never POST.
         if (result.nextTask != null) {
           upsertLocalTask(result.nextTask!);
+          calendar.upsertTask(result.nextTask!);
         }
       }
 
-      await loadGrouped();
+      // Refresh lists silently in the background — skip blocking calendar reload.
+      unawaited(loadGrouped());
+    } catch (e) {
+      upsertLocalTask(task.copyWith(id: realId));
+      calendar.upsertTask(task.copyWith(id: realId));
+      if (task.id != realId) {
+        calendar.applyTaskUpdate(task);
+      }
+      rethrow;
     } finally {
-      _completeInFlight.remove(task.id);
+      _completeInFlight.remove(realId);
     }
   }
 
@@ -1300,12 +1342,8 @@ class TasksNotifier extends StateNotifier<TasksState> {
 
   Future<Task> addTask(PartialTask partial) async {
     final created = await _ref.read(tasksServiceProvider).createTask(partial);
-    // Prefer client schedule fields if the create response omits them.
-    final task = created.copyWith(
-      dueDate: created.dueDate ?? partial.dueDate,
-      dueTime: created.dueTime ?? partial.dueTime,
-      duration: created.duration ?? partial.duration,
-    );
+    // Prefer the wall-clock we sent — API often echoes UTC (`…Z`).
+    final task = TaskMapper.preferClientSchedule(created, partial);
     // Web: upsert into main tasks list immediately so calendar pool sees it.
     upsertLocalTask(task);
     _ref.read(calendarStateProvider.notifier).upsertTask(task);
@@ -1353,11 +1391,14 @@ class TasksNotifier extends StateNotifier<TasksState> {
       'end_at=${payload['end_at']}',
     );
 
-    final task = await _ref.read(tasksServiceProvider).updateTask(id, merged);
+    final fromApi =
+        await _ref.read(tasksServiceProvider).updateTask(id, merged);
+    final task = TaskMapper.preferClientSchedule(fromApi, partial);
     upsertLocalTask(task);
     _ref.read(calendarStateProvider.notifier).upsertTask(task);
     if (refreshGrouped) {
       await loadGrouped();
+      upsertLocalTask(task);
     }
     // Keep Eisenhower matrix in sync with priority/date changes.
     if (refreshMatrix) {
@@ -1650,23 +1691,25 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
   Future<void> rescheduleTask(
     Task task,
     int startMinutes,
-    int endMinutes,
-  ) async {
+    int endMinutes, {
+    String? dueDate,
+  }) async {
     final realId = resolveRealTaskId(task.id);
     final start = formatMinutesToTime(startMinutes);
     final end = formatMinutesToTime(endMinutes);
-    // Prefer the occurrence's dueDate; fall back to any cached copy so
-    // start_at/end_at are always built with a real yyyy-MM-dd + TZ offset.
-    final dueDate = (task.dueDate != null && task.dueDate!.trim().isNotEmpty)
-        ? task.dueDate!.trim()
-        : _ref.read(tasksStateProvider.notifier).findTaskById(realId)?.dueDate;
+    // Prefer explicit drag target day, then occurrence dueDate, then cache.
+    final resolvedDue = (dueDate != null && dueDate.trim().isNotEmpty)
+        ? dueDate.trim()
+        : (task.dueDate != null && task.dueDate!.trim().isNotEmpty)
+            ? task.dueDate!.trim()
+            : _ref.read(tasksStateProvider.notifier).findTaskById(realId)?.dueDate;
     debugPrint(
-      '[Calendar] reschedule $realId dueDate=$dueDate $start – $end',
+      '[Calendar] reschedule $realId dueDate=$resolvedDue $start – $end',
     );
 
     final optimistic = task.copyWith(
       id: realId,
-      dueDate: dueDate ?? task.dueDate,
+      dueDate: resolvedDue ?? task.dueDate,
       dueTime: start,
       duration: TaskDuration(start: start, end: end),
     );
@@ -1683,7 +1726,7 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
           .updateTask(
             realId,
             PartialTask(
-              dueDate: dueDate,
+              dueDate: resolvedDue,
               dueTime: start,
               duration: TaskDuration(start: start, end: end),
             ),
@@ -1695,7 +1738,7 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
       // to the saved schedule (covers any parse differences).
       applyTaskUpdate(
         updated.copyWith(
-          dueDate: dueDate ?? updated.dueDate,
+          dueDate: resolvedDue ?? updated.dueDate,
           dueTime: start,
           duration: TaskDuration(start: start, end: end),
         ),
@@ -1944,16 +1987,50 @@ class PomodoroUiState {
   }
 }
 
-class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
+class PomodoroNotifier extends StateNotifier<PomodoroUiState>
+    with WidgetsBindingObserver {
   PomodoroNotifier(this._ref) : super(PomodoroUiState()) {
     _audio = PomodoroAudio();
+    _notifications = PomodoroNotifications();
+    WidgetsBinding.instance.addObserver(this);
   }
 
   final Ref _ref;
   late final PomodoroAudio _audio;
+  late final PomodoroNotifications _notifications;
   Timer? _ticker;
+  /// Wall-clock end of the current phase (survives background throttling).
+  DateTime? _phaseEndsAt;
   /// Prevents re-entrant phase completion while transitioning work ↔ break.
   bool _phaseCompleting = false;
+  bool _appInBackground = false;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _appInBackground = false;
+      onAppResumed();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
+      _appInBackground = true;
+    }
+  }
+
+  /// Reconcile timer after the app returns from background / lock screen.
+  void onAppResumed() {
+    if (state.timerState != 'running') return;
+    syncFromWallClock();
+  }
+
+  void _armPhaseDeadline(int seconds) {
+    final secs = seconds.clamp(0, 24 * 60 * 60);
+    _phaseEndsAt = DateTime.now().add(Duration(seconds: secs));
+  }
+
+  void _clearPhaseDeadline() {
+    _phaseEndsAt = null;
+  }
 
   void _startTicker() {
     _ticker?.cancel();
@@ -1963,6 +2040,25 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
   void _stopTicker() {
     _ticker?.cancel();
     _ticker = null;
+  }
+
+  Future<void> _syncLockScreenNotification() async {
+    if (!state.settings.showOnLockScreen ||
+        state.timerState != 'running' ||
+        _phaseEndsAt == null) {
+      await _notifications.cancelOngoing();
+      return;
+    }
+    final endsAt = _phaseEndsAt!;
+    final title = state.isBreak ? 'Перерыв' : 'Фокус';
+    final left = endsAt.difference(DateTime.now()).inSeconds.clamp(0, 99999);
+    final m = (left ~/ 60).toString().padLeft(2, '0');
+    final s = (left % 60).toString().padLeft(2, '0');
+    await _notifications.showOngoing(
+      title: 'Помодоро — $title',
+      body: 'Осталось $m:$s',
+      endsAt: endsAt,
+    );
   }
 
   Future<void> loadAll() async {
@@ -1979,6 +2075,7 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
       timerEndSoundDetail: data.timerEndSoundDetail,
       workSoundDetail: data.workSoundDetail,
     );
+    await _syncLockScreenNotification();
   }
 
   Future<void> loadSounds() async {
@@ -2083,6 +2180,7 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
       workSoundDetail: data.workSoundDetail,
     );
     await _syncBackgroundAudio();
+    await _syncLockScreenNotification();
   }
 
   void selectTask(String? taskId) {
@@ -2095,23 +2193,36 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
   void tick() {
     if (state.timerState != 'running') return;
     if (_phaseCompleting) return;
+    syncFromWallClock();
+  }
 
-    // Match otter-app: decrement first; when we hit 0, complete the phase.
-    if (state.secondsLeft > 0) {
-      state = state.copyWith(secondsLeft: state.secondsLeft - 1);
+  /// Align [secondsLeft] to wall clock; complete overdue phases (work→break→idle).
+  void syncFromWallClock() {
+    if (state.timerState != 'running') return;
+    if (_phaseCompleting) return;
+
+    if (_phaseEndsAt == null) {
+      _armPhaseDeadline(state.secondsLeft);
+    }
+
+    final endsAt = _phaseEndsAt!;
+    final remaining = endsAt.difference(DateTime.now()).inSeconds;
+    if (remaining > 0) {
+      if (remaining != state.secondsLeft) {
+        state = state.copyWith(secondsLeft: remaining);
+      }
       return;
     }
 
-    // secondsLeft == 0 → transition (do not await audio/API here).
-    _onPhaseComplete();
+    // Phase ended at [endsAt] (may be in the past if we were backgrounded).
+    _onPhaseComplete(endedAt: endsAt);
   }
 
   /// Port of otter-app `onPhaseComplete`.
   ///
-  /// Critical: transition timer state **synchronously** before any async
-  /// audio/API work. Awaiting `playOnce` previously blocked auto-start of
-  /// the break when the end-sound URL was slow or hung.
-  void _onPhaseComplete() {
+  /// [endedAt] is the wall-clock moment the previous phase finished — used so
+  /// break time accounts for time spent in the background.
+  void _onPhaseComplete({DateTime? endedAt}) {
     if (_phaseCompleting) return;
     if (state.timerState != 'running') return;
     _phaseCompleting = true;
@@ -2121,6 +2232,8 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
     final settings = state.settings;
     final endSoundUrl = state.timerEndSoundDetail?.audioUrl;
     final playEndSound = settings.sound != 'none';
+    final phaseEndedAt = endedAt ?? DateTime.now();
+    final notifyLock = settings.showOnLockScreen || _appInBackground;
 
     try {
       if (!wasBreak) {
@@ -2130,16 +2243,61 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
             nextCount > 0 && nextCount % settings.sessionsUntilLong == 0;
         final breakMinutes =
             useLong ? settings.longBreak : settings.shortBreak;
+        final breakEndsAt =
+            phaseEndedAt.add(Duration(minutes: breakMinutes));
+        final left = breakEndsAt.difference(DateTime.now()).inSeconds;
 
+        if (left <= 0) {
+          // Break also finished while away → idle.
+          _stopTicker();
+          _clearPhaseDeadline();
+          state = state.copyWith(
+            sessionCount: nextCount,
+            isBreak: false,
+            secondsLeft: settings.duration * 60,
+            timerState: 'idle',
+            clearSession: true,
+          );
+          unawaited(_notifications.cancelOngoing());
+          if (notifyLock) {
+            unawaited(
+              _notifications.showPhaseEnded(
+                title: 'Помодоро',
+                body: 'Фокус и перерыв завершены',
+              ),
+            );
+          }
+          unawaited(
+            _afterWorkPhaseComplete(
+              sessionId: sessionId,
+              playEndSound: playEndSound,
+              endSoundUrl: endSoundUrl,
+            ),
+          );
+          return;
+        }
+
+        _phaseEndsAt = breakEndsAt;
         state = state.copyWith(
           sessionCount: nextCount,
           isBreak: true,
-          secondsLeft: breakMinutes * 60,
+          secondsLeft: left,
           timerState: 'running',
           clearSession: true,
         );
 
-        // Side effects after the break is already running.
+        if (notifyLock) {
+          unawaited(
+            _notifications.showPhaseEnded(
+              title: 'Фокус завершён',
+              body: useLong
+                  ? 'Начался длинный перерыв ($breakMinutes мин)'
+                  : 'Начался короткий перерыв ($breakMinutes мин)',
+            ),
+          );
+        }
+        unawaited(_syncLockScreenNotification());
+
         unawaited(
           _afterWorkPhaseComplete(
             sessionId: sessionId,
@@ -2152,12 +2310,22 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
 
       // Break → idle work duration.
       _stopTicker();
+      _clearPhaseDeadline();
       state = state.copyWith(
         isBreak: false,
         secondsLeft: settings.duration * 60,
         timerState: 'idle',
         clearSession: true,
       );
+      unawaited(_notifications.cancelOngoing());
+      if (notifyLock) {
+        unawaited(
+          _notifications.showPhaseEnded(
+            title: 'Перерыв завершён',
+            body: 'Можно начать следующий фокус',
+          ),
+        );
+      }
       unawaited(
         _afterBreakPhaseComplete(
           playEndSound: playEndSound,
@@ -2209,10 +2377,12 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
 
     // Break resume: just continue ticking (no API work session).
     if (state.isBreak) {
+      _armPhaseDeadline(state.secondsLeft);
       state = state.copyWith(timerState: 'running');
       _startTicker();
       await _audio.stopEffect();
       await _syncBackgroundAudio();
+      await _syncLockScreenNotification();
       return;
     }
 
@@ -2233,23 +2403,32 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
           .updateSessionState(sessionId, 'running');
     }
 
+    final nextSeconds = state.timerState == 'idle'
+        ? state.settings.duration * 60
+        : state.secondsLeft;
+    _armPhaseDeadline(nextSeconds);
     state = state.copyWith(
       timerState: 'running',
       activeSessionId: sessionId,
       isBreak: false,
-      secondsLeft: state.timerState == 'idle'
-          ? state.settings.duration * 60
-          : state.secondsLeft,
+      secondsLeft: nextSeconds,
     );
     _startTicker();
     await _audio.stopEffect();
     await _syncBackgroundAudio();
+    await _syncLockScreenNotification();
   }
 
   Future<void> pause() async {
     if (state.timerState != 'running') return;
+    // Freeze remaining time from wall clock before pausing.
+    syncFromWallClock();
+    if (state.timerState != 'running') return;
+
     _stopTicker();
+    _clearPhaseDeadline();
     await _audio.pauseBackground();
+    await _notifications.cancelOngoing();
     if (!state.isBreak && state.activeSessionId != null) {
       await _ref
           .read(pomodoroServiceProvider)
@@ -2260,7 +2439,9 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
 
   Future<void> stop() async {
     _stopTicker();
+    _clearPhaseDeadline();
     await _audio.stopAll();
+    await _notifications.cancelOngoing();
     if (!state.isBreak && state.activeSessionId != null) {
       await _ref
           .read(pomodoroServiceProvider)
@@ -2276,8 +2457,12 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _stopTicker();
+    _clearPhaseDeadline();
+    unawaited(_notifications.cancelOngoing());
     unawaited(_audio.dispose());
     super.dispose();
   }
 }
+

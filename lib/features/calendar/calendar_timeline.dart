@@ -41,11 +41,14 @@ class CalendarDragPreview {
     required this.taskId,
     required this.start,
     required this.end,
+    this.date,
   });
 
   final String taskId;
   final int start;
   final int end;
+  /// Week view target day (`yyyy-MM-dd`) while dragging across columns.
+  final String? date;
 }
 
 class CalendarTimelineTask {

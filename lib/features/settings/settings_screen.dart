@@ -23,6 +23,7 @@ import '../../core/utils/open_url.dart';
 import '../../core/utils/task_export.dart';
 import '../../core/utils/timezone_utils.dart';
 import '../../data/models/ui/ui_models.dart';
+import '../../shared/widgets/app_bottom_sheet.dart';
 import '../../shared/widgets/bottom_nav.dart';
 import '../../shared/widgets/keyboard_dismisser.dart';
 import '../../shared/widgets/otter_checkbox.dart';
@@ -434,23 +435,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       };
 
   Future<void> _openViewSettings(AppSettings settings) async {
-    await showModalBottomSheet<void>(
+    await showAppBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
       builder: (ctx) {
         return Consumer(
           builder: (context, ref, _) {
             final s = ref.watch(appSettingsProvider);
-            const options = <(String, String)>[
-              ('day', 'День'),
-              ('week', 'Неделя'),
-              ('month', 'Месяц'),
-              ('year', 'Год'),
+            const options = <(String, String, IconData)>[
+              ('day', 'День', LucideIcons.calendarDays),
+              ('week', 'Неделя', LucideIcons.columns3),
+              ('month', 'Месяц', LucideIcons.calendar),
+              ('year', 'Год', LucideIcons.calendarRange),
             ];
+
+            void setView(String id) {
+              ref.read(appSettingsProvider.notifier).applyLocal(
+                    s.copyWith(calendarDefaultView: id),
+                  );
+            }
+
             return SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -458,43 +464,45 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     Text(
                       'Вид',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
                           ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
-                      'Как открывается календарь и какие часы свёрнуты по умолчанию.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      'Какой вид календаря открывать при входе в раздел «Календарь».',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: OtterColors.sberGray,
+                            height: 1.35,
                           ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     Text(
                       'КАЛЕНДАРЬ ПО УМОЛЧАНИЮ',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                             color: OtterColors.sberGray,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.6,
                           ),
                     ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                    const SizedBox(height: 10),
+                    GridView.count(
+                      crossAxisCount: 2,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 10,
+                      crossAxisSpacing: 10,
+                      childAspectRatio: 2.35,
                       children: [
                         for (final opt in options)
-                          ChoiceChip(
-                            label: Text(opt.$2),
+                          _ViewOptionCard(
+                            label: opt.$2,
+                            icon: opt.$3,
                             selected: s.calendarDefaultView == opt.$1,
-                            selectedColor: OtterColors.sberGreenLight,
-                            onSelected: (_) {
-                              ref.read(appSettingsProvider.notifier).applyLocal(
-                                    s.copyWith(calendarDefaultView: opt.$1),
-                                  );
-                            },
+                            onTap: () => setView(opt.$1),
                           ),
                       ],
                     ),
-                    const SizedBox(height: 8),
                   ],
                 ),
               ),
@@ -506,107 +514,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _openDateTimeSettings(AppSettings settings) async {
-    await showModalBottomSheet<void>(
+    await showAppBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (ctx) {
-        return Consumer(
-          builder: (context, ref, _) {
-            final s = ref.watch(appSettingsProvider);
-            final tz = s.timezone?.isNotEmpty == true ? s.timezone! : '—';
-            final nowLabel = DateFormat('d MMM yyyy, HH:mm:ss', 'ru').format(
-              DateTime.now(),
-            );
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Дата и время',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Часовой пояс используется для напоминаний и группировки «Сегодня» / «Просрочено».',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: OtterColors.sberGray,
-                          ),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: OtterColors.grayMid),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'ЧАСОВОЙ ПОЯС',
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelSmall
-                                ?.copyWith(
-                                  color: OtterColors.sberGray,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            tz,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Сейчас: $nowLabel',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: OtterColors.sberGray),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: () async {
-                        try {
-                          final deviceTz = await deviceTimezone();
-                          await ref.read(appSettingsProvider.notifier).update(
-                                s.copyWith(timezone: deviceTz),
-                              );
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Часовой пояс обновлён'),
-                            ),
-                          );
-                        } catch (e) {
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(getApiErrorMessage(e))),
-                          );
-                        }
-                      },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: OtterColors.sberGreen,
-                      ),
-                      child: const Text('Синхронизировать с устройством'),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+      builder: (ctx) => const _DateTimeSettingsSheet(),
     );
   }
 
@@ -1571,3 +1481,329 @@ class _GroupToggle extends ConsumerWidget {
     );
   }
 }
+
+class _ViewOptionCard extends StatelessWidget {
+  const _ViewOptionCard({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? OtterColors.sberGreenLight : Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected ? OtterColors.sberGreen : OtterColors.grayMid,
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: selected ? OtterColors.sberGreen : OtterColors.sberGray,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: selected
+                        ? OtterColors.sberGreen
+                        : OtterColors.sberBlack,
+                  ),
+                ),
+              ),
+              if (selected)
+                const Icon(
+                  LucideIcons.check,
+                  size: 18,
+                  color: OtterColors.sberGreen,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DateTimeSettingsSheet extends ConsumerStatefulWidget {
+  const _DateTimeSettingsSheet();
+
+  @override
+  ConsumerState<_DateTimeSettingsSheet> createState() =>
+      _DateTimeSettingsSheetState();
+}
+
+class _DateTimeSettingsSheetState
+    extends ConsumerState<_DateTimeSettingsSheet> {
+  Timer? _clock;
+  DateTime _now = DateTime.now();
+  bool _syncing = false;
+  String? _deviceTz;
+
+  @override
+  void initState() {
+    super.initState();
+    _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _now = DateTime.now());
+    });
+    unawaited(_loadDeviceTz());
+  }
+
+  @override
+  void dispose() {
+    _clock?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadDeviceTz() async {
+    try {
+      final tz = await deviceTimezone();
+      if (!mounted) return;
+      setState(() => _deviceTz = tz);
+    } catch (_) {}
+  }
+
+  String _utcOffsetLabel(DateTime at) {
+    final o = at.timeZoneOffset;
+    final sign = o.isNegative ? '-' : '+';
+    final h = o.inHours.abs().toString().padLeft(2, '0');
+    final m = (o.inMinutes.abs() % 60).toString().padLeft(2, '0');
+    return 'UTC$sign$h:$m';
+  }
+
+  Future<void> _sync() async {
+    if (_syncing) return;
+    setState(() => _syncing = true);
+    try {
+      final deviceTz = await deviceTimezone();
+      final s = ref.read(appSettingsProvider);
+      await ref.read(appSettingsProvider.notifier).update(
+            s.copyWith(timezone: deviceTz),
+          );
+      if (!mounted) return;
+      setState(() => _deviceTz = deviceTz);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Часовой пояс обновлён')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(getApiErrorMessage(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = ref.watch(appSettingsProvider);
+    final tz = s.timezone?.isNotEmpty == true ? s.timezone! : 'Не задан';
+    final nowLabel = DateFormat('d MMM yyyy, HH:mm:ss', 'ru').format(_now);
+    final offset = _utcOffsetLabel(_now);
+    final matchesDevice =
+        _deviceTz != null && s.timezone != null && s.timezone == _deviceTz;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Дата и время',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                  ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Часовой пояс нужен для напоминаний и списков «Сегодня» и «Просрочено».',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: OtterColors.sberGray,
+                    height: 1.35,
+                  ),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: OtterColors.grayLight,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: OtterColors.grayMid.withValues(alpha: 0.7)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: OtterColors.grayMid),
+                    ),
+                    child: const Icon(
+                      LucideIcons.globe,
+                      size: 22,
+                      color: OtterColors.sberGreen,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'ЧАСОВОЙ ПОЯС',
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: OtterColors.sberGray,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.6,
+                                  ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          tz,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: OtterColors.sberBlack,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: OtterColors.grayMid),
+                              ),
+                              child: Text(
+                                offset,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: OtterColors.sberBlack,
+                                ),
+                              ),
+                            ),
+                            if (matchesDevice)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: OtterColors.sberGreenLight,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      LucideIcons.check,
+                                      size: 12,
+                                      color: OtterColors.sberGreen,
+                                    ),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Как на устройстве',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: OtterColors.sberGreen,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Сейчас · $nowLabel',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: OtterColors.sberGray,
+                                    height: 1.3,
+                                  ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _syncing ? null : _sync,
+              style: FilledButton.styleFrom(
+                backgroundColor: OtterColors.sberGreen,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor:
+                    OtterColors.sberGreen.withValues(alpha: 0.45),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              icon: _syncing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(LucideIcons.smartphone, size: 18),
+              label: Text(
+                _syncing
+                    ? 'Синхронизация…'
+                    : 'Синхронизировать с устройством',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
