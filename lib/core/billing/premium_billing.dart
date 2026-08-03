@@ -3,7 +3,7 @@ import 'dart:io';
 /// How Premium purchase is fulfilled on the current platform.
 ///
 /// - [robokassa] — existing Web/Windows flow (`premium/checkout/` + external URL).
-/// - [androidComingSoon] — Android purchases temporarily disabled (UI still shown).
+/// - [androidComingSoon] — Android commerce UI hidden; RuStore Billing later.
 /// - [rustore] — reserved for future RuStore Billing integration.
 enum PremiumBillingProvider {
   robokassa,
@@ -12,8 +12,10 @@ enum PremiumBillingProvider {
 }
 
 /// Single switch for Android store billing.
-/// Flip to [PremiumBillingProvider.rustore] when RuStore Billing is ready;
-/// keep Robokassa untouched for Windows/desktop.
+///
+/// Current RuStore v1: keep [androidComingSoon] so tariffs/checkout stay hidden.
+/// Flip to [PremiumBillingProvider.rustore] when RuStore Billing is wired;
+/// Robokassa must remain untouched for Windows/desktop.
 const PremiumBillingProvider kAndroidBillingProvider =
     PremiumBillingProvider.androidComingSoon;
 
@@ -26,7 +28,8 @@ PremiumBillingProvider resolvePremiumBillingProvider() {
   return PremiumBillingProvider.robokassa;
 }
 
-/// True when the pay action must not call Robokassa / open a checkout URL.
+/// True when Android must not show or call any paid-subscription commerce
+/// (tariffs, prices, trial paywall, Robokassa checkout, consent, etc.).
 bool get isAndroidPremiumPurchaseBlocked {
   final provider = resolvePremiumBillingProvider();
   return Platform.isAndroid &&

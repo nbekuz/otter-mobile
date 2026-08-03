@@ -17,7 +17,7 @@ import '../../data/models/ui/ui_models.dart';
 import '../../features/matrix/matrix_constants.dart';
 import '../../shared/widgets/app_bottom_sheet.dart';
 import '../../shared/widgets/keyboard_dismisser.dart';
-import '../../shared/widgets/primary_button.dart';
+import '../../shared/widgets/ru_date_time_fields.dart';
 import '../../shared/widgets/select_field.dart';
 import 'task_attachment_picker.dart';
 import 'task_time_sync.dart';
@@ -25,6 +25,7 @@ import 'task_time_sync.dart';
 Future<void> showTaskDetailSheet(BuildContext context, Task task) {
   return showAppBottomSheet<void>(
     context: context,
+    dialogMaxWidth: 560,
     builder: (ctx) => TaskDetailSheet(task: task),
   );
 }
@@ -148,31 +149,6 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
     _title.dispose();
     _description.dispose();
     super.dispose();
-  }
-
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dueDate ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2035),
-    );
-    if (picked != null) {
-      setState(() => _dueDate = picked);
-    }
-  }
-
-  Future<void> _pickTime({
-    required void Function(TimeOfDay) onPicked,
-    TimeOfDay? initial,
-  }) async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: initial ?? TimeOfDay.now(),
-    );
-    if (picked != null) {
-      onPicked(picked);
-    }
   }
 
   void _applyDueTimeSync(TimeOfDay time) {
@@ -333,6 +309,41 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
         name.endsWith('.heic');
   }
 
+  Widget _fieldLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: OtterColors.sberGray,
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _textDecoration({String? hint}) {
+    return InputDecoration(
+      hintText: hint,
+      filled: true,
+      fillColor: OtterColors.grayLight,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: OtterColors.grayMid),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: OtterColors.sberGreen, width: 2),
+      ),
+    );
+  }
+
   Future<void> _delete() async {
     final task = widget.task;
     if (task.repeat != RepeatType.none) {
@@ -399,205 +410,326 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
     final surfaceAlt = isDark ? OtterColors.darkSurfaceAlt : Colors.white;
     final borderSubtle =
         isDark ? OtterColors.darkBorder : OtterColors.grayLight;
+    final notifyValue = _notification ?? '';
+    final completed = widget.task.completed;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, 20, 20, bottom + 20),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, bottom + 16),
       child: SingleChildScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                InkWell(
-                  onTap: () async {
-                    final picked = await showSelectSheet<Priority>(
-                      context: context,
-                      title: 'Приоритет',
-                      items: Priority.values,
-                      itemLabel: priorityLabel,
-                      selected: _priority,
-                      itemBuilder: (context, item, _) =>
-                          prioritySelectDot(item),
-                    );
-                    if (picked != null) setState(() => _priority = picked);
-                  },
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: priorityColor(_priority).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: priorityColor(_priority).withValues(alpha: 0.35),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        prioritySelectDot(_priority, size: 8),
-                        const SizedBox(width: 8),
-                        Text(
-                          priorityLabel(_priority),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: priorityColor(_priority),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          LucideIcons.chevronDown,
-                          size: 14,
+            // Priority chip (web TaskDetailModal)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: InkWell(
+                onTap: () async {
+                  final picked = await showSelectSheet<Priority>(
+                    context: context,
+                    title: 'Приоритет',
+                    items: Priority.values,
+                    itemLabel: priorityLabel,
+                    selected: _priority,
+                    itemBuilder: (context, item, _) =>
+                        prioritySelectDot(item),
+                  );
+                  if (picked != null) setState(() => _priority = picked);
+                },
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: priorityColor(_priority).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      prioritySelectDot(_priority, size: 10),
+                      const SizedBox(width: 8),
+                      Text(
+                        priorityLabel(_priority),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                           color: priorityColor(_priority),
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        LucideIcons.chevronDown,
+                        size: 14,
+                        color: priorityColor(_priority),
+                      ),
+                    ],
                   ),
                 ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(LucideIcons.x),
-                ),
-              ],
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+
+            _fieldLabel('Название'),
             TextField(
               controller: _title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              onTapOutside: dismissKeyboardOnTapOutside,
-              decoration: const InputDecoration(
-                labelText: 'Название',
-                border: OutlineInputBorder(),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
               ),
+              onTapOutside: dismissKeyboardOnTapOutside,
+              decoration: _textDecoration(),
             ),
             const SizedBox(height: 12),
+
+            _fieldLabel('Описание'),
             TextField(
               controller: _description,
-              maxLines: 3,
+              minLines: 3,
+              maxLines: 5,
               onTapOutside: dismissKeyboardOnTapOutside,
-              decoration: const InputDecoration(
-                labelText: 'Описание',
-                border: OutlineInputBorder(),
-              ),
+              decoration: _textDecoration(hint: 'Детали, ссылки…'),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _pickDate,
-                    icon: const Icon(LucideIcons.calendar, size: 18),
-                    label: Text(
-                      _dueDate != null
-                          ? DateFormat('d MMM yyyy', 'ru').format(_dueDate!)
-                          : 'Дата',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _pickTime(
-                      initial: _dueTime,
-                      onPicked: _applyDueTimeSync,
-                    ),
-                    icon: const Icon(LucideIcons.clock, size: 18),
-                    label: Text(_formatTime(_dueTime) ?? 'Срок'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _pickTime(
-                      initial: _durationStart,
-                      onPicked: _applyStartSync,
-                    ),
-                    child: Text(
-                      'Начало: ${_formatTime(_durationStart) ?? '—'}',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _pickTime(
-                      initial: _durationEnd,
-                      onPicked: _applyEndManual,
-                    ),
-                    child: Text('Конец: ${_formatTime(_durationEnd) ?? '—'}'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final picked = await showSelectSheet<String>(
-                  context: context,
-                  title: 'Уведомление',
-                  items: _notifyOptions.map((e) => e.value).toList(),
-                  itemLabel: (v) =>
-                      _notifyOptions.firstWhere((e) => e.value == v).label,
-                  selected: _notification ?? '',
-                );
-                if (picked != null) setState(() => _notification = picked);
-              },
-              icon: const Icon(LucideIcons.bell, size: 18),
-              label: Text(
-                _notifyOptions
-                    .firstWhere(
-                      (e) => e.value == (_notification ?? ''),
-                      orElse: () => _notifyOptions.first,
-                    )
-                    .label,
-              ),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final picked = await showSelectSheet<RepeatType>(
-                  context: context,
-                  title: 'Повтор',
-                  items: _repeatOptions.map((e) => e.value).toList(),
-                  itemLabel: (v) =>
-                      _repeatOptions.firstWhere((e) => e.value == v).label,
-                  selected: _repeat,
-                );
-                if (picked != null) setState(() => _repeat = picked);
-              },
-              icon: const Icon(LucideIcons.refreshCw, size: 18),
-              label: Text(
-                _repeatOptions
-                    .firstWhere(
-                      (e) => e.value == _repeat,
-                      orElse: () => _repeatOptions.first,
-                    )
-                    .label,
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Align(
+
+            _fieldLabel('Вложения'),
+            Align(
               alignment: Alignment.centerLeft,
-              child: Text(
-                'Матрица Эйзенхауэра',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: OtterColors.sberGray,
+              child: OutlinedButton.icon(
+                onPressed: _pickAttachment,
+                icon: const Icon(LucideIcons.paperclip, size: 16),
+                label: Text(
+                  _imagePath != null
+                      ? 'Файл выбран'
+                      : (_existingImageUrl != null && !_clearImage)
+                          ? 'Заменить файл'
+                          : 'Добавить изображение или файл',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: OtterColors.sberGreen,
+                  backgroundColor: OtterColors.sberGreenLight,
+                  side: BorderSide(
+                    color: OtterColors.sberGreen.withValues(alpha: 0.4),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ),
+            if (_imagePath != null ||
+                (_existingImageUrl != null && !_clearImage)) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: (isDark
+                          ? OtterColors.darkSurfaceAlt
+                          : OtterColors.grayLight)
+                      .withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: borderSubtle),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: _attachmentIsImage && _imagePath != null
+                          ? Image.file(
+                              File(_imagePath!),
+                              width: 56,
+                              height: 56,
+                              fit: BoxFit.cover,
+                            )
+                          : _attachmentIsImage &&
+                                  _existingImageUrl != null &&
+                                  !_clearImage
+                              ? Image.network(
+                                  resolveMediaUrl(_existingImageUrl),
+                                  width: 56,
+                                  height: 56,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) =>
+                                      const Icon(LucideIcons.file, size: 24),
+                                )
+                              : Container(
+                                  width: 56,
+                                  height: 56,
+                                  color: surfaceAlt,
+                                  alignment: Alignment.center,
+                                  child: const Icon(
+                                    LucideIcons.file,
+                                    size: 24,
+                                    color: OtterColors.sberGray,
+                                  ),
+                                ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: _imagePath == null &&
+                                _existingImageUrl != null &&
+                                !_clearImage
+                            ? _openExistingAttachment
+                            : null,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _attachmentName ??
+                                  _imagePath?.split('/').last ??
+                                  'Вложение',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: _imagePath == null &&
+                                        _existingImageUrl != null &&
+                                        !_clearImage
+                                    ? OtterColors.sberGreen
+                                    : OtterColors.sberBlack,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _attachmentIsImage
+                                  ? 'Изображение прикреплено'
+                                  : 'Файл прикреплен',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: OtterColors.sberGray,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Удалить вложение',
+                      onPressed: _clearAttachment,
+                      icon: const Icon(LucideIcons.x, size: 18),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+
+            // Date / time grid — editable like web DateFieldRu / TimeFieldRu
+            Row(
+              children: [
+                Expanded(
+                  child: RuDateField(
+                    label: 'Дата',
+                    value: _dueDate,
+                    onChanged: (date) {
+                      setState(() {
+                        _dueDate = date;
+                        if (date == null) {
+                          _dueTime = null;
+                          _durationStart = null;
+                          _durationEnd = null;
+                          _timeSync.resetEndEdited();
+                        }
+                        _error = null;
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: RuTimeField(
+                    label: 'Время срока',
+                    value: _dueTime,
+                    onChanged: (time) {
+                      if (time == null) {
+                        setState(() {
+                          _dueTime = null;
+                          _error = null;
+                        });
+                        return;
+                      }
+                      _applyDueTimeSync(time);
+                    },
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: RuTimeField(
+                    label: 'Начало',
+                    value: _durationStart,
+                    onChanged: (time) {
+                      if (time == null) {
+                        setState(() {
+                          _durationStart = null;
+                          _error = null;
+                        });
+                        return;
+                      }
+                      _applyStartSync(time);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: RuTimeField(
+                    label: 'Конец',
+                    value: _durationEnd,
+                    onChanged: (time) {
+                      if (time == null) {
+                        setState(() {
+                          _durationEnd = null;
+                          _timeSync.resetEndEdited();
+                          _error = null;
+                        });
+                        return;
+                      }
+                      _applyEndManual(time);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            SelectField<String>(
+              label: 'Уведомление',
+              value: notifyValue,
+              items: _notifyOptions.map((e) => e.value).toList(),
+              itemLabel: (v) =>
+                  _notifyOptions.firstWhere((e) => e.value == v).label,
+              onChanged: (v) => setState(() => _notification = v),
+            ),
+            const SizedBox(height: 12),
+
+            SelectField<RepeatType>(
+              label: 'Повтор',
+              value: _repeat,
+              items: _repeatOptions.map((e) => e.value).toList(),
+              itemLabel: (v) =>
+                  _repeatOptions.firstWhere((e) => e.value == v).label,
+              onChanged: (v) => setState(() => _repeat = v),
+            ),
+            const SizedBox(height: 12),
+
+            _fieldLabel('Матрица Эйзенхауэра'),
             Builder(
               builder: (context) {
                 final settings = ref.watch(matrixSettingsProvider).blocks;
@@ -607,7 +739,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                   physics: const NeverScrollableScrollPhysics(),
                   mainAxisSpacing: 8,
                   crossAxisSpacing: 8,
-                  childAspectRatio: 1.5,
+                  childAspectRatio: 1.55,
                   children: kMatrixBlockThemes.map((theme) {
                     final selected = _matrix == theme.block;
                     final title =
@@ -625,9 +757,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: selected
-                                  ? theme.accent
-                                  : borderSubtle,
+                              color: selected ? theme.accent : borderSubtle,
                               width: selected ? 2 : 1,
                             ),
                           ),
@@ -635,8 +765,8 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Container(
-                                width: 12,
-                                height: 12,
+                                width: 10,
+                                height: 10,
                                 decoration: BoxDecoration(
                                   color: theme.accent,
                                   shape: BoxShape.circle,
@@ -649,9 +779,9 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                                 maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 15,
+                                  fontSize: 13,
                                   fontWeight: FontWeight.w600,
-                                  height: 1.3,
+                                  height: 1.25,
                                   color: OtterColors.sberBlack,
                                 ),
                               ),
@@ -664,135 +794,109 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                 );
               },
             ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: _pickAttachment,
-              icon: const Icon(LucideIcons.paperclip, size: 18),
-              label: Text(
-                _imagePath != null
-                    ? 'Файл выбран'
-                    : (_existingImageUrl != null && !_clearImage)
-                        ? 'Изменить файл'
-                        : 'Добавить файл',
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: OtterColors.sberGreen,
-                backgroundColor: OtterColors.sberGreenLight,
-              ),
-            ),
-            if (_imagePath != null ||
-                (_existingImageUrl != null && !_clearImage)) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: (isDark ? OtterColors.darkSurfaceAlt : OtterColors.grayLight)
-                      .withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: borderSubtle),
-                ),
-                child: Row(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: _attachmentIsImage && _imagePath != null
-                          ? Image.file(
-                              File(_imagePath!),
-                              width: 48,
-                              height: 48,
-                              fit: BoxFit.cover,
-                            )
-                          : _attachmentIsImage &&
-                                  _existingImageUrl != null &&
-                                  !_clearImage
-                              ? Image.network(
-                                  resolveMediaUrl(_existingImageUrl),
-                                  width: 48,
-                                  height: 48,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) =>
-                                      const Icon(LucideIcons.file, size: 22),
-                                )
-                              : Container(
-                                  width: 48,
-                                  height: 48,
-                                  color: surfaceAlt,
-                                  alignment: Alignment.center,
-                                  child: const Icon(
-                                    LucideIcons.file,
-                                    size: 22,
-                                    color: OtterColors.sberGray,
-                                  ),
-                                ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: InkWell(
-                        onTap: _imagePath == null &&
-                                _existingImageUrl != null &&
-                                !_clearImage
-                            ? _openExistingAttachment
-                            : null,
-                        child: Text(
-                          _attachmentName ??
-                              _imagePath?.split('/').last ??
-                              'Вложение',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: _imagePath == null &&
-                                    _existingImageUrl != null &&
-                                    !_clearImage
-                                ? OtterColors.sberGreen
-                                : OtterColors.sberBlack,
-                          ),
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: _clearAttachment,
-                      icon: const Icon(LucideIcons.x, size: 18),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+
             if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(_error!, style: const TextStyle(color: Colors.red)),
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                style: const TextStyle(
+                  color: OtterColors.priorityHigh,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ],
             const SizedBox(height: 20),
-            PrimaryButton(
-              label: _saving ? 'Сохранение…' : 'Сохранить',
-              loading: _saving,
-              onPressed: _save,
+
+            // Footer like web TaskDetailModal: Save | Complete | Delete + Cancel
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _saving ? null : _save,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: OtterColors.sberGreen,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: Text(
+                      _saving ? '…' : 'Сохранить',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _saving ? null : _toggleComplete,
+                    style: FilledButton.styleFrom(
+                      foregroundColor: completed
+                          ? OtterColors.sberBlue
+                          : OtterColors.sberGreen,
+                      backgroundColor: completed
+                          ? OtterColors.sberBlue.withValues(alpha: 0.12)
+                          : OtterColors.sberGreenLight,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: Text(
+                      completed ? 'Восстановить' : 'Выполнено',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _saving ? null : _delete,
+                    style: FilledButton.styleFrom(
+                      foregroundColor: OtterColors.priorityHigh,
+                      backgroundColor:
+                          OtterColors.priorityHigh.withValues(alpha: 0.08),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text(
+                      'Удалить',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
-            if (widget.task.completed)
-              OutlinedButton(
-                onPressed: _toggleComplete,
-                child: const Text('Восстановить'),
-              )
-            else ...[
-              OutlinedButton(
-                onPressed: _toggleComplete,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: OtterColors.sberGreen,
-                  backgroundColor: OtterColors.sberGreenLight,
-                ),
-                child: const Text('Выполнено'),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: _delete,
-                child: const Text(
-                  'Удалить',
-                  style: TextStyle(color: Colors.red),
+            OutlinedButton(
+              onPressed: _saving ? null : () => Navigator.pop(context),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: OtterColors.sberBlack,
+                backgroundColor: OtterColors.grayLight,
+                side: BorderSide.none,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
                 ),
               ),
-            ],
+              child: const Text(
+                'Отмена',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              ),
+            ),
           ],
         ),
       ),

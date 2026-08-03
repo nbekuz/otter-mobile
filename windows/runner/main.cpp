@@ -27,7 +27,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 800);
-  if (!window.Create(L"Оттер", origin, size)) {
+  // ОТТЕР — Unicode escapes so MSVC does not mis-decode UTF-8 source as CP1251.
+  if (!window.Create(L"\x041E\x0422\x0422\x0415\x0420", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

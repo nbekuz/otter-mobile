@@ -59,7 +59,7 @@ class _MatrixScreenState extends ConsumerState<MatrixScreen> {
                       child: SizedBox(
                         height: constraints.maxHeight,
                         child: Padding(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.all(8),
                           child: Column(
                             children: [
                               Expanded(
@@ -76,7 +76,7 @@ class _MatrixScreenState extends ConsumerState<MatrixScreen> {
                                         isDark,
                                       ),
                                     ),
-                                    const SizedBox(width: 12),
+                                    const SizedBox(width: 8),
                                     Expanded(
                                       child: _buildQuadrant(
                                         context,
@@ -89,7 +89,7 @@ class _MatrixScreenState extends ConsumerState<MatrixScreen> {
                                   ],
                                 ),
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 8),
                               Expanded(
                                 child: Row(
                                   crossAxisAlignment:
@@ -104,7 +104,7 @@ class _MatrixScreenState extends ConsumerState<MatrixScreen> {
                                         isDark,
                                       ),
                                     ),
-                                    const SizedBox(width: 12),
+                                    const SizedBox(width: 8),
                                     Expanded(
                                       child: _buildQuadrant(
                                         context,
@@ -191,7 +191,7 @@ class _MatrixHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
       decoration: BoxDecoration(
         color: isDark ? OtterColors.darkSurface : Colors.white,
         border: Border(
@@ -216,7 +216,7 @@ class _MatrixHeader extends StatelessWidget {
               'Матрица Эйзенхауэра',
               style: TextStyle(
                 fontSize: 20,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w800,
                 color: isDark ? OtterColors.darkText : OtterColors.sberBlack,
               ),
             ),
@@ -285,11 +285,11 @@ class _MatrixQuadrantState extends State<_MatrixQuadrant> {
       alpha: widget.isDark ? 0.25 : 0.15,
     );
 
-    return DragTarget<Task>(
-      onWillAcceptWithDetails: (d) => d.data.matrixBlock != widget.block,
+    return DragTarget<_MatrixDragPayload>(
+      onWillAcceptWithDetails: (d) => d.data.fromBlock != widget.block,
       onAcceptWithDetails: (d) {
         setState(() => _dragOver = false);
-        widget.onAccept(d.data);
+        widget.onAccept(d.data.task);
       },
       onMove: (_) {
         if (!_dragOver) setState(() => _dragOver = true);
@@ -333,6 +333,7 @@ class _MatrixQuadrantState extends State<_MatrixQuadrant> {
                     ...widget.tasks.map(
                       (task) => _MatrixTaskCard(
                         task: task,
+                        fromBlock: widget.block,
                         accent: widget.accent,
                         isDark: widget.isDark,
                         onTap: () => widget.onTaskTap(task),
@@ -497,9 +498,17 @@ class _DropZone extends StatelessWidget {
   }
 }
 
+class _MatrixDragPayload {
+  const _MatrixDragPayload({required this.task, required this.fromBlock});
+
+  final Task task;
+  final MatrixBlock fromBlock;
+}
+
 class _MatrixTaskCard extends StatelessWidget {
   const _MatrixTaskCard({
     required this.task,
+    required this.fromBlock,
     required this.accent,
     required this.isDark,
     required this.onTap,
@@ -507,10 +516,18 @@ class _MatrixTaskCard extends StatelessWidget {
   });
 
   final Task task;
+  final MatrixBlock fromBlock;
   final Color accent;
   final bool isDark;
   final VoidCallback onTap;
   final VoidCallback onComplete;
+
+  static bool get _desktopDrag {
+    // Immediate mouse drag on desktop; long-press on phones (scroll-friendly).
+    return defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -522,19 +539,21 @@ class _MatrixTaskCard extends StatelessWidget {
       onComplete: onComplete,
     );
 
+    final payload = _MatrixDragPayload(task: task, fromBlock: fromBlock);
+
     // Gap outside Material so the white card doesn't paint over spacing
     // (matches web matrix `mb-1.5`).
     final Widget draggable;
-    if (defaultTargetPlatform == TargetPlatform.windows) {
-      draggable = Draggable<Task>(
-        data: task,
+    if (_desktopDrag) {
+      draggable = Draggable<_MatrixDragPayload>(
+        data: payload,
         feedback: _dragFeedback(card),
         childWhenDragging: Opacity(opacity: 0.35, child: card),
         child: MouseRegion(cursor: SystemMouseCursors.grab, child: card),
       );
     } else {
-      draggable = LongPressDraggable<Task>(
-        data: task,
+      draggable = LongPressDraggable<_MatrixDragPayload>(
+        data: payload,
         feedback: _dragFeedback(card),
         childWhenDragging: Opacity(opacity: 0.35, child: card),
         child: card,

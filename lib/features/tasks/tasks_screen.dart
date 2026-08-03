@@ -20,7 +20,10 @@ class TasksScreen extends ConsumerStatefulWidget {
 }
 
 class _TasksScreenState extends ConsumerState<TasksScreen> {
+  static const _searchTapGroup = Object();
+
   final _search = TextEditingController();
+  final _searchFocus = FocusNode();
   bool _searchVisible = false;
 
   @override
@@ -35,8 +38,36 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
 
   @override
   void dispose() {
+    _searchFocus.dispose();
     _search.dispose();
     super.dispose();
+  }
+
+  void _openSearch() {
+    setState(() => _searchVisible = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _searchFocus.requestFocus();
+    });
+  }
+
+  void _closeSearch() {
+    final hadQuery = _search.text.isNotEmpty ||
+        ref.read(tasksStateProvider).searchQuery.isNotEmpty;
+    if (!_searchVisible && !hadQuery) return;
+
+    _search.clear();
+    ref.read(tasksStateProvider.notifier).search('');
+    _searchFocus.unfocus();
+    setState(() => _searchVisible = false);
+  }
+
+  void _toggleSearch() {
+    if (_searchVisible) {
+      _closeSearch();
+    } else {
+      _openSearch();
+    }
   }
 
   /// Local device time: 05–11 утро, 12–16 день, 17–22 вечер, 23–04 ночь.
@@ -69,7 +100,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Row(
                 children: [
                   Expanded(
@@ -87,8 +118,23 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                   if (wide)
                     IconButton(
                       tooltip: 'Обновить',
-                      onPressed: () =>
-                          ref.read(tasksStateProvider.notifier).loadGrouped(),
+                      onPressed: () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        await ref
+                            .read(tasksStateProvider.notifier)
+                            .loadGrouped();
+                        if (!mounted) return;
+                        final err = ref.read(tasksStateProvider).error;
+                        if (err != null) {
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Не удалось обновить задачи: $err',
+                              ),
+                            ),
+                          );
+                        }
+                      },
                       icon: const Icon(LucideIcons.refreshCw, size: 20),
                       style: IconButton.styleFrom(
                         backgroundColor: isDark
@@ -114,15 +160,17 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                           : Colors.white,
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'Поиск',
-                    onPressed: () =>
-                        setState(() => _searchVisible = !_searchVisible),
-                    icon: const Icon(LucideIcons.search),
-                    style: IconButton.styleFrom(
-                      backgroundColor: isDark
-                          ? OtterColors.darkSurface
-                          : Colors.white,
+                  TapRegion(
+                    groupId: _searchTapGroup,
+                    child: IconButton(
+                      tooltip: 'Поиск',
+                      onPressed: _toggleSearch,
+                      icon: const Icon(LucideIcons.search),
+                      style: IconButton.styleFrom(
+                        backgroundColor: isDark
+                            ? OtterColors.darkSurface
+                            : Colors.white,
+                      ),
                     ),
                   ),
                 ],
@@ -130,32 +178,42 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
             ),
             if (showingSearch)
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                child: TextField(
-                  controller: _search,
-                  autofocus: !wide,
-                  onChanged: (q) =>
-                      ref.read(tasksStateProvider.notifier).search(q),
-                  onTapOutside: dismissKeyboardOnTapOutside,
-                  onEditingComplete: KeyboardDismisser.dismiss,
-                  decoration: InputDecoration(
-                    hintText: 'Поиск задач...',
-                    prefixIcon: const Icon(LucideIcons.search, size: 20),
-                    suffixIcon: state.searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(LucideIcons.x, size: 18),
-                            onPressed: () {
-                              _search.clear();
-                              ref.read(tasksStateProvider.notifier).search('');
-                            },
-                          )
-                        : null,
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+                child: TapRegion(
+                  groupId: _searchTapGroup,
+                  onTapOutside: (_) => _closeSearch(),
+                  child: TextField(
+                    controller: _search,
+                    focusNode: _searchFocus,
+                    autofocus: true,
+                    onChanged: (q) =>
+                        ref.read(tasksStateProvider.notifier).search(q),
+                    onEditingComplete: () {
+                      // Keep field ready for more typing; only hide IME.
+                      KeyboardDismisser.dismiss();
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Поиск задач...',
+                      prefixIcon: const Icon(LucideIcons.search, size: 20),
+                      suffixIcon: state.searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(LucideIcons.x, size: 18),
+                              onPressed: () {
+                                _search.clear();
+                                ref
+                                    .read(tasksStateProvider.notifier)
+                                    .search('');
+                                _searchFocus.requestFocus();
+                              },
+                            )
+                          : null,
+                    ),
                   ),
                 ),
               )
             else
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
                 child: Row(
                   children: [
                     _StatChip(
@@ -192,17 +250,17 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                               groups: groups,
                               settings: settings,
                               state: state,
-                              bottomPadding: wide ? 24 : 100,
+                              bottomPadding: wide ? 16 : 100,
                               onComplete: _complete,
                               onDelete: _delete,
                               onOpen: _openDetail,
                             )
                           : ListView(
                               padding: EdgeInsets.fromLTRB(
-                                16,
+                                12,
                                 0,
-                                16,
-                                wide ? 24 : 100,
+                                12,
+                                wide ? 16 : 100,
                               ),
                               children: _buildTaskListChildren(
                                 groups: groups,
@@ -276,12 +334,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   }
 
   void _openDetail(Task task) {
-    final query = ref.read(tasksStateProvider).searchQuery;
-    if (_searchVisible || query.isNotEmpty) {
-      _search.clear();
-      ref.read(tasksStateProvider.notifier).search('');
-      setState(() => _searchVisible = false);
-    }
+    _closeSearch();
     showTaskDetailSheet(context, task);
   }
 
@@ -417,7 +470,7 @@ class _WideTaskGroups extends StatelessWidget {
 
     Widget columnFor(List<TaskGroupKey> keys) {
       return ListView(
-        padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding),
+        padding: EdgeInsets.fromLTRB(12, 0, 12, bottomPadding),
         children: [
           for (final key in keys)
             TaskGroupWidget(
@@ -462,7 +515,7 @@ class _StatChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
         decoration: BoxDecoration(
           color: isDark ? OtterColors.darkSurface : Colors.white,
           borderRadius: BorderRadius.circular(16),

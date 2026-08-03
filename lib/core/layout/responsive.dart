@@ -23,9 +23,9 @@ abstract final class Responsive {
       isWide(context) ? 1200 : double.infinity;
 
   static EdgeInsets pagePadding(BuildContext context) {
-    if (isWide(context)) return const EdgeInsets.symmetric(horizontal: 32);
+    if (isWide(context)) return const EdgeInsets.symmetric(horizontal: 12);
     if (widthOf(context) >= compactBreakpoint) {
-      return const EdgeInsets.symmetric(horizontal: 24);
+      return const EdgeInsets.symmetric(horizontal: 16);
     }
     return EdgeInsets.zero;
   }

@@ -54,20 +54,20 @@ class ApiTask {
   final String updatedAt;
 
   factory ApiTask.fromJson(Map<String, dynamic> json) => ApiTask(
-    id: json['id'] as int,
-    title: json['title'] as String,
+    id: _asInt(json['id']) ?? 0,
+    title: '${json['title'] ?? ''}',
     description: json['description'] as String?,
     dueAt: json['due_at'] as String?,
     startAt: json['start_at'] as String?,
     endAt: json['end_at'] as String?,
     isAllDay: json['is_all_day'] as bool? ?? false,
     reminderAt: json['reminder_at'] as String?,
-    reminderOffsetMinutes: json['reminder_offset_minutes'] as int?,
+    reminderOffsetMinutes: _asInt(json['reminder_offset_minutes']),
     repeatUnit: json['repeat_unit'] as String? ?? 'none',
-    repeatInterval: json['repeat_interval'] as int? ?? 1,
+    repeatInterval: _asInt(json['repeat_interval']) ?? 1,
     repeatUntil: json['repeat_until'] as String?,
-    seriesId: json['series_id'] as String?,
-    parentTask: json['parent_task'] as int?,
+    seriesId: json['series_id']?.toString(),
+    parentTask: _asInt(json['parent_task']),
     priority: json['priority'] as String? ?? 'medium',
     matrixBlock: json['matrix_block'] as String? ?? 'not_urgent_not_important',
     image: json['image'] as String?,
@@ -82,9 +82,16 @@ class ApiTask {
         : null,
     isCompleted: json['is_completed'] as bool? ?? false,
     completedAt: json['completed_at'] as String?,
-    createdAt: json['created_at'] as String,
-    updatedAt: json['updated_at'] as String,
+    createdAt: json['created_at'] as String? ?? '',
+    updatedAt: json['updated_at'] as String? ?? '',
   );
+
+  static int? _asInt(Object? value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString());
+  }
 }
 
 class ApiAttachment {

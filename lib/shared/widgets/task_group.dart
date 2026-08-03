@@ -69,7 +69,9 @@ class _TaskGroupWidgetState extends State<TaskGroupWidget> {
         ? Color.alphaBlend(accent.withValues(alpha: 0.18), OtterColors.darkSurface)
         : (widget.surfaceColor ?? Colors.white);
 
-    return Column(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
       children: [
         Material(
           color: headerBg,
@@ -78,7 +80,7 @@ class _TaskGroupWidgetState extends State<TaskGroupWidget> {
             onTap: () => setState(() => _expanded = !_expanded),
             borderRadius: BorderRadius.circular(OtterColors.radiusMd),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               child: Row(
                 children: [
                   Container(
@@ -110,7 +112,7 @@ class _TaskGroupWidgetState extends State<TaskGroupWidget> {
           ),
         ),
         if (_expanded) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           ...widget.tasks.map(
             (t) => TaskItem(
               task: t,
@@ -120,8 +122,8 @@ class _TaskGroupWidgetState extends State<TaskGroupWidget> {
             ),
           ),
         ],
-        const SizedBox(height: 12),
       ],
+      ),
     );
   }
 }

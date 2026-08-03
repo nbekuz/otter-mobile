@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/network/api_exception.dart';
+import '../../core/layout/responsive.dart';
 import '../../core/providers/providers.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../../core/theme/otter_colors.dart';
@@ -215,6 +216,24 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                             rethrow;
                           }
                         },
+                        onMoveToUntimed: (task, dueDate) async {
+                          try {
+                            await ref
+                                .read(calendarStateProvider.notifier)
+                                .moveTaskToUntimed(task, dueDate);
+                          } catch (e) {
+                            if (context.mounted) {
+                              showAppToast(
+                                context,
+                                getApiErrorMessage(
+                                  e,
+                                  'Не удалось сохранить задачу',
+                                ),
+                              );
+                            }
+                            rethrow;
+                          }
+                        },
                       ),
                       CalendarView.month => _MonthView(
                         date: date,
@@ -230,6 +249,23 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                             .load(view: CalendarView.week, date: d),
                         onEmptyCellTap: (d) =>
                             _openNewTaskOnDate(context, d),
+                        onMoveTask: (task, dueDate) async {
+                          try {
+                            await ref
+                                .read(calendarStateProvider.notifier)
+                                .moveTaskToDate(task, dueDate);
+                          } catch (e) {
+                            if (context.mounted) {
+                              showAppToast(
+                                context,
+                                getApiErrorMessage(
+                                  e,
+                                  'Не удалось перенести задачу',
+                                ),
+                              );
+                            }
+                          }
+                        },
                       ),
                       CalendarView.year => _YearView(
                         date: date,
@@ -302,7 +338,7 @@ class _Header extends ConsumerWidget {
 
     return Container(
       color: surface,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
       child: Column(
         children: [
           Row(
@@ -317,7 +353,7 @@ class _Header extends ConsumerWidget {
                           : _viewLabel(state.view),
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                         color: isDark
                             ? OtterColors.darkText
                             : OtterColors.sberBlack,
@@ -387,7 +423,7 @@ class _Header extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           Row(
             children: [
               IconButton(
@@ -412,7 +448,7 @@ class _Header extends ConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 17,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w800,
                             color: isDark
                                 ? OtterColors.darkText
                                 : OtterColors.sberBlack,
@@ -993,7 +1029,10 @@ class _DayViewState extends State<_DayView> {
             physics: _dragTask != null
                 ? const NeverScrollableScrollPhysics()
                 : null,
-            padding: const EdgeInsets.only(bottom: 100),
+            // Mobile: clear FAB. Desktop: no large dead zone under 23:00 (web pb-2).
+            padding: EdgeInsets.only(
+              bottom: Responsive.isWide(context) ? 8 : 100,
+            ),
             child: ColoredBox(
               color: Colors.white,
                   child: Column(
@@ -1021,6 +1060,7 @@ class _MonthView extends StatelessWidget {
     required this.onTaskTap,
     required this.onDayNumberTap,
     required this.onEmptyCellTap,
+    required this.onMoveTask,
   });
 
   final DateTime date;
@@ -1028,28 +1068,47 @@ class _MonthView extends StatelessWidget {
   final void Function(Task task) onTaskTap;
   final void Function(DateTime day) onDayNumberTap;
   final void Function(DateTime day) onEmptyCellTap;
+  final Future<void> Function(Task task, String dueDate) onMoveTask;
 
   static const _dayHeaderH = 22.0;
   static const _pillSlotH = 18.0;
   static const _overflowH = 14.0;
   static const _cellPadV = 6.0;
+  static const _weekdayHeaderH = 18.0;
+  static const _headerGap = 6.0;
+  static const _rowGap = 2.0;
 
   @override
   Widget build(BuildContext context) {
     final today = DateTime.now();
     final cells = buildMonthCells(anchor: date, today: today);
+    final rowCount = cells.length ~/ 7;
+    final wide = Responsive.isWide(context);
+    // Desktop: fit all weeks in the viewport like web (no scroll).
+    // Mobile: keep a little bottom inset for the FAB when scrolling is needed.
+    final topPad = wide ? 8.0 : 8.0;
+    final bottomPad = wide ? 8.0 : 100.0;
+    final hPad = 4.0;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final colW = (constraints.maxWidth - 8) / 7;
-        // Taller than square so more pills fit (reference month denseness).
-        final cellH = math.max(colW * 1.45, 102.0);
+        final chrome =
+            topPad + bottomPad + _weekdayHeaderH + _headerGap +
+            _rowGap * math.max(0, rowCount - 1);
+        final availableH = math.max(0.0, constraints.maxHeight - chrome);
+        final fitCellH = rowCount > 0 ? availableH / rowCount : 0.0;
+        // Prefer filling the screen; only scroll if rows would be too short to use.
+        const minReadableCellH = 72.0;
+        final needsScroll = !wide && fitCellH < minReadableCellH;
+        final cellH = needsScroll
+            ? math.max(fitCellH, minReadableCellH)
+            : fitCellH;
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(4, 8, 4, 100),
-          child: Column(
-            children: [
-              Row(
+        final grid = Column(
+          children: [
+            SizedBox(
+              height: _weekdayHeaderH,
+              child: Row(
                 children: [
                   for (final label in weekdayHeadersRu)
                     Expanded(
@@ -1065,38 +1124,90 @@ class _MonthView extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: 6),
-              for (var row = 0; row < cells.length ~/ 7; row++)
+            ),
+            const SizedBox(height: _headerGap),
+            if (needsScroll)
+              for (var row = 0; row < rowCount; row++)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (var col = 0; col < 7; col++)
-                        Expanded(
-                          child: _MonthCell(
-                            cell: cells[row * 7 + col],
-                            height: cellH,
-                            tasks: monthCellTasks(
-                              tasks,
-                              cells[row * 7 + col].dateKey,
-                            ),
-                            dayHeaderH: _dayHeaderH,
-                            pillSlotH: _pillSlotH,
-                            overflowH: _overflowH,
-                            cellPadV: _cellPadV,
-                            onDayNumberTap: onDayNumberTap,
-                            onEmptyCellTap: onEmptyCellTap,
-                            onTaskTap: onTaskTap,
+                  padding: EdgeInsets.only(
+                    bottom: row < rowCount - 1 ? _rowGap : 0,
+                  ),
+                  child: _monthRow(
+                    cells: cells,
+                    row: row,
+                    height: cellH,
+                  ),
+                )
+            else
+              Expanded(
+                child: Column(
+                  children: [
+                    for (var row = 0; row < rowCount; row++)
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.only(
+                            bottom: row < rowCount - 1 ? _rowGap : 0,
+                          ),
+                          child: LayoutBuilder(
+                            builder: (context, rowConstraints) {
+                              return _monthRow(
+                                cells: cells,
+                                row: row,
+                                height: rowConstraints.maxHeight,
+                              );
+                            },
                           ),
                         ),
-                    ],
-                  ),
+                      ),
+                  ],
                 ),
-            ],
-          ),
+              ),
+          ],
+        );
+
+        if (needsScroll) {
+          return SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(hPad, topPad, hPad, bottomPad),
+            child: grid,
+          );
+        }
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(hPad, topPad, hPad, bottomPad),
+          child: grid,
         );
       },
+    );
+  }
+
+  Widget _monthRow({
+    required List<CalendarMonthCell> cells,
+    required int row,
+    required double height,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var col = 0; col < 7; col++)
+          Expanded(
+            child: _MonthCell(
+              cell: cells[row * 7 + col],
+              height: height,
+              tasks: monthCellTasks(
+                tasks,
+                cells[row * 7 + col].dateKey,
+              ),
+              dayHeaderH: _dayHeaderH,
+              pillSlotH: _pillSlotH,
+              overflowH: _overflowH,
+              cellPadV: _cellPadV,
+              onDayNumberTap: onDayNumberTap,
+              onEmptyCellTap: onEmptyCellTap,
+              onTaskTap: onTaskTap,
+              onMoveTask: onMoveTask,
+            ),
+          ),
+      ],
     );
   }
 }
@@ -1113,6 +1224,7 @@ class _MonthCell extends StatelessWidget {
     required this.onDayNumberTap,
     required this.onEmptyCellTap,
     required this.onTaskTap,
+    required this.onMoveTask,
   });
 
   final CalendarMonthCell cell;
@@ -1125,6 +1237,7 @@ class _MonthCell extends StatelessWidget {
   final void Function(DateTime day) onDayNumberTap;
   final void Function(DateTime day) onEmptyCellTap;
   final void Function(Task task) onTaskTap;
+  final Future<void> Function(Task task, String dueDate) onMoveTask;
 
   int _visibleCount(int total) {
     final body = height - cellPadV - dayHeaderH;
@@ -1142,102 +1255,117 @@ class _MonthCell extends StatelessWidget {
     final hidden = tasks.length - visible;
     final shown = tasks.take(visible).toList(growable: false);
 
-    return Opacity(
-      opacity: cell.isCurrentMonth ? 1 : 0.35,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => onEmptyCellTap(day),
-          child: SizedBox(
-            height: height,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(2, cellPadV / 2, 2, cellPadV / 2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    height: dayHeaderH,
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: InkWell(
-                        onTap: () => onDayNumberTap(day),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          width: 22,
-                          height: 22,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: cell.isToday
-                                ? OtterColors.sberGreen
-                                : Colors.transparent,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Text(
-                            '${cell.day}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: cell.isToday
-                                  ? Colors.white
-                                  : OtterColors.sberBlack,
+    return DragTarget<Task>(
+      onWillAcceptWithDetails: (details) {
+        final from = details.data.dueDate;
+        return from != cell.dateKey;
+      },
+      onAcceptWithDetails: (details) {
+        onMoveTask(details.data, cell.dateKey);
+      },
+      builder: (context, candidate, rejected) {
+        final highlight = candidate.isNotEmpty;
+        return Opacity(
+          opacity: cell.isCurrentMonth ? 1 : 0.35,
+          child: Material(
+            color: highlight
+                ? OtterColors.sberGreen.withValues(alpha: 0.08)
+                : Colors.transparent,
+            child: InkWell(
+              onTap: () => onEmptyCellTap(day),
+              child: SizedBox(
+                height: height,
+                child: Padding(
+                  padding:
+                      EdgeInsets.fromLTRB(2, cellPadV / 2, 2, cellPadV / 2),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        height: dayHeaderH,
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: InkWell(
+                            onTap: () => onDayNumberTap(day),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              width: 22,
+                              height: 22,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: cell.isToday
+                                    ? OtterColors.sberGreen
+                                    : Colors.transparent,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Text(
+                                '${cell.day}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: cell.isToday
+                                      ? Colors.white
+                                      : OtterColors.sberBlack,
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Stack(
-                      clipBehavior: Clip.hardEdge,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                      Expanded(
+                        child: Stack(
+                          clipBehavior: Clip.hardEdge,
                           children: [
-                            for (final task in shown)
-                              SizedBox(
-                                height: pillSlotH,
-                                child: _MonthTaskChip(
-                                  task: task,
-                                  onTap: () => onTaskTap(task),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                for (final task in shown)
+                                  SizedBox(
+                                    height: pillSlotH,
+                                    child: _MonthTaskChip(
+                                      task: task,
+                                      onTap: () => onTaskTap(task),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            if (hidden > 0)
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: GestureDetector(
+                                  onTap: () => onDayNumberTap(day),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 1,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: OtterColors.grayLight,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      '+$hidden',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: OtterColors.sberGray,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                           ],
                         ),
-                        if (hidden > 0)
-                          Positioned(
-                            right: 0,
-                            bottom: 0,
-                            child: GestureDetector(
-                              onTap: () => onDayNumberTap(day),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                  vertical: 1,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: OtterColors.grayLight,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  '+$hidden',
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: OtterColors.sberGray,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -1254,32 +1382,47 @@ class _MonthTaskChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = priorityColor(task.priority);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Opacity(
-        opacity: task.completed ? 0.45 : 1,
-        child: Material(
-          color: color.withValues(alpha: 0.22),
+    final chip = Opacity(
+      opacity: task.completed ? 0.45 : 1,
+      child: Material(
+        color: color.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(3),
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(3),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(3),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              child: Text(
-                task.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  height: 1.2,
-                  color: OtterColors.sberBlack,
-                ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+            child: Text(
+              task.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                height: 1.2,
+                color: OtterColors.sberBlack,
               ),
             ),
           ),
         ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Draggable<Task>(
+        data: task,
+        maxSimultaneousDrags: 1,
+        feedback: Material(
+          elevation: 3,
+          borderRadius: BorderRadius.circular(3),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 72, maxWidth: 160),
+            child: Opacity(opacity: 0.95, child: chip),
+          ),
+        ),
+        childWhenDragging: Opacity(opacity: 0.25, child: chip),
+        child: chip,
       ),
     );
   }
@@ -1292,6 +1435,16 @@ class _YearView extends StatelessWidget {
     required this.onMonthTap,
     required this.onDayTap,
   });
+
+  static const _yearWeekdayLabels = [
+    'пн',
+    'вт',
+    'ср',
+    'чт',
+    'пт',
+    'сб',
+    'вс',
+  ];
 
   final DateTime date;
   final List<Task> tasks;
@@ -1307,13 +1460,48 @@ class _YearView extends StatelessWidget {
       '${date.year}-01-01',
       '${date.year}-12-31',
     );
+    final wide = Responsive.isWide(context);
+    const gap = 8.0;
+    final pad = EdgeInsets.fromLTRB(8, 8, 8, wide ? 8 : 100);
+
+    // Desktop: fill viewport with a 3×4 grid (no dead zone under Dec).
+    // Mobile: keep scrollable wrap when the screen is too short.
+    if (wide) {
+      return Padding(
+        padding: pad,
+        child: Column(
+          children: [
+            for (var row = 0; row < 4; row++) ...[
+              if (row > 0) const SizedBox(height: gap),
+              Expanded(
+                child: Row(
+                  children: [
+                    for (var col = 0; col < 3; col++) ...[
+                      if (col > 0) const SizedBox(width: gap),
+                      Expanded(
+                        child: _YearMonthCard(
+                          month: months[row * 3 + col],
+                          byDate: byDate,
+                          weekdayLabels: _yearWeekdayLabels,
+                          onMonthTap: onMonthTap,
+                          onDayTap: onDayTap,
+                          expandDays: true,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 100),
+      padding: pad,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // 3 columns like web — tighter gaps so month cards fit on phones.
-          const gap = 8.0;
           final cardW = (constraints.maxWidth - gap * 2) / 3;
           return Wrap(
             spacing: gap,
@@ -1322,52 +1510,13 @@ class _YearView extends StatelessWidget {
               for (final month in months)
                 SizedBox(
                   width: cardW,
-                  child: Material(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    child: InkWell(
-                      onTap: () => onMonthTap(month.index),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Padding(
-                        // Was 12 — reduced so title + 6 week rows fit comfortably.
-                        padding: const EdgeInsets.all(8),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              month.name,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                height: 1.0,
-                                fontWeight: FontWeight.w700,
-                                color: OtterColors.sberBlack,
-                              ),
-                            ),
-                            // Was 8 — less space under month title.
-                            const SizedBox(height: 4),
-                            for (var row = 0; row < 6; row++)
-                              Row(
-                                children: [
-                                  for (var col = 0; col < 7; col++)
-                                    Expanded(
-                                      child: _YearDayCell(
-                                        cell: month.cells[row * 7 + col],
-                                        dots: dotsForDate(
-                                          byDate,
-                                          month.cells[row * 7 + col].dateKey ??
-                                              '',
-                                          limit: 1,
-                                        ),
-                                        onDayTap: onDayTap,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
+                  child: _YearMonthCard(
+                    month: month,
+                    byDate: byDate,
+                    weekdayLabels: _yearWeekdayLabels,
+                    onMonthTap: onMonthTap,
+                    onDayTap: onDayTap,
+                    expandDays: false,
                   ),
                 ),
             ],
@@ -1378,16 +1527,129 @@ class _YearView extends StatelessWidget {
   }
 }
 
+class _YearMonthCard extends StatelessWidget {
+  const _YearMonthCard({
+    required this.month,
+    required this.byDate,
+    required this.weekdayLabels,
+    required this.onMonthTap,
+    required this.onDayTap,
+    required this.expandDays,
+  });
+
+  final CalendarYearMonth month;
+  final Map<String, List<Task>> byDate;
+  final List<String> weekdayLabels;
+  final void Function(int monthIndex) onMonthTap;
+  final void Function(DateTime day) onDayTap;
+  final bool expandDays;
+
+  @override
+  Widget build(BuildContext context) {
+    final dayGrid = Column(
+      children: [
+        for (var row = 0; row < 6; row++)
+          expandDays
+              ? Expanded(
+                  child: Row(
+                    children: [
+                      for (var col = 0; col < 7; col++)
+                        Expanded(
+                          child: _YearDayCell(
+                            cell: month.cells[row * 7 + col],
+                            dots: dotsForDate(
+                              byDate,
+                              month.cells[row * 7 + col].dateKey ?? '',
+                              limit: 1,
+                            ),
+                            onDayTap: onDayTap,
+                            expand: true,
+                          ),
+                        ),
+                    ],
+                  ),
+                )
+              : Row(
+                  children: [
+                    for (var col = 0; col < 7; col++)
+                      Expanded(
+                        child: _YearDayCell(
+                          cell: month.cells[row * 7 + col],
+                          dots: dotsForDate(
+                            byDate,
+                            month.cells[row * 7 + col].dateKey ?? '',
+                            limit: 1,
+                          ),
+                          onDayTap: onDayTap,
+                          expand: false,
+                        ),
+                      ),
+                  ],
+                ),
+      ],
+    );
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: () => onMonthTap(month.index),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: EdgeInsets.all(expandDays ? 12 : 8),
+          child: Column(
+            mainAxisSize: expandDays ? MainAxisSize.max : MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                month.name,
+                style: TextStyle(
+                  fontSize: expandDays ? 14 : 12,
+                  height: 1.0,
+                  fontWeight: FontWeight.w700,
+                  color: OtterColors.sberBlack,
+                ),
+              ),
+              SizedBox(height: expandDays ? 6 : 4),
+              Row(
+                children: [
+                  for (final label in weekdayLabels)
+                    Expanded(
+                      child: Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: expandDays ? 10 : 8,
+                          height: 1.0,
+                          fontWeight: FontWeight.w600,
+                          color: OtterColors.sberGray,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              SizedBox(height: expandDays ? 4 : 2),
+              if (expandDays) Expanded(child: dayGrid) else dayGrid,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _YearDayCell extends StatelessWidget {
   const _YearDayCell({
     required this.cell,
     required this.dots,
     required this.onDayTap,
+    this.expand = false,
   });
 
   final CalendarYearDayCell cell;
   final List<Color> dots;
   final void Function(DateTime day) onDayTap;
+  final bool expand;
 
   static const double _dayDisc = 16;
   static const double _dotsSlot = 5;
@@ -1398,11 +1660,12 @@ class _YearDayCell extends StatelessWidget {
     final day = cell.day;
     final dateKey = cell.dateKey;
 
-    // Fixed height + Stack avoids Column sub-pixel RenderFlex overflow (~0.97px)
-    // that appeared under denser months (e.g. July with task dots).
-    return SizedBox(
-      height: _cellHeight,
-      child: InkWell(
+    Widget content({
+      required double disc,
+      required double fontSize,
+      required double dotSize,
+    }) {
+      return InkWell(
         onTap: dateKey == null
             ? null
             : () => onDayTap(DateTime.parse(dateKey)),
@@ -1411,8 +1674,8 @@ class _YearDayCell extends StatelessWidget {
           children: [
             if (day != null)
               Container(
-                width: _dayDisc,
-                height: _dayDisc,
+                width: disc,
+                height: disc,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: cell.isToday
@@ -1424,7 +1687,7 @@ class _YearDayCell extends StatelessWidget {
                   '$day',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 9,
+                    fontSize: fontSize,
                     height: 1.0,
                     fontWeight:
                         cell.isToday ? FontWeight.w600 : FontWeight.w400,
@@ -1436,17 +1699,17 @@ class _YearDayCell extends StatelessWidget {
               ),
             if (dots.isNotEmpty)
               Positioned(
-                top: _dayDisc + 1,
+                top: disc + 1,
                 left: 0,
                 right: 0,
-                height: 4,
+                height: dotSize,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     for (final c in dots)
                       Container(
-                        width: 4,
-                        height: 4,
+                        width: dotSize,
+                        height: dotSize,
                         margin: const EdgeInsets.symmetric(horizontal: 0.5),
                         decoration: BoxDecoration(
                           color: c,
@@ -1458,7 +1721,28 @@ class _YearDayCell extends StatelessWidget {
               ),
           ],
         ),
-      ),
+      );
+    }
+
+    if (!expand) {
+      // Fixed height + Stack avoids Column sub-pixel RenderFlex overflow.
+      return SizedBox(
+        height: _cellHeight,
+        child: content(disc: _dayDisc, fontSize: 9, dotSize: 4),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight;
+        final w = constraints.maxWidth;
+        final disc = (math.min(w, h * 0.72)).clamp(14.0, 28.0);
+        final fontSize = (disc * 0.55).clamp(9.0, 13.0);
+        final dotSize = (disc * 0.22).clamp(3.0, 5.0);
+        return SizedBox.expand(
+          child: content(disc: disc, fontSize: fontSize, dotSize: dotSize),
+        );
+      },
     );
   }
 }
@@ -1476,6 +1760,7 @@ class _WeekView extends StatefulWidget {
     required this.onHourTap,
     required this.onToggleComplete,
     required this.onReschedule,
+    required this.onMoveToUntimed,
   });
 
   final DateTime date;
@@ -1494,6 +1779,7 @@ class _WeekView extends StatefulWidget {
     int end, {
     String? dueDate,
   }) onReschedule;
+  final Future<void> Function(Task task, String dueDate) onMoveToUntimed;
 
   @override
   State<_WeekView> createState() => _WeekViewState();
@@ -1685,6 +1971,51 @@ class _WeekViewState extends State<_WeekView> {
     widget.onTaskTap(task);
   }
 
+  Future<void> _dropOnUntimed(Task task, DateTime day) async {
+    _ignoreNextTap = true;
+    try {
+      await widget.onMoveToUntimed(task, _dayKey(day));
+    } catch (_) {
+      // Toast shown by parent.
+    } finally {
+      Future.delayed(const Duration(milliseconds: 400), () {
+        if (mounted) _ignoreNextTap = false;
+      });
+    }
+  }
+
+  Future<void> _dropOnHour(Task task, DateTime day, int hour) async {
+    final scheduleStart = taskScheduleStart(
+      dueTime: task.dueTime,
+      durationStart: task.duration?.start,
+    );
+    final minutePart = (scheduleStart != null && scheduleStart.isNotEmpty)
+        ? parseTimeToMinutes(scheduleStart) % 60
+        : 0;
+    final nextStart = hour * 60 + minutePart;
+    final duration = taskDurationMinutes(
+      durationStart: task.duration?.start,
+      durationEnd: task.duration?.end,
+    );
+    final nextEnd = math.min(nextStart + duration, 24 * 60 - 1);
+    final end = math.max(nextStart + calendarMinDurationMinutes, nextEnd);
+    _ignoreNextTap = true;
+    try {
+      await widget.onReschedule(
+        task,
+        nextStart,
+        end,
+        dueDate: _dayKey(day),
+      );
+    } catch (_) {
+      // Toast shown by parent.
+    } finally {
+      Future.delayed(const Duration(milliseconds: 400), () {
+        if (mounted) _ignoreNextTap = false;
+      });
+    }
+  }
+
   List<Task> _timedDayTasks(DateTime day) {
     final key = DateFormat('yyyy-MM-dd').format(day);
     return expandTasksForDate(widget.tasks, key)
@@ -1774,48 +2105,71 @@ class _WeekViewState extends State<_WeekView> {
                         b.layoutCol;
                     return az.compareTo(bz);
                   });
-                  return Stack(
-                    clipBehavior: Clip.hardEdge,
-                    children: [
-                      Column(
+                  return DragTarget<Task>(
+                    onWillAcceptWithDetails: (_) => true,
+                    onAcceptWithDetails: (details) {
+                      final box = context.findRenderObject() as RenderBox?;
+                      if (box == null || !box.hasSize) {
+                        _dropOnHour(details.data, d, hours.first);
+                        return;
+                      }
+                      final local = box.globalToLocal(details.offset);
+                      final y = local.dy.clamp(0.0, height - 1);
+                      final hourIndex =
+                          (y / _hourH).floor().clamp(0, hours.length - 1);
+                      _dropOnHour(details.data, d, hours[hourIndex]);
+                    },
+                    builder: (context, candidate, rejected) {
+                      final highlight = candidate.isNotEmpty;
+                      return Stack(
+                        clipBehavior: Clip.hardEdge,
                         children: [
-                          for (final h in hours)
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () => widget.onHourTap(d, h),
-                              child: Container(
-                                height: _hourH,
-                                decoration: const BoxDecoration(
-                                  border: Border(
-                                    top: BorderSide(color: _gridBorder),
-                                    left: BorderSide(color: _gridBorder),
+                          Column(
+                            children: [
+                              for (final h in hours)
+                                GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () => widget.onHourTap(d, h),
+                                  child: Container(
+                                    height: _hourH,
+                                    decoration: BoxDecoration(
+                                      color: highlight
+                                          ? OtterColors.sberGreen
+                                              .withValues(alpha: 0.06)
+                                          : null,
+                                      border: const Border(
+                                        top: BorderSide(color: _gridBorder),
+                                        left: BorderSide(color: _gridBorder),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
+                            ],
+                          ),
+                          // Absolute overlay — same as web `pointer-events-none absolute inset-0`.
+                          ...items.map((item) {
+                            final dragging =
+                                _dragPreview?.taskId == item.task.id;
+                            return CalendarTaskBlock(
+                              item: item,
+                              timelineWidth: colW,
+                              isDragging: dragging,
+                              pad: weekOverlapPad,
+                              gap: weekOverlapGap,
+                              cornerRadius: 4,
+                              weekTypography: true,
+                              onTap: () => _handleTaskTap(item.task),
+                              onToggleComplete: () =>
+                                  widget.onToggleComplete(item.task.id),
+                              onDragStart: (mode) =>
+                                  _beginDrag(item, mode, d),
+                              onDragUpdate: _updateDrag,
+                              onDragEnd: _endDrag,
+                            );
+                          }),
                         ],
-                      ),
-                      // Absolute overlay — same as web `pointer-events-none absolute inset-0`.
-                      ...items.map((item) {
-                        final dragging =
-                            _dragPreview?.taskId == item.task.id;
-                        return CalendarTaskBlock(
-                          item: item,
-                          timelineWidth: colW,
-                          isDragging: dragging,
-                          pad: weekOverlapPad,
-                          gap: weekOverlapGap,
-                          cornerRadius: 4,
-                          onTap: () => _handleTaskTap(item.task),
-                          onToggleComplete: () =>
-                              widget.onToggleComplete(item.task.id),
-                          onDragStart: (mode) =>
-                              _beginDrag(item, mode, d),
-                          onDragUpdate: _updateDrag,
-                          onDragEnd: _endDrag,
-                        );
-                      }),
-                    ],
+                      );
+                    },
                   );
                 },
               ),
@@ -1868,59 +2222,74 @@ class _WeekViewState extends State<_WeekView> {
 
   Widget _untimedChip(Task task) {
     final color = priorityColor(task.priority);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Opacity(
-        opacity: task.completed ? 0.45 : 1,
-        child: Material(
-          color: color.withValues(alpha: 0.13),
+    final chip = Opacity(
+      opacity: task.completed ? 0.45 : 1,
+      child: Material(
+        color: color.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(4),
+        child: InkWell(
+          onTap: () => _handleTaskTap(task),
           borderRadius: BorderRadius.circular(4),
-          child: InkWell(
-            onTap: () => widget.onTaskTap(task),
-            borderRadius: BorderRadius.circular(4),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(4),
-                border: Border(
-                  left: BorderSide(color: color, width: 3),
-                  top: BorderSide(color: color.withValues(alpha: 0.25)),
-                  right: BorderSide(color: color.withValues(alpha: 0.25)),
-                  bottom: BorderSide(color: color.withValues(alpha: 0.25)),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              border: Border(
+                left: BorderSide(color: color, width: 3),
+                top: BorderSide(color: color.withValues(alpha: 0.25)),
+                right: BorderSide(color: color.withValues(alpha: 0.25)),
+                bottom: BorderSide(color: color.withValues(alpha: 0.25)),
+              ),
+            ),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => widget.onToggleComplete(task.id),
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: color, width: 1.2),
+                      color: task.completed ? color : Colors.transparent,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 ),
-              ),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => widget.onToggleComplete(task.id),
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: color, width: 1.2),
-                        color: task.completed ? color : Colors.transparent,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    task.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      task.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Draggable<Task>(
+        data: task,
+        maxSimultaneousDrags: 1,
+        feedback: Material(
+          elevation: 4,
+          borderRadius: BorderRadius.circular(4),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 140),
+            child: Opacity(opacity: 0.92, child: chip),
+          ),
+        ),
+        childWhenDragging: Opacity(opacity: 0.3, child: chip),
+        child: chip,
       ),
     );
   }
@@ -1971,6 +2340,7 @@ class _WeekViewState extends State<_WeekView> {
                                   DateFormat('E', 'ru').format(d).substring(0, 2),
                                   style: const TextStyle(
                                     fontSize: 12,
+                                    fontWeight: FontWeight.w700,
                                     color: OtterColors.sberGray,
                                   ),
                                 ),
@@ -1991,7 +2361,7 @@ class _WeekViewState extends State<_WeekView> {
                                     '${d.day}',
                                     style: TextStyle(
                                       fontSize: 14,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w800,
                                       color: d.year == today.year &&
                                               d.month == today.month &&
                                               d.day == today.day
@@ -2032,20 +2402,29 @@ class _WeekViewState extends State<_WeekView> {
                       ),
                       for (final d in days)
                         Expanded(
-                          child: Builder(
-                            builder: (context) {
+                          child: DragTarget<Task>(
+                            onWillAcceptWithDetails: (_) => true,
+                            onAcceptWithDetails: (details) {
+                              _dropOnUntimed(details.data, d);
+                            },
+                            builder: (context, candidate, rejected) {
                               final key =
                                   DateFormat('yyyy-MM-dd').format(d);
                               final untimed = untimedTasksForDate(
                                 expandTasksForDate(widget.tasks, key),
                                 dateKey: key,
                               );
+                              final highlight = candidate.isNotEmpty;
                               return Container(
                                 margin:
                                     const EdgeInsets.symmetric(horizontal: 1),
                                 padding: const EdgeInsets.all(2),
-                                decoration: const BoxDecoration(
-                                  border: Border(
+                                decoration: BoxDecoration(
+                                  color: highlight
+                                      ? OtterColors.sberGreen
+                                          .withValues(alpha: 0.08)
+                                      : null,
+                                  border: const Border(
                                     bottom: BorderSide(color: _gridBorder),
                                   ),
                                 ),
@@ -2097,7 +2476,12 @@ class _WeekViewState extends State<_WeekView> {
             physics: _dragTask != null
                 ? const NeverScrollableScrollPhysics()
                 : null,
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 100),
+            padding: EdgeInsets.fromLTRB(
+              8,
+              0,
+              8,
+              Responsive.isWide(context) ? 8 : 100,
+            ),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.45),

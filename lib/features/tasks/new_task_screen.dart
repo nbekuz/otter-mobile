@@ -21,6 +21,7 @@ import '../../features/matrix/matrix_block_setting.dart';
 import '../../features/matrix/matrix_constants.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../../shared/widgets/keyboard_dismisser.dart';
+import '../../shared/widgets/ru_date_time_fields.dart';
 import '../../shared/widgets/select_field.dart';
 import 'task_attachment_picker.dart';
 import 'task_time_sync.dart';
@@ -299,9 +300,6 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   String? _formatDate(DateTime? d) =>
       d == null ? null : DateFormat('yyyy-MM-dd').format(d);
 
-  String _displayDate(DateTime? d) =>
-      d == null ? 'ДД.ММ.ГГГГ' : DateFormat('dd.MM.yyyy').format(d);
-
   @override
   void dispose() {
     _title.dispose();
@@ -455,34 +453,6 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
     } else {
       context.pop();
     }
-  }
-
-  Future<void> _pickDate() async {
-    KeyboardDismisser.dismiss();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dueDate ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2035),
-    );
-    if (picked != null) {
-      setState(() {
-        _dueDate = picked;
-        _explicitNoDeadline = false;
-      });
-    }
-  }
-
-  Future<void> _pickTime({
-    required void Function(TimeOfDay) onPicked,
-    TimeOfDay? initial,
-  }) async {
-    KeyboardDismisser.dismiss();
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: initial ?? TimeOfDay.now(),
-    );
-    if (picked != null) onPicked(picked);
   }
 
   void _applyDueTimeSync(TimeOfDay time) {
@@ -807,45 +777,51 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   Widget _buildTitleSection() {
+    final wide = Responsive.isWide(context);
+    final showDescription = widget.isEditMode || _descOpen || wide;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      padding: EdgeInsets.fromLTRB(wide ? 16 : 12, wide ? 16 : 12, wide ? 16 : 12, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Название задачи',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: wide ? 14 : 14,
               fontWeight: FontWeight.w600,
               color: OtterColors.sberBlack,
             ),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: wide ? 8 : 6),
           TextField(
             controller: _title,
             focusNode: _titleFocus,
             autofocus: !widget.isEditMode,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            style: TextStyle(
+              fontSize: wide ? 16 : 16,
+              fontWeight: FontWeight.w500,
+            ),
             textInputAction: TextInputAction.next,
             onTapOutside: dismissKeyboardOnTapOutside,
             decoration: InputDecoration(
               hintText: 'Например: отчёт, созвон, встреча…',
               filled: true,
               fillColor: OtterColors.grayLight,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 14,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: wide ? 16 : 14,
+                vertical: wide ? 16 : 14,
               ),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(wide ? 16 : 12),
                 borderSide: BorderSide.none,
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(wide ? 16 : 12),
                 borderSide: const BorderSide(color: OtterColors.grayMid),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(wide ? 16 : 12),
                 borderSide: const BorderSide(
                   color: OtterColors.sberGreen,
                   width: 2,
@@ -853,7 +829,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
               ),
             ),
           ),
-          if (!widget.isEditMode) ...[
+          if (!widget.isEditMode && !wide) ...[
             const SizedBox(height: 6),
             Align(
               alignment: Alignment.centerLeft,
@@ -883,38 +859,69 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
               ),
             ),
           ],
-          if (widget.isEditMode || _descOpen) ...[
-            const SizedBox(height: 8),
+          if (showDescription) ...[
+            SizedBox(height: wide ? 16 : 8),
+            if (wide)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Описание',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: OtterColors.sberBlack,
+                  ),
+                ),
+              ),
             TextField(
               controller: _description,
-              maxLines: 3,
+              maxLines: wide ? 4 : 3,
+              minLines: wide ? 3 : 2,
               onTapOutside: dismissKeyboardOnTapOutside,
               decoration: InputDecoration(
                 hintText: 'Детали, ссылки…',
                 filled: true,
                 fillColor: OtterColors.grayLight,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: wide ? 16 : 12,
+                  vertical: wide ? 14 : 12,
                 ),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(wide ? 16 : 12),
                   borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(wide ? 16 : 12),
+                  borderSide: const BorderSide(color: OtterColors.grayMid),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(wide ? 16 : 12),
+                  borderSide: const BorderSide(
+                    color: OtterColors.sberGreen,
+                    width: 2,
+                  ),
                 ),
               ),
             ),
           ],
-          const SizedBox(height: 10),
+          SizedBox(height: wide ? 12 : 10),
           OutlinedButton.icon(
             onPressed: _pickAttachment,
-            icon: const Icon(LucideIcons.paperclip, size: 16),
+            icon: Icon(LucideIcons.paperclip, size: wide ? 16 : 16),
             label: Text(
               _imagePath != null
                   ? 'Файл выбран'
                   : (_existingImageUrl != null && !_clearImage)
-                      ? 'Изменить файл / фото'
-                      : 'Файл / фото',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ? (wide
+                          ? 'Изменить изображение или файл'
+                          : 'Изменить файл / фото')
+                      : (wide
+                          ? 'Добавить изображение или файл'
+                          : 'Файл / фото'),
+              style: TextStyle(
+                fontSize: wide ? 14 : 13,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             style: OutlinedButton.styleFrom(
               foregroundColor: OtterColors.sberGreen,
@@ -922,9 +929,12 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
               side: BorderSide(
                 color: OtterColors.sberGreen.withValues(alpha: 0.4),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: EdgeInsets.symmetric(
+                horizontal: wide ? 14 : 14,
+                vertical: wide ? 12 : 10,
+              ),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(wide ? 12 : 12),
               ),
             ),
           ),
@@ -1072,25 +1082,28 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       (_TaskFormTab.matrix, LucideIcons.grid2x2, 'Матрица', true),
     ];
 
+    final wide = Responsive.isWide(context);
+
     return Container(
-      margin: const EdgeInsets.only(top: 8),
+      margin: EdgeInsets.only(top: wide ? 12 : 8),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: OtterColors.grayLight)),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
+        padding: EdgeInsets.symmetric(horizontal: wide ? 8 : 2),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final compact = constraints.maxWidth < 360;
-            final iconSize = compact ? 20.0 : 22.0;
-            final fontSize = compact ? 12.0 : 13.0;
+            final compact = !wide && constraints.maxWidth < 360;
+            final iconSize = wide ? 16.0 : (compact ? 20.0 : 22.0);
+            final fontSize = wide ? 12.0 : (compact ? 12.0 : 13.0);
 
             return Row(
               children: tabs.map((t) {
                 final tab = t.$1;
                 final icon = t.$2;
                 final label = t.$3;
-                final iconOnly = t.$4;
+                // Web: iconOnly tabs hide labels only on mobile (`max-lg:sr-only`).
+                final iconOnly = t.$4 && !wide;
                 final active = _activeTab == tab;
                 final color =
                     active ? OtterColors.sberGreen : OtterColors.sberGray;
@@ -1107,8 +1120,10 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                     ),
                     child: Container(
                       padding: EdgeInsets.symmetric(
-                        vertical: 12,
-                        horizontal: iconOnly ? (compact ? 8 : 10) : 4,
+                        vertical: wide ? 10 : 12,
+                        horizontal: iconOnly
+                            ? (compact ? 8 : 10)
+                            : (wide ? 10 : 4),
                       ),
                       decoration: BoxDecoration(
                         color: active ? OtterColors.sberGreenLight : null,
@@ -1128,7 +1143,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                         children: [
                           Icon(icon, size: iconSize, color: color),
                           if (!iconOnly) ...[
-                            const SizedBox(width: 4),
+                            SizedBox(width: wide ? 6 : 4),
                             Flexible(
                               child: FittedBox(
                                 fit: BoxFit.scaleDown,
@@ -1139,7 +1154,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                                   softWrap: false,
                                   style: TextStyle(
                                     fontSize: fontSize,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w500,
                                     color: color,
                                   ),
                                 ),
@@ -1213,21 +1228,39 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
           Row(
             children: [
               Expanded(
-                child: _DateTimeField(
+                child: RuDateField(
                   label: 'Дата',
-                  value: _displayDate(_dueDate),
-                  icon: LucideIcons.calendar,
-                  onTap: _pickDate,
+                  value: _dueDate,
+                  onChanged: (date) {
+                    setState(() {
+                      _dueDate = date;
+                      _explicitNoDeadline = false;
+                      if (date == null) {
+                        _dueTime = null;
+                        _durationStart = null;
+                        _durationEnd = null;
+                        _timeSync.resetEndEdited();
+                      }
+                      _error = null;
+                    });
+                  },
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _DateTimeField(
+                child: RuTimeField(
                   label: 'Время срока',
-                  value: _formatTime(_dueTime) ?? 'ЧЧ:ММ',
-                  icon: LucideIcons.clock,
-                  onTap: () =>
-                      _pickTime(initial: _dueTime, onPicked: _applyDueTimeSync),
+                  value: _dueTime,
+                  onChanged: (time) {
+                    if (time == null) {
+                      setState(() {
+                        _dueTime = null;
+                        _error = null;
+                      });
+                      return;
+                    }
+                    _applyDueTimeSync(time);
+                  },
                 ),
               ),
             ],
@@ -1236,26 +1269,37 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
           Row(
             children: [
               Expanded(
-                child: _DateTimeField(
+                child: RuTimeField(
                   label: 'Начало',
-                  value: _formatTime(_durationStart) ?? 'ЧЧ:ММ',
-                  icon: LucideIcons.clock,
-                  onTap: () => _pickTime(
-                    initial: _durationStart,
-                    onPicked: _applyStartSync,
-                  ),
+                  value: _durationStart,
+                  onChanged: (time) {
+                    if (time == null) {
+                      setState(() {
+                        _durationStart = null;
+                        _error = null;
+                      });
+                      return;
+                    }
+                    _applyStartSync(time);
+                  },
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _DateTimeField(
+                child: RuTimeField(
                   label: 'Конец',
-                  value: _formatTime(_durationEnd) ?? 'ЧЧ:ММ',
-                  icon: LucideIcons.clock,
-                  onTap: () => _pickTime(
-                    initial: _durationEnd,
-                    onPicked: _applyEndManual,
-                  ),
+                  value: _durationEnd,
+                  onChanged: (time) {
+                    if (time == null) {
+                      setState(() {
+                        _durationEnd = null;
+                        _timeSync.resetEndEdited();
+                        _error = null;
+                      });
+                      return;
+                    }
+                    _applyEndManual(time);
+                  },
                 ),
               ),
             ],
@@ -1669,9 +1713,13 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   Widget _buildFooter() {
+    final wide = Responsive.isWide(context);
+    final btnPad = EdgeInsets.symmetric(vertical: wide ? 16 : 14);
+    final btnRadius = BorderRadius.circular(wide ? 16 : 14);
+
     if (!widget.isEditMode) {
       return Container(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        padding: EdgeInsets.fromLTRB(wide ? 16 : 12, wide ? 12 : 8, wide ? 16 : 12, wide ? 16 : 12),
         decoration: const BoxDecoration(
           border: Border(top: BorderSide(color: OtterColors.grayLight)),
         ),
@@ -1684,28 +1732,24 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                   foregroundColor: OtterColors.sberBlack,
                   backgroundColor: OtterColors.grayLight,
                   side: BorderSide.none,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  padding: btnPad,
+                  shape: RoundedRectangleBorder(borderRadius: btnRadius),
                 ),
                 child: const Text(
                   'Отмена',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: wide ? 12 : 8),
             Expanded(
-              flex: 2,
+              flex: wide ? 1 : 2,
               child: FilledButton(
                 onPressed: _loading ? null : _save,
                 style: FilledButton.styleFrom(
                   backgroundColor: OtterColors.sberGreen,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                  padding: btnPad,
+                  shape: RoundedRectangleBorder(borderRadius: btnRadius),
                 ),
                 child: _loading
                     ? const SizedBox(
@@ -1720,6 +1764,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                         'Добавить задачу',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
+                          fontSize: 16,
                           color: Colors.white,
                         ),
                       ),
@@ -1940,79 +1985,6 @@ class _UnitChip extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _DateTimeField extends StatelessWidget {
-  const _DateTimeField({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasValue = value != 'ДД.ММ.ГГГГ' && value != 'ЧЧ:ММ';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: OtterColors.sberGray,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Material(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          child: InkWell(
-            onTap: () {
-              KeyboardDismisser.dismiss();
-              onTap();
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 52),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: OtterColors.sberGreen.withValues(alpha: 0.5),
-                  width: 2,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      value,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: hasValue
-                            ? OtterColors.sberBlack
-                            : OtterColors.sberGray,
-                      ),
-                    ),
-                  ),
-                  Icon(icon, size: 20, color: OtterColors.sberGray),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

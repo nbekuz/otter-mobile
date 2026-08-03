@@ -27,20 +27,24 @@ class BrandLogo extends StatelessWidget {
       LogoSize.lg => 28.0,
     };
 
-    Widget logo = Image.asset(
-      'assets/img/logo.png',
-      width: dim,
-      height: dim,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.high,
-    );
+    final dpr = MediaQuery.devicePixelRatioOf(context);
 
-    if (lightText) {
-      logo = ColorFiltered(
-        colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-        child: logo,
-      );
-    }
+    // Match web BrandLogo tone: brightness-0 (black) / invert (white).
+    final logo = ColorFiltered(
+      colorFilter: ColorFilter.mode(
+        lightText ? Colors.white : Colors.black,
+        BlendMode.srcIn,
+      ),
+      child: Image.asset(
+        'assets/img/logo.png',
+        width: dim,
+        height: dim,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        isAntiAlias: true,
+        cacheWidth: (dim * dpr).round(),
+      ),
+    );
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -55,7 +59,9 @@ class BrandLogo extends StatelessWidget {
             'Оттер',
             style: TextStyle(
               fontSize: textSize,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w700,
+              height: 1.1,
+              letterSpacing: -0.3,
               color: lightText ? Colors.white : OtterColors.sberBlack,
             ),
           ),

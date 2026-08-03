@@ -16,12 +16,34 @@ class TasksService {
   final ApiClient _client;
 
   Future<Map<TaskGroupKey, List<Task>>> fetchGrouped() async {
-    final data = await _client.get<List<dynamic>>('tasks/grouped/');
+    // Bust intermediaries that may cache bare GET /tasks/grouped/ on desktop.
+    final data = await _client.get<List<dynamic>>(
+      'tasks/grouped/',
+      queryParameters: {'_': DateTime.now().millisecondsSinceEpoch},
+      headers: const {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
+    );
     final map = <TaskGroupKey, List<Task>>{};
     for (final item in data) {
-      final group = ApiTaskGroup.fromJson(item as Map<String, dynamic>);
-      final key = TaskGroupKeyX.fromApi(group.key);
-      map[key] = group.tasks.map(TaskMapper.apiToUi).toList();
+      if (item is! Map) continue;
+      final json = Map<String, dynamic>.from(item);
+      final key = TaskGroupKeyX.fromApi('${json['key'] ?? 'no_deadline'}');
+      final tasks = <Task>[];
+      for (final raw in (json['tasks'] as List<dynamic>? ?? const [])) {
+        if (raw is! Map) continue;
+        try {
+          tasks.add(
+            TaskMapper.apiToUi(
+              ApiTask.fromJson(Map<String, dynamic>.from(raw)),
+            ),
+          );
+        } catch (_) {
+          // Skip a single bad payload so one task cannot block the whole refresh.
+        }
+      }
+      map[key] = [...?map[key], ...tasks];
     }
     return map;
   }

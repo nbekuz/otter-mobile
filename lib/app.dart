@@ -46,7 +46,7 @@ class OtterApp extends ConsumerWidget {
     });
 
     return MaterialApp.router(
-      title: 'Оттер',
+      title: 'ОТТЕР',
       debugShowCheckedModeBanner: false,
       locale: locale,
       supportedLocales: kSupportedAppLocales,

@@ -118,82 +118,65 @@ class _MatrixSettingsSheetState extends ConsumerState<_MatrixSettingsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final maxH = appBottomSheetMaxHeight(context);
-    const headerFooter = 160.0;
+    final wide = Responsive.isWide(context);
+    final maxH = wide
+        ? MediaQuery.sizeOf(context).height * 0.85
+        : appBottomSheetMaxHeight(context);
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    final header = Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Настройки блоков',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: OtterColors.sberBlack,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'В каждом блоке выбранные условия работают как множественный фильтр (ИЛИ): '
+            'задача попадает в блок, если подходит хотя бы одно из них — по дате или по приоритету.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: 12,
+              color: OtterColors.sberGray,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+
+    final blocksList = Column(
+      children: [
+        for (var i = 0; i < kMatrixBlockThemes.length; i++) ...[
+          _BlockSection(
+            setting: _blocks[kMatrixBlockThemes[i].block]!,
+            theme: kMatrixBlockThemes[i],
+            titleController: _titleControllers[kMatrixBlockThemes[i].block]!,
+            onToggleDate: (f) => _toggleDate(kMatrixBlockThemes[i].block, f),
+            onTogglePriority: (f) =>
+                _togglePriority(kMatrixBlockThemes[i].block, f),
+          ),
+          if (i < kMatrixBlockThemes.length - 1)
+            const Padding(
+              padding: EdgeInsets.only(top: 16, bottom: 20),
+              child: Divider(height: 1, color: OtterColors.grayLight),
+            ),
+        ],
+      ],
+    );
+
+    final footer = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (!Responsive.isWide(context)) ...[
-          const SizedBox(height: 8),
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: OtterColors.grayMid,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-        ],
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Настройки блоков',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: OtterColors.sberBlack,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'В каждом блоке выбранные условия работают как множественный фильтр (ИЛИ): '
-                'задача попадает в блок, если подходит хотя бы одно из них — по дате или по приоритету.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: OtterColors.sberGray,
-                  height: 1.35,
-                ),
-              ),
-            ],
-          ),
-        ),
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: (maxH - headerFooter).clamp(200.0, maxH),
-          ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-            child: Column(
-              children: [
-                for (var i = 0; i < kMatrixBlockThemes.length; i++) ...[
-                  _BlockSection(
-                    setting: _blocks[kMatrixBlockThemes[i].block]!,
-                    theme: kMatrixBlockThemes[i],
-                    titleController:
-                        _titleControllers[kMatrixBlockThemes[i].block]!,
-                    onToggleDate: (f) =>
-                        _toggleDate(kMatrixBlockThemes[i].block, f),
-                    onTogglePriority: (f) =>
-                        _togglePriority(kMatrixBlockThemes[i].block, f),
-                  ),
-                  if (i < kMatrixBlockThemes.length - 1)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Divider(height: 1, color: OtterColors.grayLight),
-                    ),
-                ],
-              ],
-            ),
-          ),
-        ),
         if (_error != null)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
             child: Text(
               _error!,
               style: const TextStyle(color: OtterColors.priorityHigh),
@@ -207,6 +190,52 @@ class _MatrixSettingsSheetState extends ConsumerState<_MatrixSettingsSheet> {
             onPressed: _saving ? null : _save,
           ),
         ),
+      ],
+    );
+
+    final scroll = SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+      child: blocksList,
+    );
+
+    if (wide) {
+      return SizedBox(
+        height: maxH,
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            header,
+            Expanded(child: scroll),
+            footer,
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 8),
+        Center(
+          child: Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: OtterColors.grayMid,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+        header,
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: (maxH - 200).clamp(200.0, maxH),
+          ),
+          child: scroll,
+        ),
+        footer,
       ],
     );
   }
@@ -229,6 +258,7 @@ class _BlockSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Web: space-y-2 between field groups, mb-3 under block title.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -260,31 +290,39 @@ class _BlockSection extends StatelessWidget {
           'Название блока',
           style: TextStyle(fontSize: 12, color: OtterColors.sberGray),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         TextField(
           controller: titleController,
-          style: const TextStyle(fontSize: 14),
+          style: const TextStyle(fontSize: 14, color: OtterColors.sberBlack),
           onTapOutside: dismissKeyboardOnTapOutside,
           onEditingComplete: KeyboardDismisser.dismiss,
           decoration: InputDecoration(
             filled: true,
             fillColor: OtterColors.grayLight,
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 12,
+              horizontal: 16,
+              vertical: 10,
             ),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: OtterColors.grayMid),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: OtterColors.grayMid),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: OtterColors.sberGreen),
             ),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         const Text(
           'Фильтр по дате',
           style: TextStyle(fontSize: 12, color: OtterColors.sberGray),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         Wrap(
           spacing: 6,
           runSpacing: 6,
@@ -298,12 +336,12 @@ class _BlockSection extends StatelessWidget {
             );
           }).toList(),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         const Text(
           'Фильтр по приоритету',
           style: TextStyle(fontSize: 12, color: OtterColors.sberGray),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         Wrap(
           spacing: 6,
           runSpacing: 6,
@@ -337,6 +375,7 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Web: w-20 px-2 py-1 rounded-xl text-xs font-medium border
     return Material(
       color: selected ? selectedColor : Colors.white,
       borderRadius: BorderRadius.circular(12),
@@ -344,12 +383,12 @@ class _FilterChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          width: 72,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          width: 80,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? selectedColor : OtterColors.grayMid,
+              color: selected ? Colors.transparent : OtterColors.grayMid,
             ),
             color: selected ? selectedColor : Colors.white,
           ),
@@ -358,7 +397,7 @@ class _FilterChip extends StatelessWidget {
             label,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.w500,
               color: selected ? Colors.white : OtterColors.sberGray,
             ),

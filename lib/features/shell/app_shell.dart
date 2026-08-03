@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/layout/responsive.dart';
 import '../../core/providers/providers.dart';
@@ -32,17 +34,40 @@ class AppShell extends ConsumerWidget {
         resizeToAvoidBottomInset: !_hideBottomNav(path),
         body: wide
             ? Padding(
-                padding: const EdgeInsets.all(24),
+                // Tight desktop chrome so more content fits the viewport.
+                padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _Sidebar(path: path, auth: auth, isDark: isDark),
+                    const SizedBox(width: 8),
                     Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(24),
-                        child: Material(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
                           color: isDark ? OtterColors.darkBg : Colors.white,
-                          child: child,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isDark
+                                ? OtterColors.darkBorder
+                                : const Color(0xFFE9EBF1),
+                          ),
+                          boxShadow: isDark
+                              ? null
+                              : [
+                                  BoxShadow(
+                                    color: const Color(0xFF0F172A)
+                                        .withValues(alpha: 0.08),
+                                    blurRadius: 24,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Material(
+                            color: isDark ? OtterColors.darkBg : Colors.white,
+                            child: child,
+                          ),
                         ),
                       ),
                     ),
@@ -101,6 +126,22 @@ class _Sidebar extends ConsumerWidget {
   final AuthState auth;
   final bool isDark;
 
+  Future<void> _shareApp(BuildContext context) async {
+    const url = 'https://ottertime.ru';
+    try {
+      await Share.share(
+        'Оттер — планировщик задач: $url',
+        subject: 'Оттер — Планировщик',
+      );
+    } catch (_) {
+      await Clipboard.setData(const ClipboardData(text: url));
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ссылка скопирована')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(appSettingsProvider);
@@ -112,12 +153,11 @@ class _Sidebar extends ConsumerWidget {
         .toList();
 
     return Container(
-      width: 288,
-      margin: const EdgeInsets.only(right: 24),
-      padding: const EdgeInsets.all(24),
+      width: 268,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
         color: surface,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: isDark
             ? null
             : [
@@ -133,99 +173,94 @@ class _Sidebar extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           BrandLogo(showName: true, lightText: isDark),
-          const SizedBox(height: 24),
+          const SizedBox(height: 8),
           _ProfileCard(
             auth: auth,
             isDark: isDark,
             isPremium: settings.isPremium,
+            active: path.startsWith('/app/profile'),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           Expanded(
             child: ListView(
-              children: items.map((item) {
-                final active = item.path == '/app'
-                    ? path == '/app'
-                    : path.startsWith(item.path);
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Material(
-                    color: active ? OtterColors.sberGreen : Colors.transparent,
-                    borderRadius: BorderRadius.circular(16),
-                    child: ListTile(
-                      leading: Icon(
-                        item.icon,
-                        color: active
-                            ? Colors.white
-                            : (isDark
-                                  ? OtterColors.darkText
-                                  : OtterColors.sberGray),
-                      ),
-                      title: Text(
-                        item.label,
-                        style: TextStyle(
-                          color: active
-                              ? Colors.white
-                              : (isDark
-                                    ? OtterColors.darkText
-                                    : OtterColors.sberGray),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+              padding: EdgeInsets.zero,
+              children: [
+                for (final item in items)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: _NavRow(
+                      label: item.label,
+                      icon: item.icon,
+                      active: item.path == '/app'
+                          ? path == '/app'
+                          : path.startsWith(item.path),
+                      isDark: isDark,
                       onTap: () => context.go(item.path),
                     ),
                   ),
-                );
-              }).toList(),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               color: isDark
                   ? OtterColors.darkSurfaceAlt
                   : OtterColors.grayLight,
               borderRadius: BorderRadius.circular(16),
+              border: isDark
+                  ? Border.all(color: const Color(0xFF222833))
+                  : null,
             ),
             child: Column(
               children: [
+                _PremiumSidebarButton(
+                  isDark: isDark,
+                  onTap: () => context.push('/app/settings?openPremium=1'),
+                ),
+                const SizedBox(height: 2),
                 _SidebarLink(
                   label: 'FAQ',
                   icon: LucideIcons.helpCircle,
-                  path: '/app/faq',
-                  currentPath: path,
+                  active: path == '/app/faq',
                   isDark: isDark,
+                  onTap: () => context.go('/app/faq'),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 _SidebarLink(
-                  label: 'Документы',
-                  icon: LucideIcons.fileText,
-                  path: '/app/legal',
-                  currentPath: path,
+                  label: 'Рекомендовать друзьям',
+                  icon: LucideIcons.share2,
+                  active: false,
                   isDark: isDark,
+                  onTap: () => _shareApp(context),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: () => context.push('/app/new-task'),
-            icon: const Icon(LucideIcons.plus, color: Colors.white),
-            label: const Text(
-              'Новая задача',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 48,
+            child: FilledButton.icon(
+              onPressed: () => context.push(
+                '/app/new-task?returnTo=${Uri.encodeComponent(path)}',
               ),
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: OtterColors.sberGreen,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+              icon: const Icon(LucideIcons.plus, size: 18, color: Colors.white),
+              label: const Text(
+                'Новая задача',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: OtterColors.sberGreen,
+                minimumSize: const Size.fromHeight(48),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             ),
           ),
@@ -235,46 +270,189 @@ class _Sidebar extends ConsumerWidget {
   }
 }
 
-class _SidebarLink extends StatelessWidget {
-  const _SidebarLink({
+class _NavRow extends StatelessWidget {
+  const _NavRow({
     required this.label,
     required this.icon,
-    required this.path,
-    required this.currentPath,
+    required this.active,
     required this.isDark,
+    required this.onTap,
   });
 
   final String label;
   final IconData icon;
-  final String path;
-  final String currentPath;
+  final bool active;
   final bool isDark;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final active = currentPath == path;
+    final color = active
+        ? Colors.white
+        : (isDark ? const Color(0xFFCBD5E1) : OtterColors.sberGray);
+
+    return Material(
+      color: active ? OtterColors.sberGreen : Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      elevation: active ? 1 : 0,
+      shadowColor: Colors.black26,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: color),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PremiumSidebarButton extends StatelessWidget {
+  const _PremiumSidebarButton({required this.isDark, required this.onTap});
+
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              colors: isDark
+                  ? [
+                      const Color(0x33F59E0B),
+                      const Color(0x1AEAB308),
+                      Colors.transparent,
+                    ]
+                  : [
+                      const Color(0xFFFEF3C7),
+                      const Color(0xFFFFFBEB),
+                      Colors.white,
+                    ],
+            ),
+            border: Border.all(
+              color: isDark
+                  ? const Color(0x4DFBBF24)
+                  : const Color(0xCCFDE68A),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0x26FBBF24)
+                        : const Color(0x99FDE68A),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    LucideIcons.crown,
+                    size: 16,
+                    color: isDark
+                        ? const Color(0xFFFBBF24)
+                        : const Color(0xFFF59E0B),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Премиум',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.3,
+                      color: isDark
+                          ? const Color(0xFFFCD34D)
+                          : const Color(0xFF92400E),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SidebarLink extends StatelessWidget {
+  const _SidebarLink({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool active;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active
+        ? Colors.white
+        : (isDark ? const Color(0xFFCBD5E1) : OtterColors.sberGray);
+
     return Material(
       color: active ? OtterColors.sberGreen : Colors.transparent,
       borderRadius: BorderRadius.circular(12),
-      child: ListTile(
-        dense: true,
-        leading: Icon(
-          icon,
-          size: 20,
-          color: active ? Colors.white : OtterColors.sberGray,
-        ),
-        title: Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: active
-                ? Colors.white
-                : (isDark ? OtterColors.darkText : OtterColors.sberGray),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        onTap: () => context.go(path),
       ),
     );
   }
@@ -285,53 +463,57 @@ class _ProfileCard extends StatelessWidget {
     required this.auth,
     required this.isDark,
     required this.isPremium,
+    required this.active,
   });
 
   final AuthState auth;
   final bool isDark;
   final bool isPremium;
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
     final user = auth.user;
     return Material(
-      color: isDark ? OtterColors.darkSurfaceAlt : OtterColors.grayLight,
-      borderRadius: BorderRadius.circular(28),
+      color: active
+          ? OtterColors.sberGreenLight
+          : (isDark ? OtterColors.darkSurfaceAlt : OtterColors.grayLight),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: () => context.go('/app/profile'),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(10),
           child: Row(
             children: [
               Container(
-                decoration: isPremium
-                    ? BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFFFACC15),
-                          width: 2,
-                        ),
-                      )
-                    : null,
-                padding: isPremium ? const EdgeInsets.all(2) : EdgeInsets.zero,
-                child: CircleAvatar(
-                  radius: 24,
-                  backgroundColor: OtterColors.sberGreen,
-                  backgroundImage: user?.avatar != null
-                      ? NetworkImage(user!.avatar!)
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: OtterColors.sberGreen,
+                  border: isPremium
+                      ? Border.all(color: const Color(0xFFFACC15), width: 2)
                       : null,
-                  child: user?.avatar == null
-                      ? Text(
-                          (user?.name.isNotEmpty == true ? user!.name[0] : 'A')
-                              .toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
+                  image: user?.avatar != null
+                      ? DecorationImage(
+                          image: NetworkImage(user!.avatar!),
+                          fit: BoxFit.cover,
                         )
                       : null,
                 ),
+                alignment: Alignment.center,
+                child: user?.avatar == null
+                    ? Text(
+                        (user?.name.isNotEmpty == true ? user!.name[0] : 'A')
+                            .toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -342,10 +524,11 @@ class _ProfileCard extends StatelessWidget {
                       children: [
                         Flexible(
                           child: Text(
-                            user?.name ?? 'Пользователь',
+                            user?.name ?? 'Профиль',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
+                              fontSize: 14,
                               fontWeight: FontWeight.w600,
                               color: isDark
                                   ? OtterColors.darkText
@@ -354,29 +537,35 @@ class _ProfileCard extends StatelessWidget {
                           ),
                         ),
                         if (isPremium) ...[
-                          const SizedBox(width: 4),
-                          const Text(
-                            '⭐',
-                            style: TextStyle(
-                              fontSize: 13,
-                              height: 1,
-                            ),
+                          const SizedBox(width: 6),
+                          const Icon(
+                            Icons.star_rounded,
+                            size: 18,
+                            color: Color(0xFFFBBF24),
                           ),
                         ],
                       ],
                     ),
-                    if (user?.email != null)
-                      Text(
-                        user!.email,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: OtterColors.sberGray,
-                        ),
+                    Text(
+                      user?.email ?? 'Профиль',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : OtterColors.sberGray,
                       ),
+                    ),
                   ],
                 ),
+              ),
+              Icon(
+                LucideIcons.chevronRight,
+                size: 16,
+                color: isDark
+                    ? const Color(0xFF94A3B8)
+                    : OtterColors.grayMid,
               ),
             ],
           ),

@@ -25,6 +25,7 @@ import '../../data/models/ui/ui_models.dart';
 import '../audio/pomodoro_audio.dart';
 import '../audio/pomodoro_notifications.dart';
 import '../audio/feedback_audio.dart';
+import '../billing/android_premium_coming_soon.dart';
 import '../billing/premium_billing.dart';
 import '../push/push_notifications.dart';
 import '../utils/premium_tariffs.dart';
@@ -32,6 +33,7 @@ import '../utils/recurrence.dart';
 import '../utils/time_utils.dart';
 import '../utils/timezone_utils.dart';
 import '../locale/app_languages.dart';
+
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 
 final apiClientProvider = Provider<ApiClient>((ref) {
@@ -88,6 +90,7 @@ final pushNotificationsProvider = Provider<PushNotifications>((ref) {
     reminders: ref.watch(remindersServiceProvider),
     onTasksChanged: () => ref.read(tasksStateProvider.notifier).loadGrouped(),
     onReminderSound: () async {
+      // Foreground: banner always; sound only when settings.notifications.
       final settings = ref.read(appSettingsProvider);
       if (!settings.notifications) return;
       await ref.read(feedbackAudioProvider).playKey(
@@ -224,6 +227,43 @@ class NotificationsInboxNotifier
           ? (state.unreadCount - 1).clamp(0, 1 << 30)
           : state.unreadCount,
     );
+  }
+
+  /// Deletes multiple notifications (one API call per id) and syncs local inbox.
+  Future<void> removeMany(Iterable<int> ids) async {
+    final unique = ids.toSet();
+    if (unique.isEmpty) return;
+
+    final service = _ref.read(notificationsServiceProvider);
+    final results = await Future.wait(
+      unique.map((id) async {
+        try {
+          await service.delete(id);
+          return id;
+        } catch (_) {
+          return null;
+        }
+      }),
+    );
+    final deleted = results.whereType<int>().toSet();
+    if (deleted.isEmpty) {
+      throw Exception('Не удалось удалить уведомления');
+    }
+
+    var unreadRemoved = 0;
+    for (final n in state.items) {
+      if (deleted.contains(n.id) && !n.isRead) unreadRemoved++;
+    }
+    state = state.copyWith(
+      items: state.items.where((n) => !deleted.contains(n.id)).toList(),
+      unreadCount: (state.unreadCount - unreadRemoved).clamp(0, 1 << 30),
+    );
+
+    if (deleted.length != unique.length) {
+      throw Exception(
+        'Удалено ${deleted.length} из ${unique.length}. Попробуйте ещё раз.',
+      );
+    }
   }
 
   /// GET by id (server auto-marks unread as read) and sync local inbox.
@@ -380,6 +420,9 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   }
 
   Future<ApiSubscription> startTrial({bool recurringConsent = false}) async {
+    if (isAndroidPremiumPurchaseBlocked) {
+      throw StateError(kAndroidPremiumUnavailableMessage);
+    }
     state = state.copyWith(actionLoading: true, clearError: true);
     try {
       final sub = await _ref
@@ -401,9 +444,9 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   }
 
   Future<String> checkout({bool recurringConsent = false}) async {
-    // Defensive: Android Coming Soon must never hit Robokassa checkout.
+    // Defensive: Android RuStore v1 must never hit Robokassa checkout.
     if (isAndroidPremiumPurchaseBlocked) {
-      throw StateError('Подписка скоро будет доступна');
+      throw StateError(kAndroidPremiumUnavailableMessage);
     }
     state = state.copyWith(actionLoading: true, clearError: true);
     try {
@@ -1167,7 +1210,10 @@ class TasksNotifier extends StateNotifier<TasksState> {
       searchResults: state.searchResults,
     );
     try {
-      final groups = await _ref.read(tasksServiceProvider).fetchGrouped();
+      final apiGroups = await _ref.read(tasksServiceProvider).fetchGrouped();
+      // Match web `applyGrouped`: flatten + regroup by local calendar date.
+      // API buckets alone can lag / use UTC day boundaries after a web create.
+      final groups = _regroupLikeWeb(apiGroups, previous: state.groups);
       state = TasksState(
         groups: groups,
         searchQuery: state.searchQuery,
@@ -1210,19 +1256,94 @@ class TasksNotifier extends StateNotifier<TasksState> {
     );
   }
 
+  /// Web `groupTasksByKey` + `preserveImages` after `tasks/grouped/`.
+  Map<TaskGroupKey, List<Task>> _regroupLikeWeb(
+    Map<TaskGroupKey, List<Task>> apiGroups, {
+    required Map<TaskGroupKey, List<Task>> previous,
+  }) {
+    final prevById = <String, Task>{
+      for (final list in previous.values)
+        for (final t in list) t.id: t,
+    };
+
+    final seen = <String>{};
+    final flat = <Task>[];
+    for (final list in apiGroups.values) {
+      for (final incoming in list) {
+        if (!seen.add(incoming.id)) continue;
+        flat.add(_preserveTaskFields(incoming, prevById[incoming.id]));
+      }
+    }
+
+    final next = <TaskGroupKey, List<Task>>{
+      for (final key in TaskGroupKey.values) key: <Task>[],
+    };
+    for (final task in flat) {
+      next[_groupKeyForTask(task)]!.add(task);
+    }
+    return next;
+  }
+
+  /// Keep schedule/attachments when grouped payload briefly omits them (web).
+  static Task _preserveTaskFields(Task incoming, Task? prev) {
+    if (prev == null) return incoming;
+
+    var task = incoming;
+    if ((task.dueDate == null || task.dueDate!.isEmpty) &&
+        prev.dueDate != null &&
+        prev.dueDate!.isNotEmpty) {
+      task = task.copyWith(
+        dueDate: prev.dueDate,
+        dueTime: task.dueTime ?? prev.dueTime,
+        duration: task.duration ?? prev.duration,
+      );
+    }
+
+    final hasImage = (task.imageUrl != null && task.imageUrl!.isNotEmpty) ||
+        task.attachments.isNotEmpty;
+    if (hasImage) return task;
+
+    final prevCleared = (prev.imageUrl == null || prev.imageUrl!.isEmpty) &&
+        prev.attachments.isEmpty;
+    if (prevCleared) return task;
+
+    if ((prev.imageUrl != null && prev.imageUrl!.isNotEmpty) ||
+        prev.attachments.isNotEmpty) {
+      return task.copyWith(
+        imageUrl: prev.imageUrl,
+        attachments: prev.attachments.isNotEmpty
+            ? prev.attachments
+            : task.attachments,
+      );
+    }
+    return task;
+  }
+
+  /// Local YYYY-MM-DD bucketing — same rules as web `groupTasksByKey`.
   static TaskGroupKey _groupKeyForTask(Task task) {
     if (task.completed) return TaskGroupKey.completed;
-    final due = task.dueDate;
-    if (due == null || due.isEmpty) return TaskGroupKey.nodate;
-    final day = DateTime.tryParse(due);
-    if (day == null) return TaskGroupKey.nodate;
-    final today = DateTime.now();
-    final todayOnly = DateTime(today.year, today.month, today.day);
-    final dueOnly = DateTime(day.year, day.month, day.day);
-    final diff = dueOnly.difference(todayOnly).inDays;
-    if (diff < 0) return TaskGroupKey.overdue;
-    if (diff == 0) return TaskGroupKey.today;
-    if (diff == 1) return TaskGroupKey.tomorrow;
+    final raw = task.dueDate?.trim() ?? '';
+    if (raw.isEmpty) return TaskGroupKey.nodate;
+    final due = raw.length >= 10 ? raw.substring(0, 10) : raw;
+    if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(due)) {
+      return TaskGroupKey.nodate;
+    }
+
+    final now = DateTime.now();
+    final today =
+        '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+    final tomorrowDate = DateTime(now.year, now.month, now.day)
+        .add(const Duration(days: 1));
+    final tomorrow =
+        '${tomorrowDate.year.toString().padLeft(4, '0')}-'
+        '${tomorrowDate.month.toString().padLeft(2, '0')}-'
+        '${tomorrowDate.day.toString().padLeft(2, '0')}';
+
+    if (due.compareTo(today) < 0) return TaskGroupKey.overdue;
+    if (due == today) return TaskGroupKey.today;
+    if (due == tomorrow) return TaskGroupKey.tomorrow;
     return TaskGroupKey.later;
   }
 
@@ -1712,6 +1833,7 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
       dueDate: resolvedDue ?? task.dueDate,
       dueTime: start,
       duration: TaskDuration(start: start, end: end),
+      isAllDay: false,
     );
     applyTaskUpdate(optimistic);
     // Also update any expanded occurrence id in the list.
@@ -1741,8 +1863,128 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
           dueDate: resolvedDue ?? updated.dueDate,
           dueTime: start,
           duration: TaskDuration(start: start, end: end),
+          isAllDay: false,
         ),
       );
+      _ref.read(tasksStateProvider.notifier).upsertLocalTask(updated);
+    } catch (e) {
+      applyTaskUpdate(task.copyWith(id: realId));
+      rethrow;
+    }
+  }
+
+  /// Drop onto «Без вр.»: move due date and clear clock (web handleUntimedDayDrop).
+  Future<void> moveTaskToUntimed(Task task, String dueDate) async {
+    final realId = resolveRealTaskId(task.id);
+    final date = dueDate.trim();
+    if (date.isEmpty) return;
+
+    final optimistic = Task(
+      id: realId,
+      title: task.title,
+      description: task.description,
+      dueDate: date,
+      dueTime: null,
+      duration: null,
+      priority: task.priority,
+      completed: task.completed,
+      completedAt: task.completedAt,
+      notification: task.notification,
+      repeat: task.repeat,
+      repeatDays: task.repeatDays,
+      repeatCustom: task.repeatCustom,
+      imageUrl: task.imageUrl,
+      attachmentId: task.attachmentId,
+      attachmentName: task.attachmentName,
+      attachmentMimeType: task.attachmentMimeType,
+      attachments: task.attachments,
+      isAllDay: true,
+      listKey: task.listKey,
+      matrixBlock: task.matrixBlock,
+      seriesId: task.seriesId,
+      parentTaskId: task.parentTaskId,
+      createdAt: task.createdAt,
+    );
+    applyTaskUpdate(optimistic);
+    if (task.id != realId) {
+      removeTask(task.id);
+      upsertTask(optimistic);
+    }
+
+    try {
+      final updated = await _ref
+          .read(tasksStateProvider.notifier)
+          .updateTask(
+            realId,
+            PartialTask(
+              dueDate: date,
+              clearDueTime: true,
+              clearDuration: true,
+            ),
+            refreshGrouped: false,
+            refreshCalendar: false,
+            refreshMatrix: false,
+          );
+      applyTaskUpdate(
+        Task(
+          id: updated.id,
+          title: updated.title,
+          description: updated.description,
+          dueDate: date,
+          dueTime: null,
+          duration: null,
+          priority: updated.priority,
+          completed: updated.completed,
+          completedAt: updated.completedAt,
+          notification: updated.notification,
+          repeat: updated.repeat,
+          repeatDays: updated.repeatDays,
+          repeatCustom: updated.repeatCustom,
+          imageUrl: updated.imageUrl,
+          attachmentId: updated.attachmentId,
+          attachmentName: updated.attachmentName,
+          attachmentMimeType: updated.attachmentMimeType,
+          attachments: updated.attachments,
+          isAllDay: true,
+          listKey: updated.listKey,
+          matrixBlock: updated.matrixBlock,
+          seriesId: updated.seriesId,
+          parentTaskId: updated.parentTaskId,
+          createdAt: updated.createdAt,
+        ),
+      );
+      _ref.read(tasksStateProvider.notifier).upsertLocalTask(updated);
+    } catch (e) {
+      applyTaskUpdate(task.copyWith(id: realId));
+      rethrow;
+    }
+  }
+
+  /// Month drag: change due date only (web handleMonthCellDrop).
+  Future<void> moveTaskToDate(Task task, String dueDate) async {
+    final realId = resolveRealTaskId(task.id);
+    final date = dueDate.trim();
+    if (date.isEmpty) return;
+    if (task.dueDate == date) return;
+
+    final optimistic = task.copyWith(id: realId, dueDate: date);
+    applyTaskUpdate(optimistic);
+    if (task.id != realId) {
+      removeTask(task.id);
+      upsertTask(optimistic);
+    }
+
+    try {
+      final updated = await _ref
+          .read(tasksStateProvider.notifier)
+          .updateTask(
+            realId,
+            PartialTask(dueDate: date),
+            refreshGrouped: false,
+            refreshCalendar: false,
+            refreshMatrix: false,
+          );
+      applyTaskUpdate(updated.copyWith(dueDate: date));
       _ref.read(tasksStateProvider.notifier).upsertLocalTask(updated);
     } catch (e) {
       applyTaskUpdate(task.copyWith(id: realId));
@@ -1820,10 +2062,11 @@ class MatrixNotifier extends StateNotifier<Map<String, List<Task>>> {
   final Ref _ref;
 
   Future<void> load() async {
-    // Ensure we have grouped tasks for client-side multi-filter.
-    final tasksState = _ref.read(tasksStateProvider);
-    if (tasksState.groups.isEmpty && !tasksState.loading) {
+    // Web matrix page: fetchGrouped + fetchMatrix, then client-side OR filters.
+    var tasksState = _ref.read(tasksStateProvider);
+    if (tasksState.groups.isEmpty) {
       await _ref.read(tasksStateProvider.notifier).loadGrouped();
+      tasksState = _ref.read(tasksStateProvider);
     }
 
     Map<String, List<Task>> fromApi = {};
@@ -1834,24 +2077,60 @@ class MatrixNotifier extends StateNotifier<Map<String, List<Task>>> {
     }
 
     final settings = _ref.read(matrixSettingsProvider).blocks;
-    final groups = _ref.read(tasksStateProvider).groups;
-    final allTasks = <Task>[
-      for (final list in groups.values) ...list,
-    ];
-    final incomplete = allTasks.where((t) => !t.completed).toList();
+    final groups = tasksState.groups;
+
+    // Unique incomplete tasks (same as web flatten + !completed).
+    final seen = <String>{};
+    final incomplete = <Task>[];
+    for (final list in groups.values) {
+      for (final t in list) {
+        if (t.completed || !seen.add(t.id)) continue;
+        incomplete.add(t);
+      }
+    }
 
     final result = <String, List<Task>>{};
     for (final block in MatrixBlock.values) {
-      final setting = settings[block] ?? MatrixBlockUiSetting.defaults()[block]!;
-      final matched = _filterTasksForBlock(incomplete, groups, setting);
-      final assigned = fromApi[block.id] ?? [];
-      final byId = <String, Task>{};
-      for (final t in [...matched, ...assigned]) {
-        if (!t.completed) byId[t.id] = t;
-      }
-      result[block.id] = byId.values.toList();
+      final setting =
+          settings[block] ?? MatrixBlockUiSetting.defaults()[block]!;
+      result[block.id] = _tasksForBlock(
+        block: block,
+        incomplete: incomplete,
+        groups: groups,
+        setting: setting,
+        fromApi: fromApi[block.id] ?? const [],
+      );
     }
     state = result;
+  }
+
+  /// Mirrors web `getTasksForMatrix`.
+  List<Task> _tasksForBlock({
+    required MatrixBlock block,
+    required List<Task> incomplete,
+    required Map<TaskGroupKey, List<Task>> groups,
+    required MatrixBlockUiSetting setting,
+    required List<Task> fromApi,
+  }) {
+    final hasDateFilters = setting.dateFilters.isNotEmpty;
+    final hasPriorityFilters = setting.priorityFilters.isNotEmpty;
+
+    if (hasDateFilters || hasPriorityFilters) {
+      final matched = _filterTasksForBlock(incomplete, groups, setting);
+      // Web: assigned = incomplete.filter(t => t.matrixBlock === blockId)
+      // Do NOT union with matrix/ API lists — those inflate counts vs web.
+      final assigned =
+          incomplete.where((t) => t.matrixBlock == block).toList();
+      final byId = <String, Task>{};
+      for (final t in [...matched, ...assigned]) {
+        byId[t.id] = t;
+      }
+      return byId.values.toList();
+    }
+
+    final apiList = fromApi.where((t) => !t.completed).toList();
+    if (apiList.isNotEmpty) return apiList;
+    return incomplete.where((t) => t.matrixBlock == block).toList();
   }
 
   List<Task> _filterTasksForBlock(
@@ -1863,7 +2142,7 @@ class MatrixNotifier extends StateNotifier<Map<String, List<Task>>> {
     final hasPriorityFilters = setting.priorityFilters.isNotEmpty;
 
     if (!hasDateFilters && !hasPriorityFilters) {
-      return incomplete;
+      return const [];
     }
 
     final dateMatchedIds = <String>{};
@@ -1875,7 +2154,7 @@ class MatrixNotifier extends StateNotifier<Map<String, List<Task>>> {
         final list = groups[groupKey];
         if (list != null) {
           for (final t in list) {
-            dateMatchedIds.add(t.id);
+            if (!t.completed) dateMatchedIds.add(t.id);
           }
         }
       }
@@ -1901,7 +2180,34 @@ class MatrixNotifier extends StateNotifier<Map<String, List<Task>>> {
   }
 
   Future<void> moveTask(String taskId, MatrixBlock block) async {
-    await _ref.read(tasksServiceProvider).moveToMatrix(taskId, block);
+    // Optimistic: mirror web `upsertTaskInState` before refresh.
+    final groups = _ref.read(tasksStateProvider).groups;
+    Task? existing;
+    for (final list in groups.values) {
+      for (final t in list) {
+        if (t.id == taskId) {
+          existing = t;
+          break;
+        }
+      }
+      if (existing != null) break;
+    }
+    if (existing != null) {
+      _ref
+          .read(tasksStateProvider.notifier)
+          .upsertLocalTask(existing.copyWith(matrixBlock: block));
+    }
+
+    try {
+      final updated =
+          await _ref.read(tasksServiceProvider).moveToMatrix(taskId, block);
+      _ref.read(tasksStateProvider.notifier).upsertLocalTask(updated);
+    } catch (_) {
+      if (existing != null) {
+        _ref.read(tasksStateProvider.notifier).upsertLocalTask(existing);
+      }
+      rethrow;
+    }
     await load();
   }
 }

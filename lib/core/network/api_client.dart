@@ -71,9 +71,17 @@ class ApiClient {
     await _onUnauthorized?.call();
   }
 
-  Future<T> get<T>(String path, {Map<String, dynamic>? queryParameters}) async {
+  Future<T> get<T>(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    Map<String, dynamic>? headers,
+  }) async {
     final response = await _request(
-      () => _dio.get<T>(path, queryParameters: queryParameters),
+      () => _dio.get<T>(
+        path,
+        queryParameters: queryParameters,
+        options: headers == null ? null : Options(headers: headers),
+      ),
     );
     return response.data as T;
   }

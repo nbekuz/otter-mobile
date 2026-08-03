@@ -90,7 +90,7 @@ class _DocumentsHub extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        for (final doc in staticLegalDocuments)
+        for (final doc in hubStaticLegalDocuments)
           Card(
             color: surface,
             margin: const EdgeInsets.only(bottom: 8),
@@ -103,9 +103,9 @@ class _DocumentsHub extends StatelessWidget {
                 doc.title,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              subtitle: const Text(
-                '17.06.2026',
-                style: TextStyle(fontSize: 12),
+              subtitle: Text(
+                formatStaticLegalUpdatedAt(doc.updatedAt) ?? doc.updatedAt,
+                style: const TextStyle(fontSize: 12),
               ),
               trailing: const Icon(
                 LucideIcons.chevronRight,

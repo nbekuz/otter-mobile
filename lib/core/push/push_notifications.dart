@@ -44,7 +44,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       message.data['body']?.toString() ??
       message.data['task_title']?.toString() ??
       '';
-  final taskId = message.data['task_id']?.toString() ?? '';
+  final payload = _pushPayloadFromData(message.data);
 
   final local = FlutterLocalNotificationsPlugin();
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -65,6 +65,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     ),
   );
 
+  final taskId = message.data['task_id']?.toString() ?? '';
   await local.show(
     message.hashCode,
     title,
@@ -92,8 +93,19 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
               ],
       ),
     ),
-    payload: taskId,
+    payload: payload,
   );
+}
+
+/// Local notification payload: `n:<inboxId>` or bare `task_id`.
+String _pushPayloadFromData(Map<String, dynamic> data) {
+  final notificationId = data['notification_id']?.toString();
+  if (notificationId != null &&
+      notificationId.isNotEmpty &&
+      notificationId != '0') {
+    return 'n:$notificationId';
+  }
+  return data['task_id']?.toString() ?? '';
 }
 
 class PushNotifications {
@@ -190,6 +202,21 @@ class PushNotifications {
       const InitializationSettings(android: androidInit, iOS: iosInit),
       onDidReceiveNotificationResponse: _onLocalNotificationResponse,
     );
+
+    // Cold start: app opened by tapping a local notification (data-only FCM
+    // / poll fallback). Queue via _openTask if navigation handlers are not
+    // bound yet — same pending path as FCM getInitialMessage.
+    try {
+      final launch = await _local.getNotificationAppLaunchDetails();
+      if (launch?.didNotificationLaunchApp == true) {
+        final response = launch!.notificationResponse;
+        if (response != null) {
+          _onLocalNotificationResponse(response);
+        }
+      }
+    } catch (e, st) {
+      debugPrint('[PushNotifications] launch details failed: $e\n$st');
+    }
 
     final androidPlugin = _local
         .resolvePlatformSpecificImplementation<
@@ -305,7 +332,10 @@ class PushNotifications {
     final body =
         message.notification?.body ?? message.data['body']?.toString() ?? '';
     final taskId = message.data['task_id']?.toString() ?? '';
+    final payload = _pushPayloadFromData(message.data);
 
+    // Settings «Уведомления»: banner still shows; sound is gated in
+    // onReminderSound (provider checks appSettings.notifications).
     // ignore: discarded_futures
     _onReminderSound?.call();
     // ignore: discarded_futures
@@ -343,7 +373,7 @@ class PushNotifications {
           presentSound: false,
         ),
       ),
-      payload: taskId,
+      payload: payload,
     );
   }
 
@@ -365,7 +395,16 @@ class PushNotifications {
   }
 
   void _onLocalNotificationResponse(NotificationResponse response) {
-    final taskId = response.payload ?? '';
+    final raw = response.payload ?? '';
+    if (raw.startsWith('n:')) {
+      final inboxId = int.tryParse(raw.substring(2));
+      if (inboxId != null && inboxId > 0) {
+        _openNotification(inboxId);
+      }
+      return;
+    }
+
+    final taskId = raw;
     final parsed = int.tryParse(taskId);
     switch (response.actionId) {
       case _completeActionId:

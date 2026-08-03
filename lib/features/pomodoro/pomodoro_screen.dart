@@ -82,14 +82,14 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              padding: EdgeInsets.fromLTRB(wide ? 24 : 12, 6, wide ? 24 : 12, 10),
               child: Row(
                 children: [
                   const Text(
                     'Помодоро',
                     style: TextStyle(
                       fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w800,
                       color: OtterColors.sberBlack,
                     ),
                   ),
@@ -108,55 +108,30 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
             Expanded(
               child: ResponsiveContent(
                 maxWidth: wide ? 900 : double.infinity,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: wide
-                      ? Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: _PomodoroTimerCard(
-                                state: state,
-                                progress: progress,
-                                formatTime: _formatTime,
-                                onToggle: _toggleTimer,
-                                onStop: () async {
-                                  await ref
-                                      .read(pomodoroStateProvider.notifier)
-                                      .stop();
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 24),
-                            Expanded(
-                              child: _TaskSoundRow(
-                                selectedTaskTitle: selectedTask?.title,
-                                workSounds: state.workBackgroundSounds,
-                                selectedWorkSound: state.settings.workingSound,
-                                onPickTask: () => _openTaskPicker(context),
-                                onSelectWorkSound: (sound) => ref
-                                    .read(pomodoroStateProvider.notifier)
-                                    .setWorkSound(sound),
-                              ),
-                            ),
-                          ],
-                        )
-                      : Column(
-                          children: [
-                            _TaskSoundRow(
-                              selectedTaskTitle: selectedTask?.title,
-                              workSounds: state.workBackgroundSounds,
-                              selectedWorkSound: state.settings.workingSound,
-                              onPickTask: () => _openTaskPicker(context),
-                              onSelectWorkSound: (sound) => ref
-                                  .read(pomodoroStateProvider.notifier)
-                                  .setWorkSound(sound),
-                            ),
-                            const SizedBox(height: 16),
-                            _PomodoroTimerCard(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    // Web: task + sound on top, large timer card below (centered).
+                    final body = Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _TaskSoundRow(
+                          selectedTaskTitle: selectedTask?.title,
+                          workSounds: state.workBackgroundSounds,
+                          selectedWorkSound: state.settings.workingSound,
+                          sideBySide: wide,
+                          onPickTask: () => _openTaskPicker(context),
+                          onSelectWorkSound: (sound) => ref
+                              .read(pomodoroStateProvider.notifier)
+                              .setWorkSound(sound),
+                        ),
+                        const SizedBox(height: 16),
+                        if (wide)
+                          Expanded(
+                            child: _PomodoroTimerCard(
                               state: state,
                               progress: progress,
                               formatTime: _formatTime,
+                              expand: true,
                               onToggle: _toggleTimer,
                               onStop: () async {
                                 await ref
@@ -164,8 +139,34 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                                     .stop();
                               },
                             ),
-                          ],
-                        ),
+                          )
+                        else
+                          _PomodoroTimerCard(
+                            state: state,
+                            progress: progress,
+                            formatTime: _formatTime,
+                            onToggle: _toggleTimer,
+                            onStop: () async {
+                              await ref
+                                  .read(pomodoroStateProvider.notifier)
+                                  .stop();
+                            },
+                          ),
+                      ],
+                    );
+
+                    if (wide) {
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                        child: body,
+                      );
+                    }
+
+                    return SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: body,
+                    );
+                  },
                 ),
               ),
             ),
@@ -443,6 +444,7 @@ class _PomodoroTimerCard extends StatelessWidget {
     required this.formatTime,
     required this.onToggle,
     required this.onStop,
+    this.expand = false,
   });
 
   final PomodoroUiState state;
@@ -450,12 +452,16 @@ class _PomodoroTimerCard extends StatelessWidget {
   final String Function(int seconds) formatTime;
   final Future<void> Function() onToggle;
   final Future<void> Function() onStop;
+  final bool expand;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.symmetric(
+        horizontal: expand ? 40 : 24,
+        vertical: expand ? 32 : 24,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(32),
@@ -467,110 +473,123 @@ class _PomodoroTimerCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(state.settings.sessionsUntilLong, (i) {
-              final filled =
-                  state.sessionCount > 0 &&
-                  i < state.sessionCount % state.settings.sessionsUntilLong;
-              return Container(
-                width: 32,
-                height: 8,
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  color: filled ? OtterColors.sberGreen : OtterColors.grayMid,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              );
-            }),
-          ),
-          const SizedBox(height: 24),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final timerSize = (constraints.maxWidth * 0.65).clamp(
-                180.0,
-                280.0,
-              );
-              return SizedBox(
-                width: timerSize,
-                height: timerSize,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    SizedBox(
-                      width: timerSize,
-                      height: timerSize,
-                      child: CircularProgressIndicator(
-                        value: progress,
-                        strokeWidth: 10,
-                        backgroundColor: OtterColors.grayMid,
-                        color: state.isBreak
-                            ? OtterColors.sberBlue
-                            : OtterColors.sberGreen,
+      child: expand
+          ? SizedBox.expand(child: _timerBody(context))
+          : _timerBody(context),
+    );
+  }
+
+  Widget _timerBody(BuildContext context) {
+    return Column(
+      mainAxisAlignment:
+          expand ? MainAxisAlignment.center : MainAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(state.settings.sessionsUntilLong, (i) {
+            final filled =
+                state.sessionCount > 0 &&
+                i < state.sessionCount % state.settings.sessionsUntilLong;
+            return Container(
+              width: 32,
+              height: 8,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: filled ? OtterColors.sberGreen : OtterColors.grayMid,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            );
+          }),
+        ),
+        SizedBox(height: expand ? 28 : 24),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final maxByWidth = constraints.maxWidth;
+            final maxByHeight = expand
+                ? (MediaQuery.sizeOf(context).height * 0.42)
+                : 280.0;
+            final timerSize = (maxByWidth * (expand ? 0.55 : 0.65)).clamp(
+              180.0,
+              expand ? maxByHeight.clamp(220.0, 448.0) : 280.0,
+            );
+            return SizedBox(
+              width: timerSize,
+              height: timerSize,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+                    width: timerSize,
+                    height: timerSize,
+                    child: CircularProgressIndicator(
+                      value: progress,
+                      strokeWidth: expand ? 12 : 10,
+                      backgroundColor: OtterColors.grayMid,
+                      color: state.isBreak
+                          ? OtterColors.sberBlue
+                          : OtterColors.sberGreen,
+                    ),
+                  ),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        formatTime(state.secondsLeft),
+                        style: TextStyle(
+                          fontSize: timerSize * (expand ? 0.22 : 0.2),
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
+                        ),
                       ),
-                    ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          formatTime(state.secondsLeft),
-                          style: TextStyle(
-                            fontSize: timerSize * 0.2,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      const SizedBox(height: 4),
+                      Text(
+                        state.timerState == 'paused'
+                            ? 'На паузе'
+                            : state.isBreak
+                            ? 'Перерыв'
+                            : state.timerState == 'running'
+                            ? 'Фокус'
+                            : 'Готов',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: state.isBreak
+                              ? OtterColors.sberBlue
+                              : OtterColors.sberGray,
+                          fontWeight: state.isBreak
+                              ? FontWeight.w600
+                              : FontWeight.w400,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          state.timerState == 'paused'
-                              ? 'На паузе'
-                              : state.isBreak
-                              ? 'Перерыв'
-                              : state.timerState == 'running'
-                              ? 'Фокус'
-                              : 'Готов',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: state.isBreak
-                                ? OtterColors.sberBlue
-                                : OtterColors.sberGray,
-                            fontWeight: state.isBreak
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 32),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _CircleControl(
-                icon: LucideIcons.square,
-                enabled: state.timerState != 'idle',
-                onPressed: onStop,
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(width: 24),
-              _MainControl(
-                isRunning: state.timerState == 'running',
-                onPressed: onToggle,
-              ),
-              const SizedBox(width: 24),
-              _CircleControl(
-                icon: LucideIcons.skipForward,
-                enabled: true,
-                onPressed: onStop,
-              ),
-            ],
-          ),
-        ],
-      ),
+            );
+          },
+        ),
+        SizedBox(height: expand ? 36 : 32),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _CircleControl(
+              icon: LucideIcons.square,
+              enabled: state.timerState != 'idle',
+              onPressed: onStop,
+            ),
+            const SizedBox(width: 24),
+            _MainControl(
+              isRunning: state.timerState == 'running',
+              onPressed: onToggle,
+            ),
+            const SizedBox(width: 24),
+            _CircleControl(
+              icon: LucideIcons.skipForward,
+              enabled: true,
+              onPressed: onStop,
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -582,6 +601,7 @@ class _TaskSoundRow extends StatelessWidget {
     required this.selectedWorkSound,
     required this.onPickTask,
     required this.onSelectWorkSound,
+    this.sideBySide = false,
   });
 
   final String? selectedTaskTitle;
@@ -589,121 +609,164 @@ class _TaskSoundRow extends StatelessWidget {
   final String selectedWorkSound;
   final VoidCallback onPickTask;
   final ValueChanged<ApiSound> onSelectWorkSound;
+  final bool sideBySide;
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Material(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(28),
-          child: InkWell(
-            onTap: onPickTask,
-            borderRadius: BorderRadius.circular(28),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  const Icon(
-                    LucideIcons.target,
-                    color: OtterColors.sberGreen,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Задача для фокуса',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: OtterColors.sberGray,
-                          ),
-                        ),
-                        Text(
-                          selectedTaskTitle ?? 'Выбрать задачу...',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(
-                    LucideIcons.chevronRight,
-                    size: 18,
-                    color: OtterColors.sberGray,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _taskCard() {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(28),
+      child: InkWell(
+        onTap: onPickTask,
+        borderRadius: BorderRadius.circular(28),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          child: Row(
             children: [
-              Row(
-                children: [
-                  const Icon(
-                    LucideIcons.music,
-                    size: 20,
-                    color: OtterColors.sberGray,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Звук фоновый',
-                    style: TextStyle(fontSize: 14, color: OtterColors.sberGray),
-                  ),
-                ],
+              const Icon(
+                LucideIcons.target,
+                color: OtterColors.sberGreen,
+                size: 20,
               ),
-              const SizedBox(height: 12),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: workSounds.map((sound) {
-                    final selected = selectedWorkSound == sound.key;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: InkWell(
-                        onTap: () => onSelectWorkSound(sound),
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? OtterColors.sberGreen
-                                : OtterColors.grayLight,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            sound.emoji,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: selected
-                                  ? Colors.white
-                                  : OtterColors.sberGray,
-                            ),
-                          ),
-                        ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Задача для фокуса',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: OtterColors.sberGray,
                       ),
-                    );
-                  }).toList(),
+                    ),
+                    Text(
+                      selectedTaskTitle ?? 'Выбрать задачу...',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: OtterColors.sberBlack,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              const Icon(
+                LucideIcons.chevronRight,
+                size: 16,
+                color: OtterColors.sberGray,
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _soundButtons() {
+    return Wrap(
+      alignment: WrapAlignment.end,
+      spacing: 8,
+      runSpacing: 8,
+      children: workSounds.map((sound) {
+        final selected = selectedWorkSound == sound.key;
+        return InkWell(
+          onTap: () => onSelectWorkSound(sound),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: selected ? OtterColors.sberGreen : OtterColors.grayLight,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              sound.emoji,
+              style: TextStyle(
+                fontSize: 14,
+                color: selected ? Colors.white : OtterColors.sberGray,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _soundCard({required bool compactRow}) {
+    if (compactRow) {
+      // Web lg: icon + label + sound chips in one horizontal bar.
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: OtterColors.grayLight),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              LucideIcons.music,
+              size: 20,
+              color: OtterColors.sberGray,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Звук фоновый',
+                style: TextStyle(fontSize: 14, color: OtterColors.sberGray),
+              ),
+            ),
+            Flexible(child: _soundButtons()),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(LucideIcons.music, size: 20, color: OtterColors.sberGray),
+              SizedBox(width: 12),
+              Text(
+                'Звук фоновый',
+                style: TextStyle(fontSize: 14, color: OtterColors.sberGray),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _soundButtons(),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (sideBySide) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: _taskCard()),
+          const SizedBox(width: 12),
+          Expanded(child: _soundCard(compactRow: true)),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        _taskCard(),
+        const SizedBox(height: 12),
+        _soundCard(compactRow: false),
       ],
     );
   }

@@ -333,7 +333,7 @@ extension TaskGroupKeyX on TaskGroupKey {
   };
 
   static TaskGroupKey fromApi(String key) => switch (key) {
-    'no_deadline' => TaskGroupKey.nodate,
+    'no_deadline' || 'nodate' || 'no_date' => TaskGroupKey.nodate,
     'overdue' => TaskGroupKey.overdue,
     'today' => TaskGroupKey.today,
     'tomorrow' => TaskGroupKey.tomorrow,

@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,13 +22,16 @@ import '../../core/network/api_exception.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
 import '../../core/utils/open_url.dart';
+import '../../core/utils/password_policy.dart';
 import '../../core/utils/task_export.dart';
 import '../../core/utils/timezone_utils.dart';
 import '../../data/models/ui/ui_models.dart';
 import '../../shared/widgets/app_bottom_sheet.dart';
+import '../../shared/widgets/app_toast.dart';
 import '../../shared/widgets/bottom_nav.dart';
 import '../../shared/widgets/keyboard_dismisser.dart';
 import '../../shared/widgets/otter_checkbox.dart';
+import '../../shared/widgets/primary_button.dart';
 import 'windows_premium_payment_dialog.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -57,9 +62,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     Future.microtask(() async {
       await ref.read(appSettingsProvider.notifier).load();
       await ref.read(feedbackAudioProvider).ensureLoaded();
-      if (mounted) setState(() {});
-      if (widget.openPremium) {
+      if (!isAndroidPremiumPurchaseBlocked) {
         await ref.read(premiumStateProvider.notifier).loadAll();
+      }
+      if (mounted) setState(() {});
+      if (widget.openPremium && !isAndroidPremiumPurchaseBlocked) {
+        setState(() => _premiumVisible = true);
       }
     });
   }
@@ -72,6 +80,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _openPremium() async {
     setState(() => _premiumVisible = true);
+    if (isAndroidPremiumPurchaseBlocked) return;
     await ref.read(premiumStateProvider.notifier).loadAll();
   }
 
@@ -83,9 +92,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final isDark = settings.theme == 'dark';
     final wide = Responsive.isWide(context);
     final isPremium = premium.isPremium || settings.isPremium;
+    final expiresLabel = _premiumExpiresLabel(premium, auth);
 
     final content = ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
         Row(
@@ -93,143 +103,163 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const Expanded(
               child: Text(
                 'Настройки',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
             ),
             TextButton(
               onPressed: () => _confirmLogout(context),
-              child: const Text('Выйти', style: TextStyle(color: Colors.red)),
+              child: const Text(
+                'Выйти',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        _ProfileCard(auth: auth, isDark: isDark, isPremium: isPremium),
+        _ProfileCard(
+          auth: auth,
+          isDark: isDark,
+          isPremium: isPremium,
+          expiresLabel: expiresLabel,
+          bannerTitle: _premiumBannerTitle(premium, isPremium),
+          bannerSubtitle: _premiumBannerSubtitle(premium, isPremium, expiresLabel),
+          onPremiumTap: _openPremium,
+        ),
         const SizedBox(height: 16),
         _Section(
           title: 'Аккаунт',
+          isDark: isDark,
           children: [
-            ListTile(
-              leading: const Icon(LucideIcons.user),
-              title: const Text('Мой профиль'),
-              trailing: const Icon(LucideIcons.chevronRight),
+            _SettingsRow(
+              icon: LucideIcons.user,
+              label: 'Имя',
+              value: auth.user?.name.isNotEmpty == true ? auth.user!.name : '—',
+              onTap: _openNameModal,
+            ),
+            _SettingsRow(
+              icon: LucideIcons.camera,
+              label: 'Аватар',
+              onTap: _openAvatarSheet,
+            ),
+            _SettingsRow(
+              icon: LucideIcons.info,
+              label: 'Профиль',
               onTap: () => context.go('/app/profile'),
             ),
-            ListTile(
-              leading: const Icon(LucideIcons.crown, color: Colors.amber),
-              title: const Text('Premium'),
-              subtitle: Text(
-                isPremium ? 'Premium активен' : 'Подключить Premium',
-              ),
-              trailing: const Icon(LucideIcons.chevronRight),
+            _SettingsRow(
+              icon: LucideIcons.lock,
+              label: 'Пароль',
+              onTap: _openPasswordModal,
+            ),
+            _SettingsRow(
+              icon: LucideIcons.smartphone,
+              label: 'Устройства',
+              onTap: _openDevicesSheet,
+            ),
+            _SettingsRow(
+              icon: LucideIcons.crown,
+              iconColor: const Color(0xFFEAB308),
+              label: 'Премиум',
+              labelColor: const Color(0xFFCA8A04),
               onTap: _openPremium,
             ),
           ],
         ),
         if (_premiumVisible)
-          _PremiumPanel(
-            state: premium,
-            recurringConsent: _recurringConsent,
-            onConsentChanged: (v) =>
-                setState(() => _recurringConsent = v ?? false),
-            onClose: () => setState(() => _premiumVisible = false),
-            onSelectTariff: (code) =>
-                ref.read(premiumStateProvider.notifier).selectTariff(code),
-            onTrial: _startTrial,
-            onCheckout: _purchasePremium,
-            onRefresh: _refreshPremium,
-            onCancel: _cancelPremium,
-          ),
-        _Section(
-          title: 'Нижнее меню',
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Text(
-                'Включайте вкладки для нижней панели.',
-                style: TextStyle(fontSize: 12, color: OtterColors.sberGray),
-              ),
-            ),
-            for (final item in kAllNavItems)
-              SwitchListTile(
-                title: Text(item.label),
-                subtitle: item.id == 'settings'
-                    ? const Text('Всегда включено')
-                    : null,
-                value: settings.bottomNavItems.contains(item.id),
-                activeThumbColor: OtterColors.sberGreen,
-                onChanged: item.id == 'settings'
-                    ? null
-                    : (v) => _toggleNavItem(item.id, v, settings),
-              ),
-          ],
+          isAndroidPremiumPurchaseBlocked
+              ? AndroidPremiumUnavailablePanel(
+                  onClose: () => setState(() => _premiumVisible = false),
+                )
+              : _PremiumPanel(
+                  state: premium,
+                  recurringConsent: _recurringConsent,
+                  onConsentChanged: (v) =>
+                      setState(() => _recurringConsent = v ?? false),
+                  onClose: () => setState(() => _premiumVisible = false),
+                  onSelectTariff: (code) => ref
+                      .read(premiumStateProvider.notifier)
+                      .selectTariff(code),
+                  onTrial: _startTrial,
+                  onCheckout: _purchasePremium,
+                  onRefresh: _refreshPremium,
+                  onCancel: _cancelPremium,
+                ),
+        _BottomMenuSection(
+          settings: settings,
+          isDark: isDark,
+          onToggle: (id, enabled) => _toggleNavItem(id, enabled, settings),
+          onReorder: (orderedIds) {
+            final enabled = [
+              for (final id in orderedIds)
+                if (settings.bottomNavItems.contains(id)) id,
+            ];
+            if (!enabled.contains('settings')) enabled.add('settings');
+            ref
+                .read(appSettingsProvider.notifier)
+                .update(settings.copyWith(bottomNavItems: enabled));
+          },
         ),
         _Section(
           title: 'Приложение',
+          isDark: isDark,
           children: [
-            SwitchListTile(
-              title: const Text('Тёмная тема'),
-              value: isDark,
-              activeThumbColor: OtterColors.sberGreen,
-              onChanged: (v) {
-                final theme = v ? 'dark' : 'light';
+            _ThemeBlock(
+              isDark: isDark,
+              onSetTheme: (theme) {
                 ref.read(appSettingsProvider.notifier).setTheme(theme);
                 ref.read(themeModeProvider.notifier).state = theme;
               },
             ),
-            ListTile(
-              leading: const Icon(LucideIcons.paintbrush),
-              title: const Text('Вид'),
-              subtitle: Text(_calendarViewLabel(settings.calendarDefaultView)),
-              trailing: const Icon(LucideIcons.chevronRight),
+            _SettingsRow(
+              icon: LucideIcons.paintbrush,
+              label: 'Вид',
+              value: _calendarViewLabel(settings.calendarDefaultView),
               onTap: () => _openViewSettings(settings),
             ),
-            ListTile(
-              leading: const Icon(LucideIcons.clock),
-              title: const Text('Дата и время'),
-              subtitle: Text(
-                settings.timezone?.isNotEmpty == true
-                    ? settings.timezone!
-                    : 'Не задан',
-              ),
-              trailing: const Icon(LucideIcons.chevronRight),
+            _SettingsRow(
+              icon: LucideIcons.clock,
+              label: 'Дата и время',
+              value: settings.timezone?.isNotEmpty == true
+                  ? settings.timezone!
+                  : 'Не задан',
               onTap: () => _openDateTimeSettings(settings),
             ),
-            ListTile(
-              leading: const Icon(LucideIcons.download),
-              title: const Text('Интеграции и импорт'),
-              trailing: const Icon(LucideIcons.chevronRight),
+            _SettingsRow(
+              icon: LucideIcons.download,
+              label: 'Интеграции и импорт',
               onTap: _openIntegrationsSettings,
             ),
           ],
         ),
         _Section(
           title: 'Звуки и уведомления',
+          isDark: isDark,
           children: [
-            SwitchListTile(
-              title: const Text('Уведомления'),
+            _ToggleRow(
+              icon: LucideIcons.bell,
+              label: 'Уведомления',
               value: settings.notifications,
-              activeThumbColor: OtterColors.sberGreen,
               onChanged: (v) => ref
                   .read(appSettingsProvider.notifier)
                   .update(settings.copyWith(notifications: v)),
             ),
-            SwitchListTile(
-              title: const Text('Вибрация'),
+            _ToggleRow(
+              icon: LucideIcons.vibrate,
+              label: 'Вибрация',
               value: settings.vibration,
-              activeThumbColor: OtterColors.sberGreen,
               onChanged: (v) => ref
                   .read(appSettingsProvider.notifier)
                   .update(settings.copyWith(vibration: v)),
             ),
-            ListTile(
-              leading: const Icon(LucideIcons.volume2),
-              title: const Text('Звук уведомления'),
-              subtitle: Text(
-                ref
-                    .watch(feedbackAudioProvider)
-                    .label('notification', settings.notificationSound),
-              ),
-              trailing: const Icon(LucideIcons.chevronRight),
+            _SettingsRow(
+              icon: LucideIcons.volume2,
+              label: 'Звук уведомления',
+              value: ref
+                  .watch(feedbackAudioProvider)
+                  .label('notification', settings.notificationSound),
               onTap: () => _pickSound(
                 title: 'Звук уведомления',
                 category: 'notification',
@@ -239,15 +269,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     .update(settings.copyWith(notificationSound: key)),
               ),
             ),
-            ListTile(
-              leading: const Icon(LucideIcons.circleCheck),
-              title: const Text('Звук подтверждения'),
-              subtitle: Text(
-                ref
-                    .watch(feedbackAudioProvider)
-                    .label('completion', settings.completionSound),
-              ),
-              trailing: const Icon(LucideIcons.chevronRight),
+            _SettingsRow(
+              icon: LucideIcons.circleCheck,
+              label: 'Звук подтверждения',
+              value: ref
+                  .watch(feedbackAudioProvider)
+                  .label('completion', settings.completionSound),
               onTap: () => _pickSound(
                 title: 'Звук подтверждения',
                 category: 'completion',
@@ -261,72 +288,54 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         _Section(
           title: 'Разделы списка задач',
+          isDark: isDark,
           children: [
-            _GroupToggle(
-              label: 'Просрочено',
-              group: 'overdue',
-              settings: settings,
-            ),
-            _GroupToggle(label: 'Сегодня', group: 'today', settings: settings),
-            _GroupToggle(
-              label: 'Завтра',
-              group: 'tomorrow',
-              settings: settings,
-            ),
-            _GroupToggle(label: 'Позже', group: 'later', settings: settings),
-            _GroupToggle(
-              label: 'Без срока',
-              group: 'nodate',
-              settings: settings,
-            ),
-            _GroupToggle(
-              label: 'Готово',
-              group: 'completed',
-              settings: settings,
-            ),
+            for (final g in _kTaskGroups)
+              _GroupToggle(
+                label: g.label,
+                group: g.id,
+                color: g.color,
+                settings: settings,
+              ),
           ],
         ),
         _Section(
           title: 'Общее',
+          isDark: isDark,
           children: [
-            ListTile(
-              leading: const Icon(LucideIcons.globe),
-              title: const Text('Язык'),
-              subtitle: Text(appLanguageLabel(settings.language)),
-              trailing: const Icon(LucideIcons.chevronRight),
+            _SettingsRow(
+              icon: LucideIcons.globe,
+              label: 'Язык',
+              value: appLanguageLabel(settings.language),
               onTap: () => _pickLanguage(settings),
             ),
           ],
         ),
         _Section(
           title: 'Помощь и информация',
+          isDark: isDark,
           children: [
-            ListTile(
-              leading: const Icon(LucideIcons.helpCircle),
-              title: const Text('Частые вопросы (FAQ)'),
-              trailing: const Icon(LucideIcons.chevronRight),
+            _SettingsRow(
+              icon: LucideIcons.helpCircle,
+              label: 'Частые вопросы (FAQ)',
               onTap: () => context.push('/app/faq'),
             ),
-            ListTile(
-              leading: const Icon(LucideIcons.fileText),
-              title: const Text('Юридические документы'),
-              trailing: const Icon(LucideIcons.chevronRight),
+            _SettingsRow(
+              icon: LucideIcons.fileText,
+              label: 'Юридические документы',
               onTap: () => context.push('/app/legal'),
             ),
-            ListTile(
-              leading: const Icon(LucideIcons.share2),
-              title: const Text('Рекомендовать друзьям'),
-              trailing: const Icon(LucideIcons.chevronRight),
+            _SettingsRow(
+              icon: LucideIcons.share2,
+              label: 'Рекомендовать друзьям',
               onTap: _shareApp,
             ),
-            ListTile(
-              leading: const Icon(LucideIcons.messageSquare),
-              title: const Text('Написать нам'),
-              trailing: Icon(
-                _contactVisible
-                    ? LucideIcons.chevronUp
-                    : LucideIcons.chevronDown,
-              ),
+            _SettingsRow(
+              icon: LucideIcons.messageSquare,
+              label: 'Написать нам',
+              trailingIcon: _contactVisible
+                  ? LucideIcons.chevronUp
+                  : LucideIcons.chevronDown,
               onTap: () => setState(() => _contactVisible = !_contactVisible),
             ),
             if (_contactVisible) ...[
@@ -353,25 +362,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
             ],
-            ListTile(
-              leading: const Icon(LucideIcons.info),
-              title: const Text('О приложении'),
-              trailing: const Icon(LucideIcons.chevronRight),
+            _SettingsRow(
+              icon: LucideIcons.info,
+              label: 'О приложении',
               onTap: _showAbout,
             ),
           ],
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: TextButton(
-            onPressed: () => _confirmDeleteAccount(context),
-            child: const Text(
-              'Удалить аккаунт',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+        const SizedBox(height: 8),
+        Material(
+          color: const Color(0xFFFEF2F2),
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: () => _confirmDeleteAccount(context),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFFECACA)),
+              ),
+              alignment: Alignment.center,
+              child: const Text(
+                'Удалить аккаунт',
+                style: TextStyle(
+                  color: Color(0xFFDC2626),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
             ),
           ),
         ),
-        SizedBox(height: wide ? 24 : 80),
+        SizedBox(height: wide ? 16 : 80),
       ],
     );
 
@@ -379,11 +403,47 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       backgroundColor: isDark ? OtterColors.darkBg : OtterColors.grayLight,
       body: SafeArea(
         bottom: false,
-        child: wide
-            ? ResponsiveContent(maxWidth: 960, child: content)
-            : content,
+        child: content,
       ),
     );
+  }
+
+  static const _kTaskGroups = [
+    (id: 'overdue', label: 'Просрочено', color: Color(0xFFFF3B30)),
+    (id: 'today', label: 'Сегодня', color: Color(0xFFFF9500)),
+    (id: 'tomorrow', label: 'Завтра', color: Color(0xFF007AFF)),
+    (id: 'later', label: 'Позже', color: Color(0xFFAF52DE)),
+    (id: 'nodate', label: 'Без срока', color: Color(0xFF8E8E93)),
+    (id: 'completed', label: 'Готово', color: Color(0xFF21A038)),
+  ];
+
+  String? _premiumExpiresLabel(PremiumState premium, AuthState auth) {
+    final raw = premium.subscription?.expiresAt;
+    if (raw == null || raw.isEmpty) return null;
+    final date = DateTime.tryParse(raw);
+    if (date == null) return null;
+    return DateFormat('dd.MM.yyyy').format(date);
+  }
+
+  String _premiumBannerTitle(PremiumState premium, bool isPremium) {
+    if (!isPremium) return 'Подключить Premium';
+    final status = premium.subscription?.status;
+    if (status == 'trial') return 'Пробный период активен';
+    if (status == 'cancelled') return 'Premium активен (без автопродления)';
+    return 'Premium активен';
+  }
+
+  String? _premiumBannerSubtitle(
+    PremiumState premium,
+    bool isPremium,
+    String? until,
+  ) {
+    if (!isPremium) return null;
+    final tariff = premium.subscription?.tariff?.title;
+    if (tariff != null && until != null) return '$tariff · до $until';
+    if (tariff != null) return tariff;
+    if (until != null) return 'до $until';
+    return null;
   }
 
   void _toggleNavItem(String id, bool enabled, AppSettings settings) {
@@ -403,6 +463,332 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ref
         .read(appSettingsProvider.notifier)
         .update(settings.copyWith(bottomNavItems: items));
+  }
+
+  Future<void> _openNameModal() async {
+    final user = ref.read(authStateProvider).user;
+    final parts = user?.name.trim().split(RegExp(r'\s+')) ?? [];
+    final firstCtrl = TextEditingController(
+      text: parts.isNotEmpty ? parts.first : '',
+    );
+    final lastCtrl = TextEditingController(
+      text: parts.length > 1 ? parts.sublist(1).join(' ') : '',
+    );
+    String? error;
+
+    await showAppBottomSheet<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModal) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                12,
+                20,
+                20 + MediaQuery.viewInsetsOf(ctx).bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Имя и фамилия',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Имя',
+                    style: TextStyle(fontSize: 13, color: OtterColors.sberGray),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: firstCtrl,
+                    onTapOutside: dismissKeyboardOnTapOutside,
+                    decoration: const InputDecoration(hintText: 'Имя'),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Фамилия',
+                    style: TextStyle(fontSize: 13, color: OtterColors.sberGray),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: lastCtrl,
+                    onTapOutside: dismissKeyboardOnTapOutside,
+                    decoration: const InputDecoration(hintText: 'Фамилия'),
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(error!, style: const TextStyle(color: Colors.red)),
+                  ],
+                  const SizedBox(height: 16),
+                  PrimaryButton(
+                    label: 'Сохранить',
+                    onPressed: () async {
+                      try {
+                        await ref.read(authServiceProvider).updateProfile(
+                              firstName: firstCtrl.text.trim(),
+                              lastName: lastCtrl.text.trim(),
+                            );
+                        await ref
+                            .read(authStateProvider.notifier)
+                            .refreshProfile();
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      } catch (e) {
+                        setModal(
+                          () => error = getApiErrorMessage(e),
+                        );
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Отмена'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    firstCtrl.dispose();
+    lastCtrl.dispose();
+  }
+
+  Future<void> _openPasswordModal() async {
+    final nextCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    String? error;
+
+    await showAppBottomSheet<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModal) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                12,
+                20,
+                20 + MediaQuery.viewInsetsOf(ctx).bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Пароль',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Новый: 8–20 символов, Aa + цифра + спецсимвол (!, @ …).',
+                    style: TextStyle(fontSize: 12, color: OtterColors.sberGray),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nextCtrl,
+                    obscureText: true,
+                    onTapOutside: dismissKeyboardOnTapOutside,
+                    decoration: const InputDecoration(
+                      hintText: 'Новый пароль',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: confirmCtrl,
+                    obscureText: true,
+                    onTapOutside: dismissKeyboardOnTapOutside,
+                    decoration: const InputDecoration(
+                      hintText: 'Повторите новый пароль',
+                    ),
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(error!, style: const TextStyle(color: Colors.red)),
+                  ],
+                  const SizedBox(height: 16),
+                  PrimaryButton(
+                    label: 'Сохранить',
+                    onPressed: () async {
+                      final next = nextCtrl.text;
+                      final policy = validateNewPassword(next);
+                      if (policy != null) {
+                        setModal(() => error = policy);
+                        return;
+                      }
+                      if (next != confirmCtrl.text) {
+                        setModal(() => error = 'Пароли не совпадают');
+                        return;
+                      }
+                      try {
+                        await ref
+                            .read(authServiceProvider)
+                            .changePassword(next);
+                        if (!ctx.mounted) return;
+                        Navigator.pop(ctx);
+                      } catch (e) {
+                        setModal(() => error = getApiErrorMessage(e));
+                        return;
+                      }
+                      if (!mounted) return;
+                      showAppToast(
+                        context,
+                        'Пароль обновлён',
+                        type: AppToastType.success,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Отмена'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    nextCtrl.dispose();
+    confirmCtrl.dispose();
+  }
+
+  Future<void> _openAvatarSheet() async {
+    final source = await showAppBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Аватар',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  leading: const Icon(LucideIcons.camera),
+                  title: const Text('Сделать фото'),
+                  onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                ),
+                ListTile(
+                  leading: const Icon(LucideIcons.image),
+                  title: const Text('Выбрать из галереи'),
+                  onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (source == null || !mounted) return;
+
+    var effective = source;
+    if (source == ImageSource.camera &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.windows) {
+      showAppToast(
+        context,
+        'Камера на Windows недоступна — выберите фото из галереи',
+      );
+      effective = ImageSource.gallery;
+    }
+
+    try {
+      final file = await ImagePicker().pickImage(
+        source: effective,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      if (file == null || !mounted) return;
+      final user = ref.read(authStateProvider).user;
+      final parts = user?.name.trim().split(RegExp(r'\s+')) ?? [];
+      await ref.read(authServiceProvider).updateProfile(
+            firstName: parts.isNotEmpty ? parts.first : '',
+            lastName: parts.length > 1 ? parts.sublist(1).join(' ') : '',
+            avatarPath: file.path,
+          );
+      await ref.read(authStateProvider.notifier).refreshProfile();
+      if (mounted) {
+        showAppToast(context, 'Аватар обновлён', type: AppToastType.success);
+      }
+    } catch (e) {
+      if (mounted) showAppToast(context, getApiErrorMessage(e));
+    }
+  }
+
+  Future<void> _openDevicesSheet() async {
+    await showAppBottomSheet<void>(
+      context: context,
+      builder: (ctx) {
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: ref.read(devicesServiceProvider).listDevices(),
+          builder: (context, snap) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Устройства',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (snap.connectionState != ConnectionState.done)
+                      const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (snap.hasError)
+                      Text(
+                        getApiErrorMessage(snap.error!),
+                        style: const TextStyle(color: Colors.red),
+                      )
+                    else if ((snap.data ?? []).isEmpty)
+                      const Text(
+                        'Нет зарегистрированных устройств',
+                        style: TextStyle(color: OtterColors.sberGray),
+                      )
+                    else
+                      ...snap.data!.map((d) {
+                        final name = d['name']?.toString() ??
+                            d['platform']?.toString() ??
+                            'Устройство';
+                        final platform = d['platform']?.toString() ?? '';
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(LucideIcons.smartphone),
+                          title: Text(name),
+                          subtitle: platform.isEmpty ? null : Text(platform),
+                        );
+                      }),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Закрыть'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _sendContact() async {
@@ -780,6 +1166,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _startTrial() async {
+    // Android RuStore v1: commerce (including trial paywall) is hidden.
+    if (isAndroidPremiumPurchaseBlocked) return;
+
     final tariff = ref.read(premiumStateProvider).selectedTariff;
     if (tariff?.isRecurring == true && !_recurringConsent) {
       if (!mounted) return;
@@ -809,12 +1198,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _purchasePremium() async {
-    // Android: keep plan UI, block Robokassa until RuStore Billing is wired.
-    if (isAndroidPremiumPurchaseBlocked) {
-      if (!mounted) return;
-      await showAndroidPremiumComingSoon(context);
-      return;
-    }
+    // Android RuStore v1: no checkout UI / Robokassa. Kept for Windows/Web.
+    if (isAndroidPremiumPurchaseBlocked) return;
 
     final tariff = ref.read(premiumStateProvider).selectedTariff;
     if (tariff?.isRecurring == true && !_recurringConsent) {
@@ -1064,131 +1449,208 @@ class _ProfileCard extends StatelessWidget {
     required this.auth,
     required this.isDark,
     required this.isPremium,
+    required this.expiresLabel,
+    required this.bannerTitle,
+    required this.bannerSubtitle,
+    required this.onPremiumTap,
   });
 
   final AuthState auth;
   final bool isDark;
   final bool isPremium;
+  final String? expiresLabel;
+  final String bannerTitle;
+  final String? bannerSubtitle;
+  final VoidCallback onPremiumTap;
 
   @override
   Widget build(BuildContext context) {
     final user = auth.user;
-    return Card(
-      clipBehavior: Clip.antiAlias,
+    return Material(
+      color: isDark ? OtterColors.darkSurface : Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      elevation: isDark ? 0 : 1,
+      shadowColor: Colors.black26,
       child: InkWell(
         onTap: () => context.go('/app/profile'),
-        borderRadius: BorderRadius.circular(12),
-        child: Stack(
-          children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, isPremium ? 44 : 16, 16),
-              child: Row(
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Stack(
                 children: [
-                  CircleAvatar(
-                    radius: 32,
-                    backgroundColor: OtterColors.sberGreen,
-                    backgroundImage: user?.avatar != null
-                        ? NetworkImage(user!.avatar!)
-                        : null,
-                    child: user?.avatar == null
-                        ? Text(
-                            (user?.name.isNotEmpty == true
-                                    ? user!.name[0]
-                                    : 'A')
-                                .toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
+                  Container(
+                    decoration: isPremium
+                        ? BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFFFACC15),
+                              width: 2,
                             ),
                           )
                         : null,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          user?.name ?? 'Пользователь',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        if (user?.email != null)
-                          Text(
-                            user!.email,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: OtterColors.sberGray,
-                            ),
-                          ),
-                      ],
+                    padding: isPremium ? const EdgeInsets.all(2) : EdgeInsets.zero,
+                    child: CircleAvatar(
+                      radius: 32,
+                      backgroundColor: OtterColors.sberGreen,
+                      backgroundImage: user?.avatar != null
+                          ? NetworkImage(user!.avatar!)
+                          : null,
+                      child: user?.avatar == null
+                          ? Text(
+                              (user?.name.isNotEmpty == true
+                                      ? user!.name[0]
+                                      : 'A')
+                                  .toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          : null,
                     ),
                   ),
-                  const Icon(
-                    LucideIcons.chevronRight,
-                    color: OtterColors.sberGray,
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: const BoxDecoration(
+                        color: OtterColors.sberGreen,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        LucideIcons.camera,
+                        size: 12,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ],
               ),
-            ),
-            if (isPremium)
-              Positioned(
-                top: 10,
-                right: 10,
-                child: _PremiumStarBadge(isDark: isDark),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            user?.name ?? 'Пользователь',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                        if (isPremium) ...[
+                          const SizedBox(width: 6),
+                          const Text('⭐', style: TextStyle(fontSize: 16)),
+                        ],
+                      ],
+                    ),
+                    if (user?.email != null)
+                      Text(
+                        user!.email,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: OtterColors.sberGray,
+                        ),
+                      ),
+                    if (isPremium && expiresLabel != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Срок до $expiresLabel',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFFA16207),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: onPremiumTap,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isDark
+                                  ? const Color(0x66EAB308)
+                                  : const Color(0xFFFDE68A),
+                            ),
+                            gradient: isDark
+                                ? null
+                                : const LinearGradient(
+                                    colors: [
+                                      Color(0xFEFEFCE8),
+                                      Color(0xFFFFFBEB),
+                                    ],
+                                  ),
+                            color: isDark
+                                ? const Color(0x1AEAB308)
+                                : null,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'PREMIUM',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.6,
+                                  color: Color(0xFFCA8A04),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                bannerTitle,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (bannerSubtitle != null)
+                                Text(
+                                  bannerSubtitle!,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: OtterColors.sberGray,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PremiumStarBadge extends StatelessWidget {
-  const _PremiumStarBadge({required this.isDark});
-
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 30,
-      height: 30,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? const [
-                  Color(0xFF3D3420),
-                  Color(0xFF5C4A1F),
-                ]
-              : const [
-                  Color(0xFFFFF6D6),
-                  Color(0xFFFFE08A),
-                ],
-        ),
-        border: Border.all(
-          color: isDark ? const Color(0xFFC9A227) : const Color(0xFFF0C94A),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFFFC107).withValues(alpha: isDark ? 0.2 : 0.35),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+              const SizedBox(width: 8),
+              const Icon(
+                LucideIcons.chevronRight,
+                color: OtterColors.sberGray,
+              ),
+            ],
           ),
-        ],
-      ),
-      alignment: Alignment.center,
-      child: Icon(
-        Icons.star_rounded,
-        size: 18,
-        color: isDark ? const Color(0xFFFFD54F) : const Color(0xFFE8A100),
+        ),
       ),
     );
   }
@@ -1421,23 +1883,46 @@ class _PremiumPanel extends StatelessWidget {
 }
 
 class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.children});
+  const _Section({
+    required this.title,
+    required this.children,
+    required this.isDark,
+  });
+
   final String title;
   final List<Widget> children;
+  final bool isDark;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: isDark ? OtterColors.darkSurface : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: isDark ? Border.all(color: OtterColors.darkBorder) : null,
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: Text(
-              title,
+              title.toUpperCase(),
               style: const TextStyle(
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
+                letterSpacing: 0.6,
                 color: OtterColors.sberGray,
               ),
             ),
@@ -1449,35 +1934,441 @@ class _Section extends StatelessWidget {
   }
 }
 
+class _SettingsRow extends StatelessWidget {
+  const _SettingsRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.value,
+    this.iconColor,
+    this.labelColor,
+    this.trailingIcon = LucideIcons.chevronRight,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final String? value;
+  final Color? iconColor;
+  final Color? labelColor;
+  final IconData trailingIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: iconColor ?? OtterColors.sberGray),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: labelColor ?? OtterColors.sberBlack,
+                ),
+              ),
+            ),
+            if (value != null) ...[
+              Flexible(
+                child: Text(
+                  value!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: OtterColors.sberGray,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Icon(trailingIcon, size: 16, color: OtterColors.grayMid),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ToggleRow extends StatelessWidget {
+  const _ToggleRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: OtterColors.sberGray),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Switch(
+            value: value,
+            activeThumbColor: OtterColors.sberGreen,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ThemeBlock extends StatelessWidget {
+  const _ThemeBlock({required this.isDark, required this.onSetTheme});
+
+  final bool isDark;
+  final ValueChanged<String> onSetTheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: isDark ? OtterColors.darkSurfaceAlt : OtterColors.grayLight,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(
+              isDark ? LucideIcons.sun : LucideIcons.moon,
+              size: 20,
+              color: OtterColors.sberBlack,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'Переключение темы',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? OtterColors.sberBlue.withValues(alpha: 0.15)
+                            : OtterColors.sberGreenLight,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        isDark ? 'Dark' : 'Light',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? OtterColors.sberBlue
+                              : OtterColors.sberGreen,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Интерфейс переключается мгновенно и сохраняет выбранное оформление.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: OtterColors.sberGray,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    _ThemeChip(
+                      label: 'Светлая',
+                      selected: !isDark,
+                      selectedColor: OtterColors.sberGreen,
+                      onTap: () => onSetTheme('light'),
+                    ),
+                    const SizedBox(width: 8),
+                    _ThemeChip(
+                      label: 'Тёмная',
+                      selected: isDark,
+                      selectedColor: OtterColors.sberBlue,
+                      onTap: () => onSetTheme('dark'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ThemeChip extends StatelessWidget {
+  const _ThemeChip({
+    required this.label,
+    required this.selected,
+    required this.selectedColor,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final Color selectedColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? selectedColor : OtterColors.grayLight,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: selected ? Colors.white : OtterColors.sberGray,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomMenuSection extends StatelessWidget {
+  const _BottomMenuSection({
+    required this.settings,
+    required this.isDark,
+    required this.onToggle,
+    required this.onReorder,
+  });
+
+  final AppSettings settings;
+  final bool isDark;
+  final void Function(String id, bool enabled) onToggle;
+  final ValueChanged<List<String>> onReorder;
+
+  List<BottomNavItem> _ordered() {
+    final byId = {for (final i in kAllNavItems) i.id: i};
+    final enabled = settings.bottomNavItems
+        .map((id) => byId[id])
+        .whereType<BottomNavItem>()
+        .toList();
+    final rest =
+        kAllNavItems.where((i) => !settings.bottomNavItems.contains(i.id));
+    return [...enabled, ...rest];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _ordered();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: isDark ? OtterColors.darkSurface : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: isDark ? Border.all(color: OtterColors.darkBorder) : null,
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text(
+              'НИЖНЕЕ МЕНЮ',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.6,
+                color: OtterColors.sberGray,
+              ),
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Включайте вкладки и меняйте порядок перетаскиванием.',
+              style: TextStyle(fontSize: 12, color: OtterColors.sberGray),
+            ),
+          ),
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            itemCount: items.length,
+            // ignore: deprecated_member_use
+            onReorder: (oldIndex, newIndex) {
+              final next = List<BottomNavItem>.from(items);
+              if (newIndex > oldIndex) newIndex -= 1;
+              final moved = next.removeAt(oldIndex);
+              next.insert(newIndex, moved);
+              onReorder(next.map((e) => e.id).toList());
+            },
+            itemBuilder: (context, index) {
+              final item = items[index];
+              final enabled = settings.bottomNavItems.contains(item.id);
+              final isSettings = item.id == 'settings';
+              return Material(
+                key: ValueKey(item.id),
+                color: Colors.transparent,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  child: Row(
+                    children: [
+                      ReorderableDragStartListener(
+                        index: index,
+                        child: const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(
+                            LucideIcons.gripVertical,
+                            size: 18,
+                            color: OtterColors.sberGray,
+                          ),
+                        ),
+                      ),
+                      Icon(item.icon, size: 20, color: OtterColors.sberGray),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          item.label,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      if (isSettings)
+                        const Text(
+                          'Всегда',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: OtterColors.sberGray,
+                          ),
+                        )
+                      else
+                        Switch(
+                          value: enabled,
+                          activeThumbColor: OtterColors.sberGreen,
+                          onChanged: (v) => onToggle(item.id, v),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _GroupToggle extends ConsumerWidget {
   const _GroupToggle({
     required this.label,
     required this.group,
+    required this.color,
     required this.settings,
   });
 
   final String label;
   final String group;
+  final Color color;
   final AppSettings settings;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final visible = settings.visibleGroups.contains(group);
-    return SwitchListTile(
-      title: Text(label),
-      value: visible,
-      activeThumbColor: OtterColors.sberGreen,
-      onChanged: (v) {
-        final groups = List<String>.from(settings.visibleGroups);
-        if (v) {
-          if (!groups.contains(group)) groups.add(group);
-        } else {
-          groups.remove(group);
-        }
-        ref
-            .read(appSettingsProvider.notifier)
-            .update(settings.copyWith(visibleGroups: groups));
-      },
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Switch(
+            value: visible,
+            activeThumbColor: OtterColors.sberGreen,
+            onChanged: (v) {
+              final groups = List<String>.from(settings.visibleGroups);
+              if (v) {
+                if (!groups.contains(group)) groups.add(group);
+              } else {
+                groups.remove(group);
+              }
+              ref
+                  .read(appSettingsProvider.notifier)
+                  .update(settings.copyWith(visibleGroups: groups));
+            },
+          ),
+        ],
+      ),
     );
   }
 }
