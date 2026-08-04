@@ -135,17 +135,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           children: [
             _SettingsRow(
               icon: LucideIcons.user,
-              label: 'Имя',
-              value: auth.user?.name.isNotEmpty == true ? auth.user!.name : '—',
-              onTap: _openNameModal,
-            ),
-            _SettingsRow(
-              icon: LucideIcons.camera,
-              label: 'Аватар',
-              onTap: _openAvatarSheet,
-            ),
-            _SettingsRow(
-              icon: LucideIcons.info,
               label: 'Профиль',
               onTap: () => context.go('/app/profile'),
             ),
@@ -153,11 +142,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               icon: LucideIcons.lock,
               label: 'Пароль',
               onTap: _openPasswordModal,
-            ),
-            _SettingsRow(
-              icon: LucideIcons.smartphone,
-              label: 'Устройства',
-              onTap: _openDevicesSheet,
             ),
             _SettingsRow(
               icon: LucideIcons.crown,
