@@ -4,7 +4,7 @@ import 'dart:io';
 ///
 /// - [robokassa] — existing Web/Windows flow (`premium/checkout/` + external URL).
 /// - [androidComingSoon] — Android commerce UI hidden; RuStore Billing later.
-/// - [rustore] — reserved for future RuStore Billing integration.
+/// - [rustore] — Android RuStore Billing SDK (`flutter_rustore_billing`).
 enum PremiumBillingProvider {
   robokassa,
   androidComingSoon,
@@ -13,11 +13,9 @@ enum PremiumBillingProvider {
 
 /// Single switch for Android store billing.
 ///
-/// Current RuStore v1: keep [androidComingSoon] so tariffs/checkout stay hidden.
-/// Flip to [PremiumBillingProvider.rustore] when RuStore Billing is wired;
-/// Robokassa must remain untouched for Windows/desktop.
+/// RuStore Billing is active on Android; Robokassa stays for Windows/desktop.
 const PremiumBillingProvider kAndroidBillingProvider =
-    PremiumBillingProvider.androidComingSoon;
+    PremiumBillingProvider.rustore;
 
 /// Resolves the active billing provider for this process.
 PremiumBillingProvider resolvePremiumBillingProvider() {

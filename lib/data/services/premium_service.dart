@@ -1,4 +1,5 @@
 import '../models/api/api_models.dart';
+import '../models/billing/subscription_verify_request.dart';
 import '../../core/network/api_client.dart';
 
 class PremiumService {
@@ -50,6 +51,14 @@ class PremiumService {
       },
     );
     return ApiPremiumCheckoutResponse.fromJson(data);
+  }
+
+  /// Verifies a RuStore purchase on the backend. Does not grant Premium locally.
+  Future<void> verifySubscription(SubscriptionVerifyRequest request) async {
+    await _client.post<dynamic>(
+      'subscription/verify/',
+      data: request.toJson(),
+    );
   }
 
   Future<ApiSubscription> cancel() async {

@@ -14,6 +14,7 @@ import '../../data/services/matrix_service.dart';
 import '../../data/services/pomodoro_service.dart';
 import '../../data/services/settings_service.dart';
 import '../../data/services/premium_service.dart';
+import '../../data/services/rustore_billing_service.dart';
 import '../../data/services/reminders_service.dart';
 import '../../data/services/sounds_service.dart';
 import '../../data/services/tasks_service.dart';
@@ -22,11 +23,17 @@ import '../../features/matrix/matrix_block_setting.dart';
 import '../../data/mappers/task_mapper.dart';
 import '../../data/models/api/api_models.dart';
 import '../../data/models/ui/ui_models.dart';
+import '../../data/models/billing/billing_purchase.dart';
+import '../../data/models/billing/subscription_product.dart';
+import '../../data/models/billing/subscription_verify_request.dart';
 import '../audio/pomodoro_audio.dart';
 import '../audio/pomodoro_notifications.dart';
 import '../audio/feedback_audio.dart';
 import '../billing/android_premium_coming_soon.dart';
+import '../billing/billing_exceptions.dart';
+import '../billing/billing_logger.dart';
 import '../billing/premium_billing.dart';
+import '../billing/rustore_config.dart';
 import '../push/push_notifications.dart';
 import '../utils/premium_tariffs.dart';
 import '../utils/recurrence.dart';
@@ -76,6 +83,13 @@ final settingsServiceProvider = Provider<SettingsService>(
 final premiumServiceProvider = Provider<PremiumService>(
   (ref) => PremiumService(ref.watch(apiClientProvider)),
 );
+
+final rustoreBillingServiceProvider = Provider<RuStoreBillingService>(
+  (ref) => RuStoreBillingService(),
+);
+
+bool get isRustoreBillingActive =>
+    resolvePremiumBillingProvider() == PremiumBillingProvider.rustore;
 final devicesServiceProvider = Provider<DevicesService>(
   (ref) => DevicesService(ref.watch(apiClientProvider)),
 );
@@ -311,9 +325,13 @@ class PremiumState {
     this.features = const [],
     this.subscription,
     this.selectedTariffCode = 'monthly',
+    this.subscriptions = const [],
+    this.selectedSubscriptionId = RuStoreConfig.monthlyProductId,
     this.loading = false,
     this.actionLoading = false,
+    this.purchaseInProgress = false,
     this.error,
+    this.purchaseError,
     this.paymentPolling = false,
     this.paymentPollingMessage,
   });
@@ -322,9 +340,13 @@ class PremiumState {
   final List<ApiPremiumFeature> features;
   final ApiSubscription? subscription;
   final String selectedTariffCode;
+  final List<SubscriptionProduct> subscriptions;
+  final String selectedSubscriptionId;
   final bool loading;
   final bool actionLoading;
+  final bool purchaseInProgress;
   final String? error;
+  final String? purchaseError;
   final bool paymentPolling;
   final String? paymentPollingMessage;
 
@@ -333,6 +355,13 @@ class PremiumState {
       if (t.code == selectedTariffCode) return t;
     }
     return tariffs.isEmpty ? null : tariffs.first;
+  }
+
+  SubscriptionProduct? get selectedSubscription {
+    for (final s in subscriptions) {
+      if (s.productId == selectedSubscriptionId) return s;
+    }
+    return subscriptions.isEmpty ? null : subscriptions.first;
   }
 
   bool get isPremium {
@@ -346,10 +375,15 @@ class PremiumState {
     List<ApiPremiumFeature>? features,
     ApiSubscription? subscription,
     String? selectedTariffCode,
+    List<SubscriptionProduct>? subscriptions,
+    String? selectedSubscriptionId,
     bool? loading,
     bool? actionLoading,
+    bool? purchaseInProgress,
     String? error,
     bool clearError = false,
+    String? purchaseError,
+    bool clearPurchaseError = false,
     bool? paymentPolling,
     String? paymentPollingMessage,
     bool clearPaymentPollingMessage = false,
@@ -358,9 +392,15 @@ class PremiumState {
     features: features ?? this.features,
     subscription: subscription ?? this.subscription,
     selectedTariffCode: selectedTariffCode ?? this.selectedTariffCode,
+    subscriptions: subscriptions ?? this.subscriptions,
+    selectedSubscriptionId:
+        selectedSubscriptionId ?? this.selectedSubscriptionId,
     loading: loading ?? this.loading,
     actionLoading: actionLoading ?? this.actionLoading,
+    purchaseInProgress: purchaseInProgress ?? this.purchaseInProgress,
     error: clearError ? null : (error ?? this.error),
+    purchaseError:
+        clearPurchaseError ? null : (purchaseError ?? this.purchaseError),
     paymentPolling: paymentPolling ?? this.paymentPolling,
     paymentPollingMessage: clearPaymentPollingMessage
         ? null
@@ -386,7 +426,7 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   }
 
   Future<void> loadAll() async {
-    state = state.copyWith(loading: true, clearError: true);
+    state = state.copyWith(loading: true, clearError: true, clearPurchaseError: true);
     try {
       final service = _ref.read(premiumServiceProvider);
       final results = await Future.wait([
@@ -408,21 +448,63 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
         subscription: subscription,
         features: features,
         selectedTariffCode: selected,
+        selectedSubscriptionId: RuStoreConfig.productIdForTariff(selected),
         loading: false,
       );
       _syncPremiumToSettings(subscription);
+
+      if (isRustoreBillingActive) {
+        await loadStoreSubscriptions();
+      }
     } catch (e) {
       state = state.copyWith(loading: false, error: getApiErrorMessage(e));
     }
   }
 
+  Future<void> loadStoreSubscriptions() async {
+    if (!isRustoreBillingActive) return;
+    try {
+      final products =
+          await _ref.read(rustoreBillingServiceProvider).getSubscriptions();
+      var selectedId = state.selectedSubscriptionId;
+      if (!products.any((p) => p.productId == selectedId) &&
+          products.isNotEmpty) {
+        selectedId = products.first.productId;
+      }
+      state = state.copyWith(
+        subscriptions: products,
+        selectedSubscriptionId: selectedId,
+        selectedTariffCode: RuStoreConfig.tariffCodeForProduct(selectedId),
+        clearPurchaseError: true,
+      );
+    } catch (e) {
+      BillingLogger.error('loadStoreSubscriptions', e);
+      state = state.copyWith(purchaseError: billingErrorMessage(e));
+    }
+  }
+
   void selectTariff(String code) {
-    state = state.copyWith(selectedTariffCode: code);
+    state = state.copyWith(
+      selectedTariffCode: code,
+      selectedSubscriptionId: RuStoreConfig.productIdForTariff(code),
+    );
+  }
+
+  void selectSubscription(String productId) {
+    state = state.copyWith(
+      selectedSubscriptionId: productId,
+      selectedTariffCode: RuStoreConfig.tariffCodeForProduct(productId),
+    );
   }
 
   Future<ApiSubscription> startTrial({bool recurringConsent = false}) async {
     if (isAndroidPremiumPurchaseBlocked) {
       throw StateError(kAndroidPremiumUnavailableMessage);
+    }
+    if (isRustoreBillingActive) {
+      throw StateError(
+        'Пробный период оформляется через подписку в RuStore.',
+      );
     }
     state = state.copyWith(actionLoading: true, clearError: true);
     try {
@@ -445,9 +527,13 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   }
 
   Future<String> checkout({bool recurringConsent = false}) async {
-    // Defensive: Android RuStore v1 must never hit Robokassa checkout.
-    if (isAndroidPremiumPurchaseBlocked) {
-      throw StateError(kAndroidPremiumUnavailableMessage);
+    // Defensive: Android RuStore must never hit Robokassa checkout.
+    if (isAndroidPremiumPurchaseBlocked || isRustoreBillingActive) {
+      throw StateError(
+        isRustoreBillingActive
+            ? 'Оплата на Android доступна только через RuStore.'
+            : kAndroidPremiumUnavailableMessage,
+      );
     }
     state = state.copyWith(actionLoading: true, clearError: true);
     try {
@@ -465,6 +551,211 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
         error: getApiErrorMessage(e),
       );
       rethrow;
+    }
+  }
+
+  /// RuStore purchase → backend verify → refresh subscription. Never unlocks locally.
+  Future<void> purchaseSelected() async {
+    if (!isRustoreBillingActive) {
+      throw StateError('RuStore Billing недоступен на этой платформе.');
+    }
+    final productId = state.selectedSubscription?.productId ??
+        state.selectedSubscriptionId;
+    state = state.copyWith(
+      purchaseInProgress: true,
+      actionLoading: true,
+      clearPurchaseError: true,
+      clearError: true,
+    );
+    try {
+      final billing = _ref.read(rustoreBillingServiceProvider);
+      final result = await billing.purchase(productId);
+      if (result.isCancelled) {
+        state = state.copyWith(
+          purchaseInProgress: false,
+          actionLoading: false,
+          purchaseError: result.message ??
+              const PurchaseCancelledException().message,
+        );
+        throw PurchaseCancelledException(
+          result.message ?? const PurchaseCancelledException().message,
+        );
+      }
+      if (!result.isSuccess) {
+        final msg = result.message ?? const BillingUnknownException().message;
+        state = state.copyWith(
+          purchaseInProgress: false,
+          actionLoading: false,
+          purchaseError: msg,
+        );
+        throw BillingUnknownException(msg);
+      }
+
+      await _verifyPurchaseResult(result);
+      await refreshSubscription();
+      state = state.copyWith(
+        purchaseInProgress: false,
+        actionLoading: false,
+        clearPurchaseError: true,
+      );
+    } on BillingException catch (e) {
+      state = state.copyWith(
+        purchaseInProgress: false,
+        actionLoading: false,
+        purchaseError: e.message,
+      );
+      rethrow;
+    } catch (e) {
+      final msg = billingErrorMessage(e);
+      state = state.copyWith(
+        purchaseInProgress: false,
+        actionLoading: false,
+        purchaseError: msg,
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> restorePurchases() async {
+    if (!isRustoreBillingActive) {
+      throw StateError('RuStore Billing недоступен на этой платформе.');
+    }
+    state = state.copyWith(
+      purchaseInProgress: true,
+      actionLoading: true,
+      clearPurchaseError: true,
+      clearError: true,
+    );
+    BillingLogger.info('Restore purchases (notifier)');
+    try {
+      final billing = _ref.read(rustoreBillingServiceProvider);
+      final active = await billing.restorePurchases();
+      if (active.isEmpty) {
+        // Still refresh server state — user may already be premium.
+        await refreshSubscription();
+        if (!state.isPremium) {
+          throw const ExpiredSubscriptionException(
+            'Активных покупок в RuStore не найдено.',
+          );
+        }
+        state = state.copyWith(
+          purchaseInProgress: false,
+          actionLoading: false,
+        );
+        return;
+      }
+
+      for (final purchase in active) {
+        await _verifyBillingPurchase(purchase);
+      }
+      await refreshSubscription();
+      state = state.copyWith(
+        purchaseInProgress: false,
+        actionLoading: false,
+        clearPurchaseError: true,
+      );
+      BillingLogger.info('Restore purchases done isPremium=${state.isPremium}');
+    } on BillingException catch (e) {
+      state = state.copyWith(
+        purchaseInProgress: false,
+        actionLoading: false,
+        purchaseError: e.message,
+      );
+      rethrow;
+    } catch (e) {
+      final msg = billingErrorMessage(e);
+      state = state.copyWith(
+        purchaseInProgress: false,
+        actionLoading: false,
+        purchaseError: msg,
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> _verifyPurchaseResult(PurchaseResult result) async {
+    var token = result.subscriptionToken;
+    var orderId = result.orderId ?? '';
+    var purchaseTime = DateTime.now().toUtc().toIso8601String();
+    var developerPayload = '';
+    final productId = result.productId ?? state.selectedSubscriptionId;
+
+    if (token == null || token.isEmpty) {
+      final purchases =
+          await _ref.read(rustoreBillingServiceProvider).getPurchases();
+      final match = purchases.cast<BillingPurchase?>().firstWhere(
+            (p) =>
+                p != null &&
+                (p.purchaseId == result.purchaseId ||
+                    p.productId == productId) &&
+                (p.subscriptionToken ?? '').isNotEmpty,
+            orElse: () => null,
+          );
+      if (match == null) {
+        throw const VerificationFailedException(
+          'Не получен токен покупки из RuStore.',
+        );
+      }
+      token = match.subscriptionToken;
+      orderId = match.orderId ?? orderId;
+      purchaseTime = match.purchaseTime ?? purchaseTime;
+      developerPayload = match.developerPayload ?? '';
+    }
+
+    await _sendVerify(
+      productId: productId,
+      purchaseToken: token!,
+      orderId: orderId,
+      purchaseTime: purchaseTime,
+      developerPayload: developerPayload,
+    );
+  }
+
+  Future<void> _verifyBillingPurchase(BillingPurchase purchase) async {
+    final token = purchase.subscriptionToken;
+    final productId = purchase.productId;
+    if (token == null || token.isEmpty || productId == null) {
+      throw const VerificationFailedException();
+    }
+    if (purchase.isExpired) {
+      throw const ExpiredSubscriptionException();
+    }
+    await _sendVerify(
+      productId: productId,
+      purchaseToken: token,
+      orderId: purchase.orderId ?? purchase.purchaseId ?? '',
+      purchaseTime:
+          purchase.purchaseTime ?? DateTime.now().toUtc().toIso8601String(),
+      developerPayload: purchase.developerPayload ?? '',
+    );
+  }
+
+  Future<void> _sendVerify({
+    required String productId,
+    required String purchaseToken,
+    required String orderId,
+    required String purchaseTime,
+    required String developerPayload,
+  }) async {
+    BillingLogger.info(
+      'Backend verification started productId=$productId '
+      'token=${BillingLogger.truncateToken(purchaseToken)}',
+    );
+    try {
+      await _ref.read(premiumServiceProvider).verifySubscription(
+            SubscriptionVerifyRequest(
+              productId: productId,
+              purchaseToken: purchaseToken,
+              orderId: orderId,
+              purchaseTime: purchaseTime,
+              developerPayload: developerPayload,
+              packageName: RuStoreConfig.packageName,
+            ),
+          );
+      BillingLogger.info('Backend verification success');
+    } catch (e, st) {
+      BillingLogger.error('Backend verification failed', e, st);
+      throw VerificationFailedException(billingErrorMessage(e));
     }
   }
 

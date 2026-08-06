@@ -22,6 +22,11 @@ abstract final class Env {
     return raw.endsWith('/') ? raw : '$raw/';
   }
 
+  /// RuStore Console application id (https://console.rustore.ru/apps/{id}).
+  /// Required for Android billing; override via `.env` / `--dart-define`.
+  static String get rustoreConsoleAppId =>
+      _envOr('RUSTORE_CONSOLE_APP_ID', '');
+
   /// Web / Windows (Firebase Console web app) — same defaults as otter-app.
   static String get firebaseApiKey => _envOr(
         'FIREBASE_API_KEY',

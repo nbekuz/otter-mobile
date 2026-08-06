@@ -15,6 +15,7 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/billing/android_premium_coming_soon.dart';
+import '../../core/billing/billing_exceptions.dart';
 import '../../core/billing/premium_billing.dart';
 import '../../core/layout/responsive.dart';
 import '../../core/locale/app_languages.dart';
@@ -169,6 +170,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 )
               : _PremiumPanel(
                   state: premium,
+                  useRustore: isRustoreBillingActive,
                   recurringConsent: _recurringConsent,
                   onConsentChanged: (v) =>
                       setState(() => _recurringConsent = v ?? false),
@@ -176,8 +178,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   onSelectTariff: (code) => ref
                       .read(premiumStateProvider.notifier)
                       .selectTariff(code),
+                  onSelectSubscription: (productId) => ref
+                      .read(premiumStateProvider.notifier)
+                      .selectSubscription(productId),
                   onTrial: _startTrial,
                   onCheckout: _purchasePremium,
+                  onPurchase: _purchaseRustore,
+                  onRestore: _restoreRustore,
                   onRefresh: _refreshPremium,
                   onCancel: _cancelPremium,
                 ),
@@ -1123,8 +1130,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _purchasePremium() async {
-    // Android RuStore v1: no checkout UI / Robokassa. Kept for Windows/Web.
     if (isAndroidPremiumPurchaseBlocked) return;
+    if (isRustoreBillingActive) {
+      await _purchaseRustore();
+      return;
+    }
 
     final tariff = ref.read(premiumStateProvider).selectedTariff;
     if (tariff?.isRecurring == true && !_recurringConsent) {
@@ -1202,6 +1212,57 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text(getApiErrorMessage(e))));
       }
+    }
+  }
+
+  Future<void> _purchaseRustore() async {
+    try {
+      await ref.read(premiumStateProvider.notifier).purchaseSelected();
+      if (!mounted) return;
+      unawaited(ref.read(appSettingsProvider.notifier).load());
+      unawaited(ref.read(authStateProvider.notifier).refreshProfile());
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Premium успешно активирован')),
+      );
+      setState(() => _premiumVisible = false);
+    } on PurchaseCancelledException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final msg = ref.read(premiumStateProvider).purchaseError ??
+          billingErrorMessage(e);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg)),
+      );
+    }
+  }
+
+  Future<void> _restoreRustore() async {
+    try {
+      await ref.read(premiumStateProvider.notifier).restorePurchases();
+      if (!mounted) return;
+      unawaited(ref.read(appSettingsProvider.notifier).load());
+      unawaited(ref.read(authStateProvider.notifier).refreshProfile());
+      final isPremium = ref.read(premiumStateProvider).isPremium;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isPremium
+                ? 'Покупки восстановлены. Premium активен.'
+                : 'Покупки проверены.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final msg = ref.read(premiumStateProvider).purchaseError ??
+          billingErrorMessage(e);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg)),
+      );
     }
   }
 
@@ -1702,15 +1763,23 @@ class _PremiumPanel extends StatelessWidget {
     required this.onCheckout,
     required this.onRefresh,
     required this.onCancel,
+    this.useRustore = false,
+    this.onSelectSubscription,
+    this.onPurchase,
+    this.onRestore,
   });
 
   final PremiumState state;
+  final bool useRustore;
   final bool recurringConsent;
   final ValueChanged<bool?> onConsentChanged;
   final VoidCallback onClose;
   final ValueChanged<String> onSelectTariff;
+  final ValueChanged<String>? onSelectSubscription;
   final VoidCallback onTrial;
   final VoidCallback onCheckout;
+  final VoidCallback? onPurchase;
+  final VoidCallback? onRestore;
   final VoidCallback onRefresh;
   final VoidCallback onCancel;
 
@@ -1726,10 +1795,12 @@ class _PremiumPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = state.selectedTariff;
+    final selectedStore = state.selectedSubscription;
     final isPremium = state.isPremium;
     final expires = _formatExpires(state.subscription?.expiresAt);
-    final needsConsent = selected?.isRecurring == true;
+    final needsConsent = !useRustore && selected?.isRecurring == true;
     final isDark = OtterColors.isDarkOf(context);
+    final busy = state.actionLoading || state.purchaseInProgress;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -1784,125 +1855,246 @@ class _PremiumPanel extends StatelessWidget {
                     state.subscription?.cancelledAt == null) ...[
                   const SizedBox(height: 12),
                   OutlinedButton(
-                    onPressed: state.actionLoading ? null : onCancel,
+                    onPressed: busy ? null : onCancel,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.red,
                     ),
                     child: Text(
-                      state.actionLoading
-                          ? 'Отмена…'
-                          : 'Отменить автопродление',
+                      busy ? 'Отмена…' : 'Отменить автопродление',
                     ),
                   ),
                 ],
                 TextButton(
-                  onPressed: state.actionLoading ? null : onRefresh,
-                  child: Text(
-                    state.actionLoading ? 'Обновление…' : 'Обновить статус',
-                  ),
+                  onPressed: busy ? null : onRefresh,
+                  child: Text(busy ? 'Обновление…' : 'Обновить статус'),
                 ),
+                if (useRustore && onRestore != null)
+                  TextButton(
+                    onPressed: busy ? null : onRestore,
+                    child: Text(
+                      busy ? 'Восстановление…' : 'Восстановить покупки',
+                    ),
+                  ),
               ] else ...[
-                if (state.tariffs.isNotEmpty) ...[
+                if (useRustore) ...[
                   const SizedBox(height: 4),
-                  for (final tariff in state.tariffs)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Material(
-                        color: selected?.code == tariff.code
-                            ? (isDark
-                                ? const Color(0x33FBBF24)
-                                : Colors.amber.shade50)
-                            : OtterColors.elevated(isDark),
-                        borderRadius: BorderRadius.circular(16),
-                        child: InkWell(
+                  if (state.subscriptions.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        'Не удалось загрузить тарифы из RuStore. '
+                        'Проверьте интернет и попробуйте снова.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: OtterColors.sberGray,
+                        ),
+                      ),
+                    )
+                  else
+                    for (final product in state.subscriptions)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Material(
+                          color: selectedStore?.productId == product.productId
+                              ? (isDark
+                                  ? const Color(0x33FBBF24)
+                                  : Colors.amber.shade50)
+                              : OtterColors.elevated(isDark),
                           borderRadius: BorderRadius.circular(16),
-                          onTap: () => onSelectTariff(tariff.code),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        tariff.title,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      if (tariff.promoDays > 0)
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () =>
+                                onSelectSubscription?.call(product.productId),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
                                         Text(
-                                          '${tariff.promoDays} дней бесплатно',
+                                          product.title,
                                           style: const TextStyle(
-                                            fontSize: 12,
-                                            color: OtterColors.sberGreen,
+                                            fontWeight: FontWeight.w600,
                                           ),
                                         ),
-                                    ],
+                                        if (product.description.isNotEmpty)
+                                          Text(
+                                            product.description,
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: OtterColors.sberGray,
+                                            ),
+                                          ),
+                                        Text(
+                                          'Период: ${product.periodLabel}',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: OtterColors.sberGray,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                Text(
-                                  tariff.priceLabel,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
+                                  Text(
+                                    product.priceLabel,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                ],
-                if (needsConsent) ...[
-                  OtterCheckbox(
-                    value: recurringConsent,
-                    onChanged: onConsentChanged,
-                    child: const Text(
-                      'Я согласен на автоматические списания согласно условиям оферты',
-                      style: TextStyle(fontSize: 13),
-                    ),
-                  ),
                   const SizedBox(height: 8),
-                ],
-                if ((selected?.promoDays ?? 0) > 0)
-                  OutlinedButton(
-                    onPressed: state.actionLoading ? null : onTrial,
+                  FilledButton(
+                    onPressed: busy || state.subscriptions.isEmpty
+                        ? null
+                        : onPurchase,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.amber.shade600,
+                    ),
                     child: Text(
-                      state.actionLoading
-                          ? 'Активация…'
-                          : 'Попробовать бесплатно (${selected!.promoDays} дн.)',
+                      busy
+                          ? 'Покупка…'
+                          : 'Купить ${selectedStore?.priceLabel ?? 'Premium'}',
                     ),
                   ),
-                const SizedBox(height: 8),
-                FilledButton(
-                  onPressed: state.actionLoading ? null : onCheckout,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.amber.shade600,
+                  TextButton(
+                    onPressed: busy ? null : onRestore,
+                    child: Text(
+                      busy ? 'Восстановление…' : 'Восстановить покупки',
+                    ),
                   ),
-                  child: Text(
-                    state.actionLoading
-                        ? 'Открываем оплату…'
-                        : 'Оплатить ${selected?.priceLabel ?? 'Premium'}',
+                  TextButton(
+                    onPressed: busy ? null : onRefresh,
+                    child: Text(busy ? 'Проверяем…' : 'Обновить статус'),
                   ),
-                ),
-                TextButton(
-                  onPressed: state.actionLoading ? null : onRefresh,
-                  child: Text(
-                    state.actionLoading
-                        ? 'Проверяем…'
-                        : 'Я оплатил — обновить статус',
+                  const Text(
+                    'Premium активируется после подтверждения покупки на сервере.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: OtterColors.sberGray,
+                    ),
                   ),
-                ),
-                const Text(
-                  'После оплаты Premium включается автоматически. '
-                  'Если статус не обновился — нажмите «обновить статус».',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 12, color: OtterColors.sberGray),
-                ),
+                ] else ...[
+                  if (state.tariffs.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    for (final tariff in state.tariffs)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Material(
+                          color: selected?.code == tariff.code
+                              ? (isDark
+                                  ? const Color(0x33FBBF24)
+                                  : Colors.amber.shade50)
+                              : OtterColors.elevated(isDark),
+                          borderRadius: BorderRadius.circular(16),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () => onSelectTariff(tariff.code),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          tariff.title,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        if (tariff.promoDays > 0)
+                                          Text(
+                                            '${tariff.promoDays} дней бесплатно',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: OtterColors.sberGreen,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  Text(
+                                    tariff.priceLabel,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                  if (needsConsent) ...[
+                    OtterCheckbox(
+                      value: recurringConsent,
+                      onChanged: onConsentChanged,
+                      child: const Text(
+                        'Я согласен на автоматические списания согласно условиям оферты',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  if ((selected?.promoDays ?? 0) > 0)
+                    OutlinedButton(
+                      onPressed: busy ? null : onTrial,
+                      child: Text(
+                        busy
+                            ? 'Активация…'
+                            : 'Попробовать бесплатно (${selected!.promoDays} дн.)',
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  FilledButton(
+                    onPressed: busy ? null : onCheckout,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.amber.shade600,
+                    ),
+                    child: Text(
+                      busy
+                          ? 'Открываем оплату…'
+                          : 'Оплатить ${selected?.priceLabel ?? 'Premium'}',
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: busy ? null : onRefresh,
+                    child: Text(
+                      busy ? 'Проверяем…' : 'Я оплатил — обновить статус',
+                    ),
+                  ),
+                  const Text(
+                    'После оплаты Premium включается автоматически. '
+                    'Если статус не обновился — нажмите «обновить статус».',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: OtterColors.sberGray,
+                    ),
+                  ),
+                ],
               ],
+            ],
+            if (state.purchaseError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                state.purchaseError!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
             ],
             if (state.error != null) ...[
               const SizedBox(height: 8),

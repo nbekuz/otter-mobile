@@ -419,6 +419,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.6.1"
+  flutter_rustore_billing:
+    dependency: "direct main"
+    description:
+      name: flutter_rustore_billing
+      sha256: f1e95cffd91616fae326f575c9a0c46db33ba9d1967ddc2650f5858ac7577476
+      url: "https://pub.dev"
+    source: hosted
+    version: "10.3.1"
   flutter_secure_storage:
     dependency: "direct main"
     description:

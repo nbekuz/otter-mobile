@@ -35,6 +35,7 @@ dependencies:
   lucide_icons_flutter: ^3.1.14+2
   share_plus: ^10.1.4
   url_launcher: ^6.3.1
+  flutter_rustore_billing: ^10.3.1
   # 11.0.x breaks AGP 9 + android.builtInKotlin=false (FilePickerPlugin missing).
   # 12.x-beta conflicts with share_plus 10 / win32 5. Revisit after share_plus upgrade.
   file_picker: 10.3.10
