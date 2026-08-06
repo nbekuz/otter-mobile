@@ -64,9 +64,23 @@ abstract final class OtterTheme {
       scaffoldBackgroundColor: OtterColors.darkBg,
       colorScheme: const ColorScheme.dark(
         primary: OtterColors.sberGreen,
+        onPrimary: Colors.white,
         secondary: OtterColors.sberBlue,
+        onSecondary: Colors.white,
         surface: OtterColors.darkSurface,
         onSurface: OtterColors.darkText,
+        error: OtterColors.priorityHigh,
+        onError: Colors.white,
+        outline: OtterColors.darkBorder,
+      ),
+      dividerColor: OtterColors.darkBorder,
+      dialogTheme: const DialogThemeData(
+        backgroundColor: OtterColors.darkSurface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: OtterColors.darkSurface,
+        surfaceTintColor: Colors.transparent,
       ),
     );
     return base.copyWith(
@@ -79,9 +93,14 @@ abstract final class OtterTheme {
         foregroundColor: OtterColors.darkText,
         elevation: 0,
       ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: OtterColors.sberGreen,
+        foregroundColor: Colors.white,
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: OtterColors.darkSurfaceAlt,
+        hintStyle: const TextStyle(color: OtterColors.darkMuted),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(OtterColors.radiusMd),
           borderSide: const BorderSide(color: OtterColors.darkBorder),

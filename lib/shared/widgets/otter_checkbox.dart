@@ -18,6 +18,7 @@ class OtterCheckbox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     void toggle() => onChanged(!value);
+    final isDark = OtterColors.isDarkOf(context);
 
     return FocusableActionDetector(
       mouseCursor: SystemMouseCursors.click,
@@ -52,7 +53,7 @@ class OtterCheckbox extends StatelessWidget {
                     border: Border.all(
                       color: value
                           ? OtterColors.sberGreen
-                          : OtterColors.grayMid,
+                          : OtterColors.border(isDark),
                       width: 2,
                     ),
                   ),

@@ -98,16 +98,19 @@ class _TopToastState extends State<_TopToast>
   Widget build(BuildContext context) {
     final topInset = MediaQuery.paddingOf(context).top;
     final maxWidth = MediaQuery.sizeOf(context).width - 32;
+    final isDark = OtterColors.isDarkOf(context);
 
     final borderColor = _isSuccess
         ? OtterColors.sberGreen
         : const Color(0xFFFCA5A5);
     final backgroundColor = _isSuccess
-        ? OtterColors.sberGreenLight
-        : const Color(0xFFFEF2F2);
+        ? OtterColors.greenTint(isDark)
+        : (isDark
+            ? OtterColors.priorityHigh.withValues(alpha: 0.15)
+            : const Color(0xFFFEF2F2));
     final foregroundColor = _isSuccess
         ? OtterColors.sberGreen
-        : const Color(0xFFDC2626);
+        : (isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626));
 
     return Positioned(
       top: topInset + 16,

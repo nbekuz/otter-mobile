@@ -122,6 +122,7 @@ class _RuDateFieldState extends State<RuDateField> {
           }
         },
         decoration: _fieldDecoration(
+          context,
           hint: 'ДД.ММ.ГГГГ',
           icon: LucideIcons.calendar,
           onIconTap: _openPicker,
@@ -303,6 +304,7 @@ class _RuTimeFieldState extends State<RuTimeField> {
           if (parsed != null) widget.onChanged(parsed);
         },
         decoration: _fieldDecoration(
+          context,
           hint: 'ЧЧ:ММ',
           icon: LucideIcons.clock,
           onIconTap: _openPicker,
@@ -339,20 +341,22 @@ class _LabeledField extends StatelessWidget {
   }
 }
 
-InputDecoration _fieldDecoration({
+InputDecoration _fieldDecoration(
+  BuildContext context, {
   required String hint,
   required IconData icon,
   required VoidCallback onIconTap,
 }) {
+  final isDark = OtterColors.isDarkOf(context);
   return InputDecoration(
     hintText: hint,
-    hintStyle: const TextStyle(
+    hintStyle: TextStyle(
       fontSize: 16,
       fontWeight: FontWeight.w500,
-      color: OtterColors.sberGray,
+      color: OtterColors.muted(isDark),
     ),
     filled: true,
-    fillColor: Colors.white,
+    fillColor: OtterColors.surfaceAlt(isDark),
     contentPadding: const EdgeInsets.fromLTRB(14, 16, 44, 16),
     suffixIcon: IconButton(
       onPressed: onIconTap,

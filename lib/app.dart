@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/locale/app_languages.dart';
+import 'core/platform/windows_title_bar.dart';
 import 'core/providers/providers.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/otter_theme.dart';
@@ -22,6 +23,10 @@ class OtterApp extends ConsumerWidget {
     final isBootstrapping = ref.watch(
       authStateProvider.select((s) => s.isBootstrapping),
     );
+
+    ref.listen<String>(themeModeProvider, (_, next) {
+      syncWindowsTitleBarTheme(next == 'dark');
+    });
 
     // Bind FCM / local-notification taps → task / notification screens.
     ref.listen(routerProvider, (_, next) {

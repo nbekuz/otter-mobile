@@ -55,6 +55,9 @@ class Win32Window {
   // Return a RECT representing the bounds of the current client area.
   RECT GetClientArea();
 
+  // Match the Windows title bar to the in-app light/dark theme.
+  void SetTitleBarDarkMode(bool dark);
+
  protected:
   // Processes and route salient window messages for mouse handling,
   // size change and DPI. Delegates handling of these to member overloads that
@@ -87,7 +90,8 @@ class Win32Window {
   // Retrieves a class instance pointer for |window|
   static Win32Window* GetThisFromHandle(HWND const window) noexcept;
 
-  // Update the window frame's theme to match the system theme.
+  // Update the window frame's theme to match the system theme
+  // unless the app has set an explicit title-bar preference.
   static void UpdateTheme(HWND const window);
 
   bool quit_on_close_ = false;
@@ -97,6 +101,10 @@ class Win32Window {
 
   // window handle for hosted content.
   HWND child_content_ = nullptr;
+
+  // When set, title bar follows the in-app theme instead of Windows OS theme.
+  bool has_title_bar_override_ = false;
+  bool title_bar_dark_ = false;
 };
 
 #endif  // RUNNER_WIN32_WINDOW_H_

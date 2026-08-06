@@ -16,12 +16,40 @@ abstract final class OtterColors {
   static const priorityLow = Color(0xFF34C759);
   static const priorityNone = Color(0xFFC7C7CC);
 
+  /// Matches otter-app `.dark` tokens in `assets/css/main.css`.
   static const darkBg = Color(0xFF0F1115);
   static const darkSurface = Color(0xFF171A21);
-  static const darkSurfaceAlt = Color(0xFF10141B);
+  static const darkSurfaceAlt = Color(0xFF11151B);
+  static const darkElevated = Color(0xFF20242D);
   static const darkBorder = Color(0xFF2A303A);
   static const darkText = Color(0xFFF3F4F6);
+  static const darkMuted = Color(0xFF9AA3AF);
+  static const darkGreenTint = Color(0x2E21A038); // rgba(33,160,56,0.18)
+  static const darkGreenTintStrong = Color(0x3821A038); // rgba(33,160,56,0.22)
 
   static const radiusMd = 16.0;
   static const radiusLg = 24.0;
+
+  static bool isDarkOf(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark;
+
+  static Color pageBg(bool isDark) => isDark ? darkBg : grayLight;
+
+  static Color surface(bool isDark) => isDark ? darkSurface : Colors.white;
+
+  static Color surfaceAlt(bool isDark) => isDark ? darkSurfaceAlt : grayLight;
+
+  static Color elevated(bool isDark) => isDark ? darkElevated : grayLight;
+
+  static Color border(bool isDark) => isDark ? darkBorder : grayMid;
+
+  static Color text(bool isDark) => isDark ? darkText : sberBlack;
+
+  static Color muted(bool isDark) => isDark ? darkMuted : sberGray;
+
+  static Color greenTint(bool isDark) =>
+      isDark ? darkGreenTint : sberGreenLight;
+
+  static Color greenTintStrong(bool isDark) =>
+      isDark ? darkGreenTintStrong : sberGreenLight;
 }

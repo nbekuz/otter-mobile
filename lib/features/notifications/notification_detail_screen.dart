@@ -165,9 +165,7 @@ class _NotificationDetailScreenState
                           item.body,
                           style: TextStyle(
                             height: 1.45,
-                            color: isDark
-                                ? Colors.white70
-                                : OtterColors.sberGray,
+                            color: OtterColors.muted(isDark),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -175,9 +173,7 @@ class _NotificationDetailScreenState
                           _formatDate(item.createdAt),
                           style: TextStyle(
                             fontSize: 12,
-                              color: isDark
-                                ? Colors.white54
-                                : OtterColors.sberGray,
+                            color: OtterColors.muted(isDark),
                           ),
                         ),
                         if (item.type.isNotEmpty) ...[
@@ -186,9 +182,7 @@ class _NotificationDetailScreenState
                             'Тип: ${item.type}',
                             style: TextStyle(
                               fontSize: 12,
-                              color: isDark
-                                  ? Colors.white54
-                                  : OtterColors.sberGray,
+                              color: OtterColors.muted(isDark),
                             ),
                           ),
                         ],

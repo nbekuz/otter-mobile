@@ -384,21 +384,30 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
     if (recurring) {
       scope = await showModalBottomSheet<String>(
         context: context,
-        builder: (ctx) => SafeArea(
+        builder: (ctx) {
+          final isDark = OtterColors.isDarkOf(ctx);
+          return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
+                Text(
                   'Удалить повторяющуюся задачу?',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: OtterColors.text(isDark),
+                  ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'Выберите, что именно удалить.',
-                  style: TextStyle(fontSize: 13, color: OtterColors.sberGray),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: OtterColors.muted(isDark),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 FilledButton(
@@ -417,7 +426,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
               ],
             ),
           ),
-        ),
+        );
+        },
       );
       if (scope == null) return;
     }
@@ -653,15 +663,20 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
+
     if (_loading && widget.isEditMode && _title.text.isEmpty) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        backgroundColor: OtterColors.pageBg(isDark),
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
 
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      backgroundColor: OtterColors.grayLight,
+      backgroundColor: OtterColors.pageBg(isDark),
       body: SafeArea(
         bottom: keyboardInset == 0,
         child: Padding(
@@ -678,7 +693,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                     padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: OtterColors.surface(isDark),
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
@@ -742,21 +757,27 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   Widget _buildHeader() {
+    final isDark = OtterColors.isDarkOf(context);
+
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
-      color: Colors.white,
+      color: OtterColors.surface(isDark),
       child: Row(
         children: [
           Material(
-            color: OtterColors.grayLight,
+            color: OtterColors.elevated(isDark),
             shape: const CircleBorder(),
             child: InkWell(
               onTap: _goBack,
               customBorder: const CircleBorder(),
-              child: const SizedBox(
+              child: SizedBox(
                 width: 36,
                 height: 36,
-                child: Icon(LucideIcons.chevronLeft, size: 20),
+                child: Icon(
+                  LucideIcons.chevronLeft,
+                  size: 20,
+                  color: OtterColors.text(isDark),
+                ),
               ),
             ),
           ),
@@ -764,10 +785,10 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
           Expanded(
             child: Text(
               widget.isEditMode ? 'Редактирование задачи' : 'Новая задача',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: OtterColors.sberBlack,
+                color: OtterColors.text(isDark),
               ),
             ),
           ),
@@ -777,6 +798,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   Widget _buildTitleSection() {
+    final isDark = OtterColors.isDarkOf(context);
     final wide = Responsive.isWide(context);
     final showDescription = widget.isEditMode || _descOpen || wide;
 
@@ -790,7 +812,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             style: TextStyle(
               fontSize: wide ? 14 : 14,
               fontWeight: FontWeight.w600,
-              color: OtterColors.sberBlack,
+              color: OtterColors.text(isDark),
             ),
           ),
           SizedBox(height: wide ? 8 : 6),
@@ -801,13 +823,14 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             style: TextStyle(
               fontSize: wide ? 16 : 16,
               fontWeight: FontWeight.w500,
+              color: OtterColors.text(isDark),
             ),
             textInputAction: TextInputAction.next,
             onTapOutside: dismissKeyboardOnTapOutside,
             decoration: InputDecoration(
               hintText: 'Например: отчёт, созвон, встреча…',
               filled: true,
-              fillColor: OtterColors.grayLight,
+              fillColor: OtterColors.surfaceAlt(isDark),
               contentPadding: EdgeInsets.symmetric(
                 horizontal: wide ? 16 : 14,
                 vertical: wide ? 16 : 14,
@@ -818,7 +841,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(wide ? 16 : 12),
-                borderSide: const BorderSide(color: OtterColors.grayMid),
+                borderSide: BorderSide(color: OtterColors.border(isDark)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(wide ? 16 : 12),
@@ -862,14 +885,14 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
           if (showDescription) ...[
             SizedBox(height: wide ? 16 : 8),
             if (wide)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 8),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
                   'Описание',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: OtterColors.sberBlack,
+                    color: OtterColors.text(isDark),
                   ),
                 ),
               ),
@@ -877,11 +900,12 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
               controller: _description,
               maxLines: wide ? 4 : 3,
               minLines: wide ? 3 : 2,
+              style: TextStyle(color: OtterColors.text(isDark)),
               onTapOutside: dismissKeyboardOnTapOutside,
               decoration: InputDecoration(
                 hintText: 'Детали, ссылки…',
                 filled: true,
-                fillColor: OtterColors.grayLight,
+                fillColor: OtterColors.surfaceAlt(isDark),
                 contentPadding: EdgeInsets.symmetric(
                   horizontal: wide ? 16 : 12,
                   vertical: wide ? 14 : 12,
@@ -892,7 +916,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(wide ? 16 : 12),
-                  borderSide: const BorderSide(color: OtterColors.grayMid),
+                  borderSide: BorderSide(color: OtterColors.border(isDark)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(wide ? 16 : 12),
@@ -925,7 +949,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             ),
             style: OutlinedButton.styleFrom(
               foregroundColor: OtterColors.sberGreen,
-              backgroundColor: OtterColors.sberGreenLight,
+              backgroundColor: OtterColors.greenTint(isDark),
               side: BorderSide(
                 color: OtterColors.sberGreen.withValues(alpha: 0.4),
               ),
@@ -962,6 +986,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   Widget _buildAttachmentPreview() {
+    final isDark = OtterColors.isDarkOf(context);
     final name = _attachmentName ??
         _imagePath?.split('/').last ??
         'Вложение';
@@ -983,10 +1008,10 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
           width: 56,
           height: 56,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const Icon(
+          errorBuilder: (_, __, ___) => Icon(
             LucideIcons.file,
             size: 28,
-            color: OtterColors.sberGray,
+            color: OtterColors.muted(isDark),
           ),
         );
       }
@@ -995,9 +1020,9 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: OtterColors.grayLight.withValues(alpha: 0.6),
+        color: OtterColors.surfaceAlt(isDark),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: OtterColors.grayLight),
+        border: Border.all(color: OtterColors.border(isDark)),
       ),
       child: Row(
         children: [
@@ -1007,12 +1032,12 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                 Container(
                   width: 56,
                   height: 56,
-                  color: Colors.white,
+                  color: OtterColors.elevated(isDark),
                   alignment: Alignment.center,
-                  child: const Icon(
+                  child: Icon(
                     LucideIcons.file,
                     size: 24,
-                    color: OtterColors.sberGray,
+                    color: OtterColors.muted(isDark),
                   ),
                 ),
           ),
@@ -1038,7 +1063,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                               _existingImageUrl != null &&
                               !_clearImage
                           ? OtterColors.sberGreen
-                          : OtterColors.sberBlack,
+                          : OtterColors.text(isDark),
                       decoration: _imagePath == null &&
                               _existingImageUrl != null &&
                               !_clearImage
@@ -1051,9 +1076,9 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                     _attachmentIsImage
                         ? 'Изображение прикреплено'
                         : 'Файл прикреплен',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: OtterColors.sberGray,
+                      color: OtterColors.muted(isDark),
                     ),
                   ),
                 ],
@@ -1062,7 +1087,11 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
           ),
           IconButton(
             onPressed: _clearAttachment,
-            icon: const Icon(LucideIcons.x, size: 16),
+            icon: Icon(
+              LucideIcons.x,
+              size: 16,
+              color: OtterColors.muted(isDark),
+            ),
             visualDensity: VisualDensity.compact,
           ),
         ],
@@ -1071,6 +1100,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   Widget _buildTabBar() {
+    final isDark = OtterColors.isDarkOf(context);
     // Match otter-app: labels for Дата/Приоритет; icon-only for the rest.
     // Icon-only tabs keep intrinsic width so labeled tabs get enough room
     // for full words (no "Прио..." truncation).
@@ -1086,8 +1116,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
 
     return Container(
       margin: EdgeInsets.only(top: wide ? 12 : 8),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: OtterColors.grayLight)),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: OtterColors.border(isDark))),
       ),
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: wide ? 8 : 2),
@@ -1106,7 +1136,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                 final iconOnly = t.$4 && !wide;
                 final active = _activeTab == tab;
                 final color =
-                    active ? OtterColors.sberGreen : OtterColors.sberGray;
+                    active ? OtterColors.sberGreen : OtterColors.muted(isDark);
 
                 final child = Tooltip(
                   message: label,
@@ -1126,7 +1156,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                             : (wide ? 10 : 4),
                       ),
                       decoration: BoxDecoration(
-                        color: active ? OtterColors.sberGreenLight : null,
+                        color: active ? OtterColors.greenTint(isDark) : null,
                         border: Border(
                           bottom: BorderSide(
                             color: active
@@ -1320,6 +1350,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   Widget _buildPriorityTab() {
+    final isDark = OtterColors.isDarkOf(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1354,7 +1386,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: selected ? color : OtterColors.sberBlack,
+                        color: selected ? color : OtterColors.text(isDark),
                       ),
                     ),
                   ),
@@ -1374,6 +1406,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   Widget _buildNotifyTab() {
+    final isDark = OtterColors.isDarkOf(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1394,7 +1428,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                     size: 16,
                     color: selected
                         ? OtterColors.sberGreen
-                        : OtterColors.sberGray,
+                        : OtterColors.muted(isDark),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -1407,7 +1441,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                             : FontWeight.w500,
                         color: selected
                             ? OtterColors.sberGreen
-                            : OtterColors.sberBlack,
+                            : OtterColors.text(isDark),
                       ),
                     ),
                   ),
@@ -1431,7 +1465,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             decoration: InputDecoration(
               labelText: 'Минут до срока',
               filled: true,
-              fillColor: OtterColors.grayLight,
+              fillColor: OtterColors.surfaceAlt(isDark),
               border: OutlineInputBorder(
                 borderSide: BorderSide.none,
                 borderRadius: BorderRadius.circular(12),
@@ -1444,6 +1478,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   Widget _buildRepeatTab() {
+    final isDark = OtterColors.isDarkOf(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1469,7 +1505,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                     size: 16,
                     color: selected
                         ? OtterColors.sberGreen
-                        : OtterColors.sberGray,
+                        : OtterColors.muted(isDark),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -1482,7 +1518,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                             : FontWeight.w500,
                         color: selected
                             ? OtterColors.sberGreen
-                            : OtterColors.sberBlack,
+                            : OtterColors.text(isDark),
                       ),
                     ),
                   ),
@@ -1502,7 +1538,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: OtterColors.sberGreenLight.withValues(alpha: 0.3),
+              color: OtterColors.greenTint(isDark),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: OtterColors.sberGreen.withValues(alpha: 0.3),
@@ -1522,7 +1558,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                           labelText: 'Интервал',
                           errorText: _repeatIntervalError,
                           filled: true,
-                          fillColor: Colors.white,
+                          fillColor: OtterColors.surface(isDark),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -1581,12 +1617,12 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                           decoration: BoxDecoration(
                             color: selected
                                 ? OtterColors.sberGreen
-                                : Colors.white,
+                                : OtterColors.surface(isDark),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: selected
                                   ? OtterColors.sberGreen
-                                  : OtterColors.grayMid,
+                                  : OtterColors.border(isDark),
                             ),
                           ),
                           child: Text(
@@ -1596,7 +1632,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                               fontWeight: FontWeight.w600,
                               color: selected
                                   ? Colors.white
-                                  : OtterColors.sberBlack,
+                                  : OtterColors.text(isDark),
                             ),
                           ),
                         ),
@@ -1607,7 +1643,10 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                     const SizedBox(height: 6),
                     Text(
                       _repeatWeekdaysError!,
-                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                      style: const TextStyle(
+                        color: OtterColors.priorityHigh,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ],
@@ -1621,7 +1660,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                       labelText: 'День месяца',
                       errorText: _repeatMonthDayError,
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: OtterColors.surface(isDark),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -1639,6 +1678,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   Widget _buildMatrixTab() {
+    final isDark = OtterColors.isDarkOf(context);
     final settings = ref.watch(matrixSettingsProvider).blocks;
 
     return Column(
@@ -1660,7 +1700,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             return Material(
               color: selected
                   ? theme.accent.withValues(alpha: 0.08)
-                  : Colors.white,
+                  : OtterColors.surface(isDark),
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
                 onTap: () {
@@ -1673,7 +1713,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: selected ? theme.accent : OtterColors.grayLight,
+                      color: selected ? theme.accent : OtterColors.border(isDark),
                       width: selected ? 2 : 1,
                     ),
                   ),
@@ -1694,11 +1734,11 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                         softWrap: true,
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                           height: 1.3,
-                          color: OtterColors.sberBlack,
+                          color: OtterColors.text(isDark),
                         ),
                       ),
                     ],
@@ -1713,6 +1753,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   }
 
   Widget _buildFooter() {
+    final isDark = OtterColors.isDarkOf(context);
     final wide = Responsive.isWide(context);
     final btnPad = EdgeInsets.symmetric(vertical: wide ? 16 : 14);
     final btnRadius = BorderRadius.circular(wide ? 16 : 14);
@@ -1720,8 +1761,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
     if (!widget.isEditMode) {
       return Container(
         padding: EdgeInsets.fromLTRB(wide ? 16 : 12, wide ? 12 : 8, wide ? 16 : 12, wide ? 16 : 12),
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: OtterColors.grayLight)),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: OtterColors.border(isDark))),
         ),
         child: Row(
           children: [
@@ -1729,8 +1770,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
               child: OutlinedButton(
                 onPressed: _loading ? null : _goBack,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: OtterColors.sberBlack,
-                  backgroundColor: OtterColors.grayLight,
+                  foregroundColor: OtterColors.text(isDark),
+                  backgroundColor: OtterColors.elevated(isDark),
                   side: BorderSide.none,
                   padding: btnPad,
                   shape: RoundedRectangleBorder(borderRadius: btnRadius),
@@ -1777,8 +1818,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
 
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: OtterColors.grayLight)),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: OtterColors.border(isDark))),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1789,10 +1830,10 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             label: Text(_completed ? 'Восстановить' : 'Выполнено'),
             style: FilledButton.styleFrom(
               foregroundColor:
-                  _completed ? OtterColors.sberGray : OtterColors.sberGreen,
+                  _completed ? OtterColors.muted(isDark) : OtterColors.sberGreen,
               backgroundColor: _completed
-                  ? OtterColors.grayLight
-                  : OtterColors.sberGreenLight,
+                  ? OtterColors.elevated(isDark)
+                  : OtterColors.greenTint(isDark),
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -1806,8 +1847,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                 child: OutlinedButton(
                   onPressed: _loading ? null : _goBack,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: OtterColors.sberBlack,
-                    backgroundColor: OtterColors.grayLight,
+                    foregroundColor: OtterColors.text(isDark),
+                    backgroundColor: OtterColors.elevated(isDark),
                     side: BorderSide.none,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
@@ -1827,8 +1868,9 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                   icon: const Icon(LucideIcons.trash2, size: 14),
                   label: const Text('Удалить'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFFF3B30),
-                    backgroundColor: const Color(0xFFFFF0EE),
+                    foregroundColor: OtterColors.priorityHigh,
+                    backgroundColor:
+                        OtterColors.priorityHigh.withValues(alpha: 0.08),
                     side: BorderSide.none,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
@@ -1886,13 +1928,15 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
+
     return Text(
       text.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.5,
-          color: OtterColors.sberGray,
+          color: OtterColors.muted(isDark),
         ),
     );
   }
@@ -1911,8 +1955,10 @@ class _QuickChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
+
     return Material(
-      color: selected ? OtterColors.sberGreen : Colors.white,
+      color: selected ? OtterColors.sberGreen : OtterColors.surface(isDark),
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: () {
@@ -1927,7 +1973,7 @@ class _QuickChip extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: selected ? OtterColors.sberGreen : OtterColors.grayMid,
+              color: selected ? OtterColors.sberGreen : OtterColors.border(isDark),
             ),
           ),
           child: Text(
@@ -1935,7 +1981,7 @@ class _QuickChip extends StatelessWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: selected ? Colors.white : OtterColors.sberBlack,
+              color: selected ? Colors.white : OtterColors.text(isDark),
             ),
           ),
         ),
@@ -1957,8 +2003,10 @@ class _UnitChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
+
     return Material(
-      color: selected ? OtterColors.sberGreen : Colors.white,
+      color: selected ? OtterColors.sberGreen : OtterColors.surface(isDark),
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         onTap: () {
@@ -1972,7 +2020,7 @@ class _UnitChip extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: selected ? OtterColors.sberGreen : OtterColors.grayMid,
+              color: selected ? OtterColors.sberGreen : OtterColors.border(isDark),
             ),
           ),
           child: Text(
@@ -1980,7 +2028,7 @@ class _UnitChip extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: selected ? Colors.white : OtterColors.sberBlack,
+              color: selected ? Colors.white : OtterColors.text(isDark),
             ),
           ),
         ),
@@ -2004,8 +2052,10 @@ class _SelectCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
+
     return Material(
-      color: selected ? selectedColor.withValues(alpha: 0.08) : Colors.white,
+      color: selected ? selectedColor.withValues(alpha: 0.08) : OtterColors.surface(isDark),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: () {
@@ -2018,7 +2068,7 @@ class _SelectCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? selectedColor : OtterColors.grayLight,
+              color: selected ? selectedColor : OtterColors.border(isDark),
               width: selected ? 2 : 1,
             ),
           ),

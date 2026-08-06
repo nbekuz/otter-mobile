@@ -66,10 +66,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       groups: tasksState.groups,
     );
     final date = state.date ?? DateTime.now();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = OtterColors.isDarkOf(context);
 
     return Scaffold(
-      backgroundColor: isDark ? OtterColors.darkBg : OtterColors.grayLight,
+      backgroundColor: OtterColors.pageBg(isDark),
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -332,9 +332,9 @@ class _Header extends ConsumerWidget {
     final isDay = state.view == CalendarView.day;
     final title = state.displayLabel;
     final inbox = ref.watch(notificationsInboxProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface = isDark ? OtterColors.darkSurface : Colors.white;
-    final chipBg = isDark ? OtterColors.darkSurfaceAlt : OtterColors.grayLight;
+    final isDark = OtterColors.isDarkOf(context);
+    final surface = OtterColors.surface(isDark);
+    final chipBg = OtterColors.surfaceAlt(isDark);
 
     return Container(
       color: surface,
@@ -354,9 +354,7 @@ class _Header extends ConsumerWidget {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
-                        color: isDark
-                            ? OtterColors.darkText
-                            : OtterColors.sberBlack,
+                        color: OtterColors.text(isDark),
                       ),
                     ),
                     if (isDay) ...[
@@ -368,9 +366,7 @@ class _Header extends ConsumerWidget {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
-                          color: isDark
-                              ? Colors.white54
-                              : OtterColors.sberGray,
+                          color: OtterColors.muted(isDark),
                         ),
                       ),
                     ],
@@ -381,9 +377,7 @@ class _Header extends ConsumerWidget {
                 onPressed: () => context.push('/app/notifications'),
                 style: IconButton.styleFrom(
                   backgroundColor: chipBg,
-                  foregroundColor: isDark
-                      ? OtterColors.darkText
-                      : OtterColors.sberGray,
+                  foregroundColor: OtterColors.muted(isDark),
                 ),
                 icon: Badge(
                   isLabelVisible: inbox.unreadCount > 0,
@@ -396,7 +390,7 @@ class _Header extends ConsumerWidget {
               TextButton(
                 onPressed: onToday,
                 style: TextButton.styleFrom(
-                  backgroundColor: OtterColors.sberGreenLight,
+                  backgroundColor: OtterColors.greenTint(isDark),
                   foregroundColor: OtterColors.sberGreen,
                   minimumSize: const Size(0, 40),
                   padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -410,7 +404,7 @@ class _Header extends ConsumerWidget {
               PopupMenuButton<CalendarView>(
                 icon: Icon(
                   LucideIcons.layoutGrid,
-                  color: isDark ? OtterColors.darkText : OtterColors.sberGray,
+                  color: OtterColors.muted(isDark),
                 ),
                 style: IconButton.styleFrom(backgroundColor: chipBg),
                 onSelected: onSetView,
@@ -431,9 +425,7 @@ class _Header extends ConsumerWidget {
                 icon: const Icon(LucideIcons.chevronLeft),
                 style: IconButton.styleFrom(
                   backgroundColor: chipBg,
-                  foregroundColor: isDark
-                      ? OtterColors.darkText
-                      : OtterColors.sberBlack,
+                  foregroundColor: OtterColors.text(isDark),
                 ),
               ),
               Expanded(
@@ -449,9 +441,7 @@ class _Header extends ConsumerWidget {
                           style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w800,
-                            color: isDark
-                                ? OtterColors.darkText
-                                : OtterColors.sberBlack,
+                            color: OtterColors.text(isDark),
                           ),
                         ),
                       ),
@@ -461,9 +451,7 @@ class _Header extends ConsumerWidget {
                 icon: const Icon(LucideIcons.chevronRight),
                 style: IconButton.styleFrom(
                   backgroundColor: chipBg,
-                  foregroundColor: isDark
-                      ? OtterColors.darkText
-                      : OtterColors.sberBlack,
+                  foregroundColor: OtterColors.text(isDark),
                 ),
               ),
             ],
@@ -489,6 +477,7 @@ class _WeekStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     final start = date.subtract(Duration(days: date.weekday - 1));
     final today = DateTime.now();
     final selectedKey = DateFormat('yyyy-MM-dd').format(date);
@@ -519,7 +508,7 @@ class _WeekStrip extends StatelessWidget {
                         color: isSelected
                             ? OtterColors.sberGreen
                             : isToday
-                            ? OtterColors.sberGreenLight
+                            ? OtterColors.greenTint(isDark)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -536,7 +525,7 @@ class _WeekStrip extends StatelessWidget {
                                   ? Colors.white.withValues(alpha: 0.85)
                                   : isToday
                                   ? OtterColors.sberGreen
-                                  : OtterColors.sberGray,
+                                  : OtterColors.muted(isDark),
                             ),
                           ),
                           const SizedBox(height: 3),
@@ -550,7 +539,7 @@ class _WeekStrip extends StatelessWidget {
                                   ? Colors.white
                                   : isToday
                                   ? OtterColors.sberGreen
-                                  : OtterColors.sberBlack,
+                                  : OtterColors.text(isDark),
                             ),
                           ),
                         ],
@@ -727,9 +716,10 @@ class _DayViewState extends State<_DayView> {
     required String label,
     required bool collapsed,
     required VoidCallback onTap,
+    required bool isDark,
   }) {
     return Material(
-      color: OtterColors.grayLight,
+      color: OtterColors.elevated(isDark),
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -741,21 +731,21 @@ class _DayViewState extends State<_DayView> {
                 child: Text(
                   label,
                   textAlign: TextAlign.right,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: OtterColors.sberGray,
+                    color: OtterColors.muted(isDark),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
-              const Expanded(
-                child: Divider(height: 1, color: OtterColors.grayMid),
+              Expanded(
+                child: Divider(height: 1, color: OtterColors.border(isDark)),
               ),
               const SizedBox(width: 8),
               Icon(
                 collapsed ? LucideIcons.chevronDown : LucideIcons.chevronUp,
                 size: 16,
-                color: OtterColors.sberGray,
+                color: OtterColors.muted(isDark),
               ),
             ],
           ),
@@ -768,6 +758,7 @@ class _DayViewState extends State<_DayView> {
     List<int> hours, {
     required List<CalendarTimelineTask> timeline,
     double? nowOffsetPx,
+    required bool isDark,
   }) {
     final height = hours.length * hourHeightPx;
     return SizedBox(
@@ -789,9 +780,9 @@ class _DayViewState extends State<_DayView> {
                         child: Text(
                           '${h.toString().padLeft(2, '0')}:00',
                           textAlign: TextAlign.right,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: OtterColors.sberGray,
+                            color: OtterColors.muted(isDark),
                           ),
                         ),
                       ),
@@ -802,9 +793,9 @@ class _DayViewState extends State<_DayView> {
                         child: GestureDetector(
                           onTap: () => widget.onHourTap(h),
                           child: Container(
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               border: Border(
-                                top: BorderSide(color: Color(0xFFE5E5EA)),
+                                top: BorderSide(color: OtterColors.border(isDark)),
                               ),
                             ),
                           ),
@@ -887,6 +878,7 @@ class _DayViewState extends State<_DayView> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     final dateKey = DateFormat('yyyy-MM-dd').format(widget.date);
     final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final dayTasks = expandTasksForDate(widget.tasks, dateKey);
@@ -906,7 +898,7 @@ class _DayViewState extends State<_DayView> {
       children: [
         if (untimed.isNotEmpty)
           Material(
-            color: Colors.white,
+            color: OtterColors.surface(isDark),
             elevation: 1,
             shadowColor: Colors.black26,
             child: Column(
@@ -917,22 +909,22 @@ class _DayViewState extends State<_DayView> {
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: Row(
                     children: [
-                      const Text(
+                      Text(
                         'Без времени',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 0.4,
-                          color: OtterColors.sberGray,
+                          color: OtterColors.muted(isDark),
                         ),
                       ),
                       const Spacer(),
                       Text(
                         '${untimed.length}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w500,
-                          color: OtterColors.sberGray,
+                          color: OtterColors.muted(isDark),
                         ),
                       ),
                     ],
@@ -979,9 +971,10 @@ class _DayViewState extends State<_DayView> {
                                     task.title,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w500,
+                                      color: OtterColors.text(isDark),
                                     ),
                                   ),
                                 ),
@@ -1004,7 +997,7 @@ class _DayViewState extends State<_DayView> {
                       );
                     });
                   },
-                  child: const SizedBox(
+                  child: SizedBox(
                     height: 16,
                     child: Center(
                       child: SizedBox(
@@ -1012,7 +1005,7 @@ class _DayViewState extends State<_DayView> {
                         height: 4,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            color: OtterColors.grayMid,
+                            color: OtterColors.border(isDark),
                             borderRadius:
                                 BorderRadius.all(Radius.circular(2)),
                           ),
@@ -1034,7 +1027,7 @@ class _DayViewState extends State<_DayView> {
               bottom: Responsive.isWide(context) ? 8 : 100,
             ),
             child: ColoredBox(
-              color: Colors.white,
+              color: OtterColors.surface(isDark),
                   child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -1042,6 +1035,7 @@ class _DayViewState extends State<_DayView> {
                     dayHours,
                     timeline: dayTimeline,
                     nowOffsetPx: nowOffsetPx,
+                    isDark: isDark,
                   ),
                 ],
               ),
@@ -1080,6 +1074,7 @@ class _MonthView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     final today = DateTime.now();
     final cells = buildMonthCells(anchor: date, today: today);
     final rowCount = cells.length ~/ 7;
@@ -1115,10 +1110,10 @@ class _MonthView extends StatelessWidget {
                       child: Text(
                         label,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: OtterColors.sberGray,
+                          color: OtterColors.muted(isDark),
                         ),
                       ),
                     ),
@@ -1250,6 +1245,7 @@ class _MonthCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     final day = DateTime.parse(cell.dateKey);
     final visible = _visibleCount(tasks.length);
     final hidden = tasks.length - visible;
@@ -1305,7 +1301,7 @@ class _MonthCell extends StatelessWidget {
                                   fontWeight: FontWeight.w600,
                                   color: cell.isToday
                                       ? Colors.white
-                                      : OtterColors.sberBlack,
+                                      : OtterColors.text(isDark),
                                 ),
                               ),
                             ),
@@ -1341,15 +1337,15 @@ class _MonthCell extends StatelessWidget {
                                       vertical: 1,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: OtterColors.grayLight,
+                                      color: OtterColors.elevated(isDark),
                                       borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Text(
                                       '+$hidden',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w600,
-                                        color: OtterColors.sberGray,
+                                        color: OtterColors.muted(isDark),
                                       ),
                                     ),
                                   ),
@@ -1381,6 +1377,7 @@ class _MonthTaskChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     final color = priorityColor(task.priority);
     final chip = Opacity(
       opacity: task.completed ? 0.45 : 1,
@@ -1396,11 +1393,11 @@ class _MonthTaskChip extends StatelessWidget {
               task.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w500,
                 height: 1.2,
-                color: OtterColors.sberBlack,
+                color: OtterColors.text(isDark),
               ),
             ),
           ),
@@ -1546,6 +1543,7 @@ class _YearMonthCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     final dayGrid = Column(
       children: [
         for (var row = 0; row < 6; row++)
@@ -1590,7 +1588,7 @@ class _YearMonthCard extends StatelessWidget {
     );
 
     return Material(
-      color: Colors.white,
+      color: OtterColors.surface(isDark),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: () => onMonthTap(month.index),
@@ -1607,7 +1605,7 @@ class _YearMonthCard extends StatelessWidget {
                   fontSize: expandDays ? 14 : 12,
                   height: 1.0,
                   fontWeight: FontWeight.w700,
-                  color: OtterColors.sberBlack,
+                  color: OtterColors.text(isDark),
                 ),
               ),
               SizedBox(height: expandDays ? 6 : 4),
@@ -1622,7 +1620,7 @@ class _YearMonthCard extends StatelessWidget {
                           fontSize: expandDays ? 10 : 8,
                           height: 1.0,
                           fontWeight: FontWeight.w600,
-                          color: OtterColors.sberGray,
+                          color: OtterColors.muted(isDark),
                         ),
                       ),
                     ),
@@ -1657,6 +1655,7 @@ class _YearDayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     final day = cell.day;
     final dateKey = cell.dateKey;
 
@@ -1693,7 +1692,7 @@ class _YearDayCell extends StatelessWidget {
                         cell.isToday ? FontWeight.w600 : FontWeight.w400,
                     color: cell.isToday
                         ? Colors.white
-                        : OtterColors.sberGray,
+                        : OtterColors.muted(isDark),
                   ),
                 ),
               ),
@@ -1788,7 +1787,6 @@ class _WeekView extends StatefulWidget {
 class _WeekViewState extends State<_WeekView> {
   static const _hourH = hourHeightPx;
   static const _gutter = weekGutterWidth;
-  static const _gridBorder = Color(0xFFC8CFDB);
 
   double _untimedHeight = untimedDefaultPx;
   CalendarDragPreview? _dragPreview;
@@ -2035,6 +2033,7 @@ class _WeekViewState extends State<_WeekView> {
     required List<int> hours,
     required List<CalendarTimelineTask> Function(List<Task> dayTasks)
         buildTimeline,
+    required bool isDark,
   }) {
     final height = hours.length * _hourH;
     return SizedBox(
@@ -2055,9 +2054,9 @@ class _WeekViewState extends State<_WeekView> {
                         padding: const EdgeInsets.only(top: 4, right: 8),
                         child: Text(
                           '${h.toString().padLeft(2, '0')}:00',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
-                            color: OtterColors.sberGray,
+                            color: OtterColors.muted(isDark),
                           ),
                         ),
                       ),
@@ -2137,9 +2136,13 @@ class _WeekViewState extends State<_WeekView> {
                                           ? OtterColors.sberGreen
                                               .withValues(alpha: 0.06)
                                           : null,
-                                      border: const Border(
-                                        top: BorderSide(color: _gridBorder),
-                                        left: BorderSide(color: _gridBorder),
+                                      border: Border(
+                                        top: BorderSide(
+                                          color: OtterColors.border(isDark),
+                                        ),
+                                        left: BorderSide(
+                                          color: OtterColors.border(isDark),
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -2183,9 +2186,10 @@ class _WeekViewState extends State<_WeekView> {
     required String label,
     required bool collapsed,
     required VoidCallback onTap,
+    required bool isDark,
   }) {
     return Material(
-      color: OtterColors.grayLight,
+      color: OtterColors.elevated(isDark),
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -2197,21 +2201,21 @@ class _WeekViewState extends State<_WeekView> {
                 child: Text(
                   label,
                   textAlign: TextAlign.right,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10,
-                    color: OtterColors.sberGray,
+                    color: OtterColors.muted(isDark),
                   ),
                 ),
               ),
               const SizedBox(width: 6),
-              const Expanded(
-                child: Divider(height: 1, color: OtterColors.grayMid),
+              Expanded(
+                child: Divider(height: 1, color: OtterColors.border(isDark)),
               ),
               const SizedBox(width: 6),
               Icon(
                 collapsed ? LucideIcons.chevronDown : LucideIcons.chevronUp,
                 size: 16,
-                color: OtterColors.sberGray,
+                color: OtterColors.muted(isDark),
               ),
             ],
           ),
@@ -2220,7 +2224,7 @@ class _WeekViewState extends State<_WeekView> {
     );
   }
 
-  Widget _untimedChip(Task task) {
+  Widget _untimedChip(Task task, {required bool isDark}) {
     final color = priorityColor(task.priority);
     final chip = Opacity(
       opacity: task.completed ? 0.45 : 1,
@@ -2262,9 +2266,10 @@ class _WeekViewState extends State<_WeekView> {
                     task.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
+                      color: OtterColors.text(isDark),
                     ),
                   ),
                 ),
@@ -2296,6 +2301,7 @@ class _WeekViewState extends State<_WeekView> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     final weekStart = widget.date.subtract(
       Duration(days: widget.date.weekday - 1),
     );
@@ -2318,7 +2324,7 @@ class _WeekViewState extends State<_WeekView> {
       children: [
         // Pinned day headers (+ untimed) — matches web sticky week chrome.
         ColoredBox(
-          color: OtterColors.grayLight,
+          color: OtterColors.pageBg(isDark),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -2338,10 +2344,10 @@ class _WeekViewState extends State<_WeekView> {
                               children: [
                                 Text(
                                   DateFormat('E', 'ru').format(d).substring(0, 2),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w700,
-                                    color: OtterColors.sberGray,
+                                    color: OtterColors.muted(isDark),
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -2366,7 +2372,7 @@ class _WeekViewState extends State<_WeekView> {
                                               d.month == today.month &&
                                               d.day == today.day
                                           ? Colors.white
-                                          : OtterColors.sberBlack,
+                                          : OtterColors.text(isDark),
                                     ),
                                   ),
                                 ),
@@ -2384,17 +2390,17 @@ class _WeekViewState extends State<_WeekView> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SizedBox(
+                      SizedBox(
                         width: _gutter,
                         child: Padding(
-                          padding: EdgeInsets.only(top: 6, right: 4),
+                          padding: const EdgeInsets.only(top: 6, right: 4),
                           child: Text(
                             'Без\nвр.',
                             textAlign: TextAlign.right,
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              color: OtterColors.sberGray,
+                              color: OtterColors.muted(isDark),
                               height: 1.1,
                             ),
                           ),
@@ -2424,15 +2430,17 @@ class _WeekViewState extends State<_WeekView> {
                                       ? OtterColors.sberGreen
                                           .withValues(alpha: 0.08)
                                       : null,
-                                  border: const Border(
-                                    bottom: BorderSide(color: _gridBorder),
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: OtterColors.border(isDark),
+                                    ),
                                   ),
                                 ),
                                 child: ListView(
                                   primary: false,
                                   children: [
                                     for (final task in untimed)
-                                      _untimedChip(task),
+                                      _untimedChip(task, isDark: isDark),
                                   ],
                                 ),
                               );
@@ -2450,7 +2458,7 @@ class _WeekViewState extends State<_WeekView> {
                           .clamp(untimedMinPx, untimedMaxPx);
                     });
                   },
-                  child: const SizedBox(
+                  child: SizedBox(
                     height: 16,
                     child: Center(
                       child: SizedBox(
@@ -2458,7 +2466,7 @@ class _WeekViewState extends State<_WeekView> {
                         height: 4,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            color: OtterColors.grayMid,
+                            color: OtterColors.border(isDark),
                             borderRadius:
                                 BorderRadius.all(Radius.circular(2)),
                           ),
@@ -2484,9 +2492,9 @@ class _WeekViewState extends State<_WeekView> {
             ),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.45),
+                color: OtterColors.surface(isDark),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _gridBorder),
+                border: Border.all(color: OtterColors.border(isDark)),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
@@ -2502,6 +2510,7 @@ class _WeekViewState extends State<_WeekView> {
                                 visibleHours: hours,
                                 dragPreview: _dragPreview,
                               ),
+                              isDark: isDark,
                             ),
                   ],
                 ),

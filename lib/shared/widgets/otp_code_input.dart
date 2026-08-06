@@ -90,6 +90,7 @@ class OtpCodeInputState extends State<OtpCodeInput> {
   Widget build(BuildContext context) {
     final hasError = widget.errorText != null && widget.errorText!.isNotEmpty;
     final code = _controller.text;
+    final isDark = OtterColors.isDarkOf(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -118,7 +119,7 @@ class OtpCodeInputState extends State<OtpCodeInput> {
                       height: 52,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: OtterColors.grayLight,
+                        color: OtterColors.surfaceAlt(isDark),
                         borderRadius: BorderRadius.circular(
                           OtterColors.radiusMd,
                         ),
@@ -127,7 +128,7 @@ class OtpCodeInputState extends State<OtpCodeInput> {
                               ? Colors.red.shade300
                               : active
                               ? OtterColors.sberGreen
-                              : OtterColors.grayMid,
+                              : OtterColors.border(isDark),
                           width: active ? 2 : 1,
                         ),
                       ),
@@ -135,9 +136,10 @@ class OtpCodeInputState extends State<OtpCodeInput> {
                           ? _BlinkingCursor(color: OtterColors.sberGreen)
                           : Text(
                               char,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.w600,
+                                color: OtterColors.text(isDark),
                               ),
                             ),
                     ),

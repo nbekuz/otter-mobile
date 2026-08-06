@@ -40,7 +40,8 @@ class InputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = OtterColors.isDarkOf(context);
+    final muted = OtterColors.muted(isDark);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -50,7 +51,7 @@ class InputField extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: isDark ? OtterColors.sberGray : OtterColors.sberGray,
+              color: muted,
             ),
           ),
           const SizedBox(height: 8),
@@ -74,13 +75,13 @@ class InputField extends StatelessWidget {
             errorMaxLines: 3,
             counterText: maxLength != null ? '' : null,
             prefixIcon: icon != null
-                ? Icon(icon, color: OtterColors.sberGray, size: 20)
+                ? Icon(icon, color: muted, size: 20)
                 : null,
             suffixIcon: onToggleObscure != null
                 ? IconButton(
                     icon: Icon(
                       obscureVisible ? LucideIcons.eyeOff : LucideIcons.eye,
-                      color: OtterColors.sberGray,
+                      color: muted,
                       size: 20,
                     ),
                     onPressed: onToggleObscure,

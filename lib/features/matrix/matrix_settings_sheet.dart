@@ -118,6 +118,7 @@ class _MatrixSettingsSheetState extends ConsumerState<_MatrixSettingsSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     final wide = Responsive.isWide(context);
     final maxH = wide
         ? MediaQuery.sizeOf(context).height * 0.85
@@ -133,7 +134,7 @@ class _MatrixSettingsSheetState extends ConsumerState<_MatrixSettingsSheet> {
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: OtterColors.sberBlack,
+              color: OtterColors.text(isDark),
             ),
           ),
           const SizedBox(height: 16),
@@ -142,7 +143,7 @@ class _MatrixSettingsSheetState extends ConsumerState<_MatrixSettingsSheet> {
             'задача попадает в блок, если подходит хотя бы одно из них — по дате или по приоритету.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               fontSize: 12,
-              color: OtterColors.sberGray,
+              color: OtterColors.muted(isDark),
               height: 1.4,
             ),
           ),
@@ -163,9 +164,9 @@ class _MatrixSettingsSheetState extends ConsumerState<_MatrixSettingsSheet> {
                 _togglePriority(kMatrixBlockThemes[i].block, f),
           ),
           if (i < kMatrixBlockThemes.length - 1)
-            const Padding(
-              padding: EdgeInsets.only(top: 16, bottom: 20),
-              child: Divider(height: 1, color: OtterColors.grayLight),
+            Padding(
+              padding: const EdgeInsets.only(top: 16, bottom: 20),
+              child: Divider(height: 1, color: OtterColors.border(isDark)),
             ),
         ],
       ],
@@ -223,7 +224,7 @@ class _MatrixSettingsSheetState extends ConsumerState<_MatrixSettingsSheet> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: OtterColors.grayMid,
+              color: OtterColors.border(isDark),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -258,6 +259,8 @@ class _BlockSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
+    final borderColor = OtterColors.border(isDark);
     // Web: space-y-2 between field groups, mb-3 under block title.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -276,40 +279,40 @@ class _BlockSection extends StatelessWidget {
             Expanded(
               child: Text(
                 setting.title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: OtterColors.sberBlack,
+                  color: OtterColors.text(isDark),
                 ),
               ),
             ),
           ],
         ),
         const SizedBox(height: 12),
-        const Text(
+        Text(
           'Название блока',
-          style: TextStyle(fontSize: 12, color: OtterColors.sberGray),
+          style: TextStyle(fontSize: 12, color: OtterColors.muted(isDark)),
         ),
         const SizedBox(height: 4),
         TextField(
           controller: titleController,
-          style: const TextStyle(fontSize: 14, color: OtterColors.sberBlack),
+          style: TextStyle(fontSize: 14, color: OtterColors.text(isDark)),
           onTapOutside: dismissKeyboardOnTapOutside,
           onEditingComplete: KeyboardDismisser.dismiss,
           decoration: InputDecoration(
             filled: true,
-            fillColor: OtterColors.grayLight,
+            fillColor: OtterColors.surfaceAlt(isDark),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 10,
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: OtterColors.grayMid),
+              borderSide: BorderSide(color: borderColor),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: OtterColors.grayMid),
+              borderSide: BorderSide(color: borderColor),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
@@ -318,9 +321,9 @@ class _BlockSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
           'Фильтр по дате',
-          style: TextStyle(fontSize: 12, color: OtterColors.sberGray),
+          style: TextStyle(fontSize: 12, color: OtterColors.muted(isDark)),
         ),
         const SizedBox(height: 4),
         Wrap(
@@ -337,9 +340,9 @@ class _BlockSection extends StatelessWidget {
           }).toList(),
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
           'Фильтр по приоритету',
-          style: TextStyle(fontSize: 12, color: OtterColors.sberGray),
+          style: TextStyle(fontSize: 12, color: OtterColors.muted(isDark)),
         ),
         const SizedBox(height: 4),
         Wrap(
@@ -375,9 +378,11 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
+    final unselectedBg = OtterColors.surface(isDark);
     // Web: w-20 px-2 py-1 rounded-xl text-xs font-medium border
     return Material(
-      color: selected ? selectedColor : Colors.white,
+      color: selected ? selectedColor : unselectedBg,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
@@ -388,9 +393,9 @@ class _FilterChip extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? Colors.transparent : OtterColors.grayMid,
+              color: selected ? Colors.transparent : OtterColors.border(isDark),
             ),
-            color: selected ? selectedColor : Colors.white,
+            color: selected ? selectedColor : unselectedBg,
           ),
           alignment: Alignment.center,
           child: Text(
@@ -399,7 +404,7 @@ class _FilterChip extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: selected ? Colors.white : OtterColors.sberGray,
+              color: selected ? Colors.white : OtterColors.muted(isDark),
             ),
           ),
         ),

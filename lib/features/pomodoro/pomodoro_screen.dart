@@ -71,13 +71,14 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     final state = ref.watch(pomodoroStateProvider);
     final selectedTask = _selectedTask(state);
     final progress = state.progress.clamp(0.0, 1.0);
     final wide = Responsive.isWide(context);
 
     return Scaffold(
-      backgroundColor: OtterColors.grayLight,
+      backgroundColor: OtterColors.pageBg(isDark),
       body: SafeArea(
         child: Column(
           children: [
@@ -85,12 +86,12 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
               padding: EdgeInsets.fromLTRB(wide ? 24 : 12, 6, wide ? 24 : 12, 10),
               child: Row(
                 children: [
-                  const Text(
+                  Text(
                     'Помодоро',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
-                      color: OtterColors.sberBlack,
+                      color: OtterColors.text(isDark),
                     ),
                   ),
                   const Spacer(),
@@ -98,8 +99,8 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                     onPressed: () => _openSettings(context, state),
                     icon: const Icon(LucideIcons.settings),
                     style: IconButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: OtterColors.sberBlack,
+                      backgroundColor: OtterColors.surface(isDark),
+                      foregroundColor: OtterColors.text(isDark),
                     ),
                   ),
                 ],
@@ -183,6 +184,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final isDark = OtterColors.isDarkOf(context);
             final query = searchController.text.toLowerCase();
             final tasks = _activeTasks()
                 .where(
@@ -204,11 +206,12 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Text(
+                        Text(
                           'Выбрать задачу',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
+                            color: OtterColors.text(isDark),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -216,14 +219,17 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                           controller: searchController,
                           onTapOutside: dismissKeyboardOnTapOutside,
                           onEditingComplete: KeyboardDismisser.dismiss,
+                          style: TextStyle(color: OtterColors.text(isDark)),
                           decoration: InputDecoration(
                             hintText: 'Поиск...',
-                            prefixIcon: const Icon(
+                            hintStyle: TextStyle(color: OtterColors.muted(isDark)),
+                            prefixIcon: Icon(
                               LucideIcons.search,
                               size: 18,
+                              color: OtterColors.muted(isDark),
                             ),
                             filled: true,
-                            fillColor: OtterColors.grayLight,
+                            fillColor: OtterColors.surfaceAlt(isDark),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
                               borderSide: BorderSide.none,
@@ -234,8 +240,15 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                         const SizedBox(height: 8),
                         ListTile(
                           contentPadding: EdgeInsets.zero,
-                          leading: const Icon(LucideIcons.x, size: 18),
-                          title: const Text('Без задачи'),
+                          leading: Icon(
+                            LucideIcons.x,
+                            size: 18,
+                            color: OtterColors.text(isDark),
+                          ),
+                          title: Text(
+                            'Без задачи',
+                            style: TextStyle(color: OtterColors.text(isDark)),
+                          ),
                           onTap: () {
                             ref
                                 .read(pomodoroStateProvider.notifier)
@@ -243,7 +256,10 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                             Navigator.pop(context);
                           },
                         ),
-                        const Divider(height: 1),
+                        Divider(
+                          height: 1,
+                          color: OtterColors.border(isDark),
+                        ),
                       ],
                     ),
                   ),
@@ -270,6 +286,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                             task.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: OtterColors.text(isDark)),
                           ),
                           trailing: selected
                               ? const Icon(
@@ -307,6 +324,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final isDark = OtterColors.isDarkOf(context);
             final current = ref.watch(pomodoroStateProvider);
             return Padding(
               padding: EdgeInsets.only(
@@ -320,11 +338,12 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
+                    Text(
                       'Настройки Помодоро',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
+                        color: OtterColors.text(isDark),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -373,10 +392,16 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                     if (defaultTargetPlatform != TargetPlatform.windows)
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('Показывать при блокировке'),
-                        subtitle: const Text(
+                        title: Text(
+                          'Показывать при блокировке',
+                          style: TextStyle(color: OtterColors.text(isDark)),
+                        ),
+                        subtitle: Text(
                           'На экране блокировки смартфона',
-                          style: TextStyle(fontSize: 12),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: OtterColors.muted(isDark),
+                          ),
                         ),
                         value: current.settings.showOnLockScreen,
                         activeThumbColor: OtterColors.sberGreen,
@@ -388,9 +413,12 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                         },
                       ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Звук завершения',
-                      style: TextStyle(fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: OtterColors.text(isDark),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Wrap(
@@ -456,6 +484,7 @@ class _PomodoroTimerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     return Container(
       width: double.infinity,
       padding: EdgeInsets.symmetric(
@@ -463,23 +492,23 @@ class _PomodoroTimerCard extends StatelessWidget {
         vertical: expand ? 32 : 24,
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: OtterColors.surface(isDark),
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
+            color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.06),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
         ],
       ),
       child: expand
-          ? SizedBox.expand(child: _timerBody(context))
-          : _timerBody(context),
+          ? SizedBox.expand(child: _timerBody(context, isDark))
+          : _timerBody(context, isDark),
     );
   }
 
-  Widget _timerBody(BuildContext context) {
+  Widget _timerBody(BuildContext context, bool isDark) {
     return Column(
       mainAxisAlignment:
           expand ? MainAxisAlignment.center : MainAxisAlignment.start,
@@ -495,7 +524,9 @@ class _PomodoroTimerCard extends StatelessWidget {
               height: 8,
               margin: const EdgeInsets.symmetric(horizontal: 4),
               decoration: BoxDecoration(
-                color: filled ? OtterColors.sberGreen : OtterColors.grayMid,
+                color: filled
+                    ? OtterColors.sberGreen
+                    : OtterColors.border(isDark),
                 borderRadius: BorderRadius.circular(4),
               ),
             );
@@ -524,7 +555,7 @@ class _PomodoroTimerCard extends StatelessWidget {
                     child: CircularProgressIndicator(
                       value: progress,
                       strokeWidth: expand ? 12 : 10,
-                      backgroundColor: OtterColors.grayMid,
+                      backgroundColor: OtterColors.border(isDark),
                       color: state.isBreak
                           ? OtterColors.sberBlue
                           : OtterColors.sberGreen,
@@ -539,6 +570,7 @@ class _PomodoroTimerCard extends StatelessWidget {
                           fontSize: timerSize * (expand ? 0.22 : 0.2),
                           fontWeight: FontWeight.w800,
                           letterSpacing: -0.5,
+                          color: OtterColors.text(isDark),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -554,7 +586,7 @@ class _PomodoroTimerCard extends StatelessWidget {
                           fontSize: 14,
                           color: state.isBreak
                               ? OtterColors.sberBlue
-                              : OtterColors.sberGray,
+                              : OtterColors.muted(isDark),
                           fontWeight: state.isBreak
                               ? FontWeight.w600
                               : FontWeight.w400,
@@ -611,9 +643,9 @@ class _TaskSoundRow extends StatelessWidget {
   final ValueChanged<ApiSound> onSelectWorkSound;
   final bool sideBySide;
 
-  Widget _taskCard() {
+  Widget _taskCard(bool isDark) {
     return Material(
-      color: Colors.white,
+      color: OtterColors.surface(isDark),
       borderRadius: BorderRadius.circular(28),
       child: InkWell(
         onTap: onPickTask,
@@ -632,30 +664,30 @@ class _TaskSoundRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Задача для фокуса',
                       style: TextStyle(
                         fontSize: 12,
-                        color: OtterColors.sberGray,
+                        color: OtterColors.muted(isDark),
                       ),
                     ),
                     Text(
                       selectedTaskTitle ?? 'Выбрать задачу...',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        color: OtterColors.sberBlack,
+                        color: OtterColors.text(isDark),
                       ),
                     ),
                   ],
                 ),
               ),
-              const Icon(
+              Icon(
                 LucideIcons.chevronRight,
                 size: 16,
-                color: OtterColors.sberGray,
+                color: OtterColors.muted(isDark),
               ),
             ],
           ),
@@ -664,7 +696,7 @@ class _TaskSoundRow extends StatelessWidget {
     );
   }
 
-  Widget _soundButtons() {
+  Widget _soundButtons(bool isDark) {
     return Wrap(
       alignment: WrapAlignment.end,
       spacing: 8,
@@ -677,14 +709,16 @@ class _TaskSoundRow extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: selected ? OtterColors.sberGreen : OtterColors.grayLight,
+              color: selected
+                  ? OtterColors.sberGreen
+                  : OtterColors.elevated(isDark),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               sound.emoji,
               style: TextStyle(
                 fontSize: 14,
-                color: selected ? Colors.white : OtterColors.sberGray,
+                color: selected ? Colors.white : OtterColors.muted(isDark),
               ),
             ),
           ),
@@ -693,31 +727,34 @@ class _TaskSoundRow extends StatelessWidget {
     );
   }
 
-  Widget _soundCard({required bool compactRow}) {
+  Widget _soundCard({required bool compactRow, required bool isDark}) {
     if (compactRow) {
       // Web lg: icon + label + sound chips in one horizontal bar.
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: OtterColors.surface(isDark),
           borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: OtterColors.grayLight),
+          border: Border.all(color: OtterColors.border(isDark)),
         ),
         child: Row(
           children: [
-            const Icon(
+            Icon(
               LucideIcons.music,
               size: 20,
-              color: OtterColors.sberGray,
+              color: OtterColors.muted(isDark),
             ),
             const SizedBox(width: 12),
-            const Expanded(
+            Expanded(
               child: Text(
                 'Звук фоновый',
-                style: TextStyle(fontSize: 14, color: OtterColors.sberGray),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: OtterColors.muted(isDark),
+                ),
               ),
             ),
-            Flexible(child: _soundButtons()),
+            Flexible(child: _soundButtons(isDark)),
           ],
         ),
       );
@@ -726,24 +763,31 @@ class _TaskSoundRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: OtterColors.surface(isDark),
         borderRadius: BorderRadius.circular(28),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(LucideIcons.music, size: 20, color: OtterColors.sberGray),
-              SizedBox(width: 12),
+              Icon(
+                LucideIcons.music,
+                size: 20,
+                color: OtterColors.muted(isDark),
+              ),
+              const SizedBox(width: 12),
               Text(
                 'Звук фоновый',
-                style: TextStyle(fontSize: 14, color: OtterColors.sberGray),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: OtterColors.muted(isDark),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          _soundButtons(),
+          _soundButtons(isDark),
         ],
       ),
     );
@@ -751,22 +795,23 @@ class _TaskSoundRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     if (sideBySide) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: _taskCard()),
+          Expanded(child: _taskCard(isDark)),
           const SizedBox(width: 12),
-          Expanded(child: _soundCard(compactRow: true)),
+          Expanded(child: _soundCard(compactRow: true, isDark: isDark)),
         ],
       );
     }
 
     return Column(
       children: [
-        _taskCard(),
+        _taskCard(isDark),
         const SizedBox(height: 12),
-        _soundCard(compactRow: false),
+        _soundCard(compactRow: false, isDark: isDark),
       ],
     );
   }
@@ -780,12 +825,19 @@ class _SettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+          Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: OtterColors.text(isDark),
+            ),
+          ),
           const SizedBox(height: 8),
           child,
         ],
@@ -809,6 +861,7 @@ class _ChipButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -817,7 +870,7 @@ class _ChipButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? selectedColor : Colors.transparent,
           border: Border.all(
-            color: selected ? selectedColor : OtterColors.grayMid,
+            color: selected ? selectedColor : OtterColors.border(isDark),
           ),
           borderRadius: BorderRadius.circular(12),
         ),
@@ -826,7 +879,7 @@ class _ChipButton extends StatelessWidget {
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: selected ? Colors.white : OtterColors.sberBlack,
+            color: selected ? Colors.white : OtterColors.text(isDark),
           ),
         ),
       ),
@@ -847,13 +900,14 @@ class _CircleControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     return IconButton(
       onPressed: enabled ? onPressed : null,
       icon: Icon(icon),
       style: IconButton.styleFrom(
-        backgroundColor: OtterColors.grayLight,
-        foregroundColor: OtterColors.sberBlack,
-        disabledForegroundColor: OtterColors.grayMid,
+        backgroundColor: OtterColors.elevated(isDark),
+        foregroundColor: OtterColors.text(isDark),
+        disabledForegroundColor: OtterColors.muted(isDark),
         minimumSize: const Size(48, 48),
       ),
     );

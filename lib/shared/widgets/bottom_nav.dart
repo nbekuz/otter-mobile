@@ -71,15 +71,13 @@ class OtterBottomNav extends StatelessWidget {
         .whereType<BottomNavItem>()
         .toList();
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = OtterColors.isDarkOf(context);
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? OtterColors.darkBg : Colors.white,
+        color: OtterColors.surface(isDark),
         border: Border(
-          top: BorderSide(
-            color: isDark ? OtterColors.darkBorder : OtterColors.grayMid,
-          ),
+          top: BorderSide(color: OtterColors.border(isDark)),
         ),
       ),
       child: SafeArea(
@@ -90,6 +88,7 @@ class OtterBottomNav extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: items.map((item) {
               final active = _isActive(item.path);
+              final inactiveColor = OtterColors.muted(isDark);
               return InkWell(
                 onTap: () => context.go(item.path),
                 borderRadius: BorderRadius.circular(12),
@@ -109,7 +108,7 @@ class OtterBottomNav extends StatelessWidget {
                             size: 24,
                             color: active
                                 ? OtterColors.sberGreen
-                                : OtterColors.sberGray,
+                                : inactiveColor,
                           ),
                           if (item.id == 'calendar')
                             Positioned(
@@ -122,8 +121,8 @@ class OtterBottomNav extends StatelessWidget {
                                 ),
                                 decoration: BoxDecoration(
                                   color: active
-                                      ? OtterColors.sberGreenLight
-                                      : OtterColors.grayLight,
+                                      ? OtterColors.greenTint(isDark)
+                                      : OtterColors.elevated(isDark),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
@@ -133,7 +132,7 @@ class OtterBottomNav extends StatelessWidget {
                                     fontWeight: FontWeight.bold,
                                     color: active
                                         ? OtterColors.sberGreen
-                                        : OtterColors.sberGray,
+                                        : inactiveColor,
                                   ),
                                 ),
                               ),
@@ -148,7 +147,7 @@ class OtterBottomNav extends StatelessWidget {
                           fontWeight: FontWeight.w500,
                           color: active
                               ? OtterColors.sberGreen
-                              : OtterColors.sberGray,
+                              : inactiveColor,
                         ),
                       ),
                     ],

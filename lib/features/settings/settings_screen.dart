@@ -145,9 +145,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             _SettingsRow(
               icon: LucideIcons.crown,
-              iconColor: const Color(0xFFEAB308),
+              iconColor: isDark
+                  ? const Color(0xFFFBBF24)
+                  : const Color(0xFFEAB308),
               label: 'Премиум',
-              labelColor: const Color(0xFFCA8A04),
+              labelColor: isDark
+                  ? const Color(0xFFFCD34D)
+                  : const Color(0xFFCA8A04),
               onTap: _openPremium,
             ),
           ],
@@ -355,7 +359,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         const SizedBox(height: 8),
         Material(
-          color: const Color(0xFFFEF2F2),
+          color: isDark
+              ? OtterColors.priorityHigh.withValues(alpha: 0.1)
+              : const Color(0xFFFEF2F2),
           borderRadius: BorderRadius.circular(16),
           child: InkWell(
             onTap: () => _confirmDeleteAccount(context),
@@ -365,13 +371,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               padding: const EdgeInsets.symmetric(vertical: 16),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFFECACA)),
+                border: Border.all(
+                  color: isDark
+                      ? OtterColors.priorityHigh.withValues(alpha: 0.35)
+                      : const Color(0xFFFECACA),
+                ),
               ),
               alignment: Alignment.center,
-              child: const Text(
+              child: Text(
                 'Удалить аккаунт',
                 style: TextStyle(
-                  color: Color(0xFFDC2626),
+                  color: isDark
+                      ? const Color(0xFFFF6B6B)
+                      : const Color(0xFFDC2626),
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                 ),
@@ -384,7 +396,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
 
     return Scaffold(
-      backgroundColor: isDark ? OtterColors.darkBg : OtterColors.grayLight,
+      backgroundColor: OtterColors.pageBg(isDark),
       body: SafeArea(
         bottom: false,
         child: content,
@@ -1059,7 +1071,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       side: BorderSide(
                         color: current == lang.id
                             ? OtterColors.sberGreen
-                            : OtterColors.grayMid,
+                            : OtterColors.border(OtterColors.isDarkOf(ctx)),
                       ),
                     ),
                     onTap: () => Navigator.pop(ctx, lang.id),
@@ -1451,7 +1463,7 @@ class _ProfileCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = auth.user;
     return Material(
-      color: isDark ? OtterColors.darkSurface : Colors.white,
+      color: OtterColors.surface(isDark),
       borderRadius: BorderRadius.circular(16),
       elevation: isDark ? 0 : 1,
       shadowColor: Colors.black26,
@@ -1527,9 +1539,10 @@ class _ProfileCard extends StatelessWidget {
                             user?.name ?? 'Пользователь',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
+                              color: OtterColors.text(isDark),
                             ),
                           ),
                         ),
@@ -1544,19 +1557,21 @@ class _ProfileCard extends StatelessWidget {
                         user!.email,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: OtterColors.sberGray,
+                          color: OtterColors.muted(isDark),
                         ),
                       ),
                     if (isPremium && expiresLabel != null) ...[
                       const SizedBox(height: 4),
                       Text(
                         'Срок до $expiresLabel',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
-                          color: Color(0xFFA16207),
+                          color: isDark
+                              ? const Color(0xFFFBBF24)
+                              : const Color(0xFFA16207),
                         ),
                       ),
                     ],
@@ -1576,7 +1591,7 @@ class _ProfileCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: isDark
-                                  ? const Color(0x66EAB308)
+                                  ? const Color(0x4DFBBF24)
                                   : const Color(0xFFFDE68A),
                             ),
                             gradient: isDark
@@ -1587,36 +1602,37 @@ class _ProfileCard extends StatelessWidget {
                                       Color(0xFFFFFBEB),
                                     ],
                                   ),
-                            color: isDark
-                                ? const Color(0x1AEAB308)
-                                : null,
+                            color: isDark ? OtterColors.darkElevated : null,
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+                              Text(
                                 'PREMIUM',
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
                                   letterSpacing: 0.6,
-                                  color: Color(0xFFCA8A04),
+                                  color: isDark
+                                      ? const Color(0xFFFBBF24)
+                                      : const Color(0xFFCA8A04),
                                 ),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 bannerTitle,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
+                                  color: OtterColors.text(isDark),
                                 ),
                               ),
                               if (bannerSubtitle != null)
                                 Text(
                                   bannerSubtitle!,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 11,
-                                    color: OtterColors.sberGray,
+                                    color: OtterColors.muted(isDark),
                                   ),
                                 ),
                             ],
@@ -1678,6 +1694,7 @@ class _PremiumPanel extends StatelessWidget {
     final isPremium = state.isPremium;
     final expires = _formatExpires(state.subscription?.expiresAt);
     final needsConsent = selected?.isRecurring == true;
+    final isDark = OtterColors.isDarkOf(context);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -1757,8 +1774,10 @@ class _PremiumPanel extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Material(
                         color: selected?.code == tariff.code
-                            ? Colors.amber.shade50
-                            : OtterColors.grayLight,
+                            ? (isDark
+                                ? const Color(0x33FBBF24)
+                                : Colors.amber.shade50)
+                            : OtterColors.elevated(isDark),
                         borderRadius: BorderRadius.circular(16),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(16),
@@ -1882,9 +1901,9 @@ class _Section extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: isDark ? OtterColors.darkSurface : Colors.white,
+        color: OtterColors.surface(isDark),
         borderRadius: BorderRadius.circular(16),
-        border: isDark ? Border.all(color: OtterColors.darkBorder) : null,
+        border: isDark ? Border.all(color: OtterColors.border(isDark)) : null,
         boxShadow: isDark
             ? null
             : [
@@ -1903,11 +1922,11 @@ class _Section extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: Text(
               title.toUpperCase(),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.6,
-                color: OtterColors.sberGray,
+                color: OtterColors.muted(isDark),
               ),
             ),
           ),
@@ -1939,13 +1958,14 @@ class _SettingsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     return InkWell(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: iconColor ?? OtterColors.sberGray),
+            Icon(icon, size: 20, color: iconColor ?? OtterColors.muted(isDark)),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -1953,7 +1973,7 @@ class _SettingsRow extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: labelColor ?? OtterColors.sberBlack,
+                  color: labelColor ?? OtterColors.text(isDark),
                 ),
               ),
             ),
@@ -1964,15 +1984,15 @@ class _SettingsRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.right,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: OtterColors.sberGray,
+                    color: OtterColors.muted(isDark),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
             ],
-            Icon(trailingIcon, size: 16, color: OtterColors.grayMid),
+            Icon(trailingIcon, size: 16, color: OtterColors.border(isDark)),
           ],
         ),
       ),
@@ -1995,18 +2015,20 @@ class _ToggleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: OtterColors.sberGray),
+          Icon(icon, size: 20, color: OtterColors.muted(isDark)),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
+                color: OtterColors.text(isDark),
               ),
             ),
           ),
@@ -2038,13 +2060,13 @@ class _ThemeBlock extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: isDark ? OtterColors.darkSurfaceAlt : OtterColors.grayLight,
+              color: OtterColors.surfaceAlt(isDark),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(
               isDark ? LucideIcons.sun : LucideIcons.moon,
               size: 20,
-              color: OtterColors.sberBlack,
+              color: OtterColors.text(isDark),
             ),
           ),
           const SizedBox(width: 12),
@@ -2054,11 +2076,12 @@ class _ThemeBlock extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Text(
+                    Text(
                       'Переключение темы',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
+                        color: OtterColors.text(isDark),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -2070,7 +2093,7 @@ class _ThemeBlock extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: isDark
                             ? OtterColors.sberBlue.withValues(alpha: 0.15)
-                            : OtterColors.sberGreenLight,
+                            : OtterColors.greenTint(isDark),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
@@ -2087,11 +2110,11 @@ class _ThemeBlock extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'Интерфейс переключается мгновенно и сохраняет выбранное оформление.',
                   style: TextStyle(
                     fontSize: 12,
-                    color: OtterColors.sberGray,
+                    color: OtterColors.muted(isDark),
                     height: 1.35,
                   ),
                 ),
@@ -2137,8 +2160,9 @@ class _ThemeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     return Material(
-      color: selected ? selectedColor : OtterColors.grayLight,
+      color: selected ? selectedColor : OtterColors.elevated(isDark),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
@@ -2150,7 +2174,7 @@ class _ThemeChip extends StatelessWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
-              color: selected ? Colors.white : OtterColors.sberGray,
+              color: selected ? Colors.white : OtterColors.muted(isDark),
             ),
           ),
         ),
@@ -2189,9 +2213,9 @@ class _BottomMenuSection extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: isDark ? OtterColors.darkSurface : Colors.white,
+        color: OtterColors.surface(isDark),
         borderRadius: BorderRadius.circular(16),
-        border: isDark ? Border.all(color: OtterColors.darkBorder) : null,
+        border: isDark ? Border.all(color: OtterColors.border(isDark)) : null,
         boxShadow: isDark
             ? null
             : [
@@ -2254,33 +2278,34 @@ class _BottomMenuSection extends StatelessWidget {
                     children: [
                       ReorderableDragStartListener(
                         index: index,
-                        child: const Padding(
-                          padding: EdgeInsets.all(4),
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
                           child: Icon(
                             LucideIcons.gripVertical,
                             size: 18,
-                            color: OtterColors.sberGray,
+                            color: OtterColors.muted(isDark),
                           ),
                         ),
                       ),
-                      Icon(item.icon, size: 20, color: OtterColors.sberGray),
+                      Icon(item.icon, size: 20, color: OtterColors.muted(isDark)),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           item.label,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
+                            color: OtterColors.text(isDark),
                           ),
                         ),
                       ),
                       if (isSettings)
-                        const Text(
+                        Text(
                           'Всегда',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
-                            color: OtterColors.sberGray,
+                            color: OtterColors.muted(isDark),
                           ),
                         )
                       else
@@ -2317,6 +2342,7 @@ class _GroupToggle extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final visible = settings.visibleGroups.contains(group);
+    final isDark = OtterColors.isDarkOf(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
@@ -2330,9 +2356,10 @@ class _GroupToggle extends ConsumerWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
+                color: OtterColors.text(isDark),
               ),
             ),
           ),
@@ -2372,8 +2399,11 @@ class _ViewOptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     return Material(
-      color: selected ? OtterColors.sberGreenLight : Colors.white,
+      color: selected
+          ? OtterColors.greenTint(isDark)
+          : OtterColors.surface(isDark),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -2383,7 +2413,9 @@ class _ViewOptionCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: selected ? OtterColors.sberGreen : OtterColors.grayMid,
+              color: selected
+                  ? OtterColors.sberGreen
+                  : OtterColors.border(isDark),
               width: selected ? 1.5 : 1,
             ),
           ),
@@ -2392,7 +2424,9 @@ class _ViewOptionCard extends StatelessWidget {
               Icon(
                 icon,
                 size: 20,
-                color: selected ? OtterColors.sberGreen : OtterColors.sberGray,
+                color: selected
+                    ? OtterColors.sberGreen
+                    : OtterColors.muted(isDark),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -2405,7 +2439,7 @@ class _ViewOptionCard extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                     color: selected
                         ? OtterColors.sberGreen
-                        : OtterColors.sberBlack,
+                        : OtterColors.text(isDark),
                   ),
                 ),
               ),
@@ -2497,6 +2531,7 @@ class _DateTimeSettingsSheetState
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(appSettingsProvider);
+    final isDark = OtterColors.isDarkOf(context);
     final tz = s.timezone?.isNotEmpty == true ? s.timezone! : 'Не задан';
     final nowLabel = DateFormat('d MMM yyyy, HH:mm:ss', 'ru').format(_now);
     final offset = _utcOffsetLabel(_now);
@@ -2521,7 +2556,7 @@ class _DateTimeSettingsSheetState
             Text(
               'Часовой пояс нужен для напоминаний и списков «Сегодня» и «Просрочено».',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: OtterColors.sberGray,
+                    color: OtterColors.muted(isDark),
                     height: 1.35,
                   ),
             ),
@@ -2529,9 +2564,11 @@ class _DateTimeSettingsSheetState
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: OtterColors.grayLight,
+                color: OtterColors.elevated(isDark),
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: OtterColors.grayMid.withValues(alpha: 0.7)),
+                border: Border.all(
+                  color: OtterColors.border(isDark).withValues(alpha: 0.7),
+                ),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2540,9 +2577,9 @@ class _DateTimeSettingsSheetState
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: OtterColors.surface(isDark),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: OtterColors.grayMid),
+                      border: Border.all(color: OtterColors.border(isDark)),
                     ),
                     child: const Icon(
                       LucideIcons.globe,
@@ -2559,7 +2596,7 @@ class _DateTimeSettingsSheetState
                           'ЧАСОВОЙ ПОЯС',
                           style:
                               Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: OtterColors.sberGray,
+                                    color: OtterColors.muted(isDark),
                                     fontWeight: FontWeight.w700,
                                     letterSpacing: 0.6,
                                   ),
@@ -2567,10 +2604,10 @@ class _DateTimeSettingsSheetState
                         const SizedBox(height: 6),
                         Text(
                           tz,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
-                            color: OtterColors.sberBlack,
+                            color: OtterColors.text(isDark),
                             letterSpacing: -0.2,
                           ),
                         ),
@@ -2586,16 +2623,18 @@ class _DateTimeSettingsSheetState
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: OtterColors.surface(isDark),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: OtterColors.grayMid),
+                                border: Border.all(
+                                  color: OtterColors.border(isDark),
+                                ),
                               ),
                               child: Text(
                                 offset,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: OtterColors.sberBlack,
+                                  color: OtterColors.text(isDark),
                                 ),
                               ),
                             ),
@@ -2606,7 +2645,7 @@ class _DateTimeSettingsSheetState
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: OtterColors.sberGreenLight,
+                                  color: OtterColors.greenTint(isDark),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: const Row(
@@ -2636,7 +2675,7 @@ class _DateTimeSettingsSheetState
                           'Сейчас · $nowLabel',
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: OtterColors.sberGray,
+                                    color: OtterColors.muted(isDark),
                                     height: 1.3,
                                   ),
                         ),

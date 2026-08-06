@@ -309,25 +309,25 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
         name.endsWith('.heic');
   }
 
-  Widget _fieldLabel(String text) {
+  Widget _fieldLabel(String text, bool isDark) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: OtterColors.sberGray,
+          color: OtterColors.muted(isDark),
         ),
       ),
     );
   }
 
-  InputDecoration _textDecoration({String? hint}) {
+  InputDecoration _textDecoration({String? hint, required bool isDark}) {
     return InputDecoration(
       hintText: hint,
       filled: true,
-      fillColor: OtterColors.grayLight,
+      fillColor: OtterColors.surfaceAlt(isDark),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
@@ -335,7 +335,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: OtterColors.grayMid),
+        borderSide: BorderSide(color: OtterColors.border(isDark)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
@@ -406,10 +406,9 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surfaceAlt = isDark ? OtterColors.darkSurfaceAlt : Colors.white;
-    final borderSubtle =
-        isDark ? OtterColors.darkBorder : OtterColors.grayLight;
+    final isDark = OtterColors.isDarkOf(context);
+    final surfaceAltColor = OtterColors.surface(isDark);
+    final borderSubtle = OtterColors.border(isDark);
     final notifyValue = _notification ?? '';
     final completed = widget.task.completed;
 
@@ -473,29 +472,31 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
             ),
             const SizedBox(height: 16),
 
-            _fieldLabel('Название'),
+            _fieldLabel('Название', isDark),
             TextField(
               controller: _title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
+                color: OtterColors.text(isDark),
               ),
               onTapOutside: dismissKeyboardOnTapOutside,
-              decoration: _textDecoration(),
+              decoration: _textDecoration(isDark: isDark),
             ),
             const SizedBox(height: 12),
 
-            _fieldLabel('Описание'),
+            _fieldLabel('Описание', isDark),
             TextField(
               controller: _description,
               minLines: 3,
               maxLines: 5,
+              style: TextStyle(color: OtterColors.text(isDark)),
               onTapOutside: dismissKeyboardOnTapOutside,
-              decoration: _textDecoration(hint: 'Детали, ссылки…'),
+              decoration: _textDecoration(hint: 'Детали, ссылки…', isDark: isDark),
             ),
             const SizedBox(height: 12),
 
-            _fieldLabel('Вложения'),
+            _fieldLabel('Вложения', isDark),
             Align(
               alignment: Alignment.centerLeft,
               child: OutlinedButton.icon(
@@ -514,7 +515,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: OtterColors.sberGreen,
-                  backgroundColor: OtterColors.sberGreenLight,
+                  backgroundColor: OtterColors.greenTint(isDark),
                   side: BorderSide(
                     color: OtterColors.sberGreen.withValues(alpha: 0.4),
                   ),
@@ -534,10 +535,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: (isDark
-                          ? OtterColors.darkSurfaceAlt
-                          : OtterColors.grayLight)
-                      .withValues(alpha: 0.6),
+                  color: OtterColors.elevated(isDark).withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: borderSubtle),
                 ),
@@ -567,12 +565,12 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                               : Container(
                                   width: 56,
                                   height: 56,
-                                  color: surfaceAlt,
+                                  color: surfaceAltColor,
                                   alignment: Alignment.center,
-                                  child: const Icon(
+                                  child: Icon(
                                     LucideIcons.file,
                                     size: 24,
-                                    color: OtterColors.sberGray,
+                                    color: OtterColors.muted(isDark),
                                   ),
                                 ),
                     ),
@@ -600,7 +598,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                                         _existingImageUrl != null &&
                                         !_clearImage
                                     ? OtterColors.sberGreen
-                                    : OtterColors.sberBlack,
+                                    : OtterColors.text(isDark),
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -608,9 +606,9 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                               _attachmentIsImage
                                   ? 'Изображение прикреплено'
                                   : 'Файл прикреплен',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                color: OtterColors.sberGray,
+                                color: OtterColors.muted(isDark),
                               ),
                             ),
                           ],
@@ -729,7 +727,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
             ),
             const SizedBox(height: 12),
 
-            _fieldLabel('Матрица Эйзенхауэра'),
+            _fieldLabel('Матрица Эйзенхауэра', isDark),
             Builder(
               builder: (context) {
                 final settings = ref.watch(matrixSettingsProvider).blocks;
@@ -747,7 +745,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                     return Material(
                       color: selected
                           ? theme.accent.withValues(alpha: 0.08)
-                          : surfaceAlt,
+                          : surfaceAltColor,
                       borderRadius: BorderRadius.circular(12),
                       child: InkWell(
                         onTap: () => setState(() => _matrix = theme.block),
@@ -778,11 +776,11 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                                 softWrap: true,
                                 maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   height: 1.25,
-                                  color: OtterColors.sberBlack,
+                                  color: OtterColors.text(isDark),
                                 ),
                               ),
                             ],
@@ -841,7 +839,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                           : OtterColors.sberGreen,
                       backgroundColor: completed
                           ? OtterColors.sberBlue.withValues(alpha: 0.12)
-                          : OtterColors.sberGreenLight,
+                          : OtterColors.greenTint(isDark),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -884,8 +882,8 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
             OutlinedButton(
               onPressed: _saving ? null : () => Navigator.pop(context),
               style: OutlinedButton.styleFrom(
-                foregroundColor: OtterColors.sberBlack,
-                backgroundColor: OtterColors.grayLight,
+                foregroundColor: OtterColors.text(isDark),
+                backgroundColor: OtterColors.elevated(isDark),
                 side: BorderSide.none,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(

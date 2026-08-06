@@ -41,6 +41,7 @@ class CalendarTaskBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     final color = priorityColor(item.task.priority);
     final style = timelineTaskHorizontalStyle(
       layoutCols: item.layoutCols,
@@ -87,7 +88,7 @@ class CalendarTaskBlock extends StatelessWidget {
                     width: compact ? 32 : 44,
                     height: 3,
                     decoration: BoxDecoration(
-                      color: OtterColors.sberGray.withValues(alpha: 0.45),
+                      color: OtterColors.muted(isDark).withValues(alpha: 0.45),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -140,13 +141,13 @@ class CalendarTaskBlock extends StatelessWidget {
           fontSize: 11,
           fontWeight: FontWeight.w600,
           height: 1.2,
-          color: OtterColors.sberBlack,
+          color: OtterColors.text(isDark),
         );
         final titleStyle = TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w500,
           height: 1.2,
-          color: OtterColors.sberBlack,
+          color: OtterColors.text(isDark),
           decoration:
               item.task.completed ? TextDecoration.lineThrough : null,
         );
@@ -261,20 +262,20 @@ class CalendarTaskBlock extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: OtterColors.sberBlack,
+                      color: OtterColors.text(isDark),
                       decoration: item.task.completed
                           ? TextDecoration.lineThrough
                           : null,
                     ),
                   ),
                   if (item.continuesAfter)
-                    const Text(
+                    Text(
                       'продолжается ↓',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 10,
-                        color: OtterColors.sberGray,
+                        color: OtterColors.muted(isDark),
                       ),
                     ),
                 ],

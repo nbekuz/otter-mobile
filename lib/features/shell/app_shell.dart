@@ -24,7 +24,7 @@ class AppShell extends ConsumerWidget {
     final path = GoRouterState.of(context).uri.path;
     final wide = Responsive.isWide(context);
 
-    final bg = isDark ? OtterColors.darkBg : OtterColors.grayLight;
+    final bg = OtterColors.pageBg(isDark);
 
     return Theme(
       data: Theme.of(context),
@@ -44,11 +44,11 @@ class AppShell extends ConsumerWidget {
                     Expanded(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          color: isDark ? OtterColors.darkBg : Colors.white,
+                          color: OtterColors.pageBg(isDark),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isDark
-                                ? OtterColors.darkBorder
+                                ? OtterColors.border(isDark)
                                 : const Color(0xFFE9EBF1),
                           ),
                           boxShadow: isDark
@@ -65,7 +65,7 @@ class AppShell extends ConsumerWidget {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(16),
                           child: Material(
-                            color: isDark ? OtterColors.darkBg : Colors.white,
+                            color: OtterColors.pageBg(isDark),
                             child: child,
                           ),
                         ),
@@ -145,7 +145,7 @@ class _Sidebar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(appSettingsProvider);
-    final surface = isDark ? OtterColors.darkSurface : Colors.white;
+    final surface = OtterColors.surface(isDark);
     final byId = {for (final i in kAllNavItems) i.id: i};
     final items = settings.bottomNavItems
         .map((id) => byId[id])
@@ -167,7 +167,7 @@ class _Sidebar extends ConsumerWidget {
                   offset: const Offset(0, 2),
                 ),
               ],
-        border: isDark ? Border.all(color: OtterColors.darkBorder) : null,
+        border: isDark ? Border.all(color: OtterColors.border(isDark)) : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -205,12 +205,10 @@ class _Sidebar extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: isDark
-                  ? OtterColors.darkSurfaceAlt
-                  : OtterColors.grayLight,
+              color: OtterColors.elevated(isDark),
               borderRadius: BorderRadius.circular(16),
               border: isDark
-                  ? Border.all(color: const Color(0xFF222833))
+                  ? Border.all(color: OtterColors.border(isDark))
                   : null,
             ),
             child: Column(
@@ -289,7 +287,7 @@ class _NavRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = active
         ? Colors.white
-        : (isDark ? const Color(0xFFCBD5E1) : OtterColors.sberGray);
+        : OtterColors.muted(isDark);
 
     return Material(
       color: active ? OtterColors.sberGreen : Colors.transparent,
@@ -341,19 +339,16 @@ class _PremiumSidebarButton extends StatelessWidget {
         child: Ink(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            gradient: LinearGradient(
-              colors: isDark
-                  ? [
-                      const Color(0x33F59E0B),
-                      const Color(0x1AEAB308),
-                      Colors.transparent,
-                    ]
-                  : [
-                      const Color(0xFFFEF3C7),
-                      const Color(0xFFFFFBEB),
+            color: isDark ? OtterColors.darkElevated : null,
+            gradient: isDark
+                ? null
+                : const LinearGradient(
+                    colors: [
+                      Color(0xFFFEF3C7),
+                      Color(0xFFFFFBEB),
                       Colors.white,
                     ],
-            ),
+                  ),
             border: Border.all(
               color: isDark
                   ? const Color(0x4DFBBF24)
@@ -424,7 +419,7 @@ class _SidebarLink extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = active
         ? Colors.white
-        : (isDark ? const Color(0xFFCBD5E1) : OtterColors.sberGray);
+        : OtterColors.muted(isDark);
 
     return Material(
       color: active ? OtterColors.sberGreen : Colors.transparent,
@@ -476,8 +471,8 @@ class _ProfileCard extends StatelessWidget {
     final user = auth.user;
     return Material(
       color: active
-          ? OtterColors.sberGreenLight
-          : (isDark ? OtterColors.darkSurfaceAlt : OtterColors.grayLight),
+          ? OtterColors.greenTint(isDark)
+          : OtterColors.surfaceAlt(isDark),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: () => context.go('/app/profile'),
@@ -530,9 +525,7 @@ class _ProfileCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
-                              color: isDark
-                                  ? OtterColors.darkText
-                                  : OtterColors.sberBlack,
+                              color: OtterColors.text(isDark),
                             ),
                           ),
                         ),
@@ -552,9 +545,7 @@ class _ProfileCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark
-                            ? const Color(0xFF94A3B8)
-                            : OtterColors.sberGray,
+                        color: OtterColors.muted(isDark),
                       ),
                     ),
                   ],
@@ -563,9 +554,7 @@ class _ProfileCard extends StatelessWidget {
               Icon(
                 LucideIcons.chevronRight,
                 size: 16,
-                color: isDark
-                    ? const Color(0xFF94A3B8)
-                    : OtterColors.grayMid,
+                color: OtterColors.muted(isDark),
               ),
             ],
           ),

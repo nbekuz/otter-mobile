@@ -2,6 +2,9 @@
 
 #include <optional>
 
+#include <flutter/method_channel.h>
+#include <flutter/standard_method_codec.h>
+
 #include "flutter/generated_plugin_registrant.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -26,6 +29,27 @@ bool FlutterWindow::OnCreate() {
   }
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
+
+  window_theme_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(), "otter/window_theme",
+          &flutter::StandardMethodCodec::GetInstance());
+  window_theme_channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+                 result) {
+        if (call.method_name() == "setTitleBarDark") {
+          const auto* dark = std::get_if<bool>(call.arguments());
+          if (dark == nullptr) {
+            result->Error("bad_args", "Expected bool");
+            return;
+          }
+          SetTitleBarDarkMode(*dark);
+          result->Success();
+          return;
+        }
+        result->NotImplemented();
+      });
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();

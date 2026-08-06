@@ -33,6 +33,7 @@ import '../utils/recurrence.dart';
 import '../utils/time_utils.dart';
 import '../utils/timezone_utils.dart';
 import '../locale/app_languages.dart';
+import '../platform/windows_title_bar.dart';
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 
@@ -779,6 +780,7 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
       );
       if (theme != null) {
         _ref.read(themeModeProvider.notifier).state = theme;
+        unawaited(syncWindowsTitleBarTheme(theme == 'dark'));
       }
       // Keep an already-created calendar in sync after prefs hydrate.
       try {
@@ -904,6 +906,7 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
     state = state.copyWith(theme: theme);
     _ref.read(themeModeProvider.notifier).state = theme;
     unawaited(_persistLocalPrefs(state));
+    unawaited(syncWindowsTitleBarTheme(theme == 'dark'));
   }
 }
 

@@ -284,7 +284,26 @@ void Win32Window::OnDestroy() {
   // No-op; provided for subclasses.
 }
 
+void Win32Window::SetTitleBarDarkMode(bool dark) {
+  has_title_bar_override_ = true;
+  title_bar_dark_ = dark;
+  if (!window_handle_) {
+    return;
+  }
+  BOOL enable_dark_mode = dark ? TRUE : FALSE;
+  DwmSetWindowAttribute(window_handle_, DWMWA_USE_IMMERSIVE_DARK_MODE,
+                        &enable_dark_mode, sizeof(enable_dark_mode));
+}
+
 void Win32Window::UpdateTheme(HWND const window) {
+  auto* that = GetThisFromHandle(window);
+  if (that != nullptr && that->has_title_bar_override_) {
+    BOOL enable_dark_mode = that->title_bar_dark_ ? TRUE : FALSE;
+    DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE,
+                          &enable_dark_mode, sizeof(enable_dark_mode));
+    return;
+  }
+
   DWORD light_mode;
   DWORD light_mode_size = sizeof(light_mode);
   LSTATUS result = RegGetValue(HKEY_CURRENT_USER, kGetPreferredBrightnessRegKey,

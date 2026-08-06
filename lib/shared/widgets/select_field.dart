@@ -18,6 +18,7 @@ Future<T?> showSelectSheet<T>({
   required T selected,
   SelectItemBuilder<T>? itemBuilder,
 }) {
+  final isDark = OtterColors.isDarkOf(context);
   return showAppBottomSheet<T>(
     context: context,
     builder: (ctx) {
@@ -31,7 +32,7 @@ Future<T?> showSelectSheet<T>({
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: OtterColors.grayMid,
+                  color: OtterColors.border(isDark),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -39,10 +40,10 @@ Future<T?> showSelectSheet<T>({
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                 child: Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: OtterColors.sberBlack,
+                    color: OtterColors.text(isDark),
                   ),
                 ),
               ),
@@ -50,7 +51,7 @@ Future<T?> showSelectSheet<T>({
                 final isSelected = item == selected;
                 return Material(
                   color: isSelected
-                      ? OtterColors.sberGreenLight
+                      ? OtterColors.greenTint(isDark)
                       : Colors.transparent,
                   child: InkWell(
                     onTap: () => Navigator.pop(ctx, item),
@@ -73,7 +74,7 @@ Future<T?> showSelectSheet<T>({
                                 fontWeight: isSelected
                                     ? FontWeight.w600
                                     : FontWeight.w500,
-                                color: OtterColors.sberBlack,
+                                color: OtterColors.text(isDark),
                               ),
                             ),
                           ),
@@ -133,7 +134,9 @@ class SelectField<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = OtterColors.isDarkOf(context);
     final display = itemLabel(value);
+    final borderColor = OtterColors.border(isDark);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -142,7 +145,7 @@ class SelectField<T> extends StatelessWidget {
           label,
           style: theme.textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.w500,
-            color: OtterColors.sberGray,
+            color: OtterColors.muted(isDark),
           ),
         ),
         const SizedBox(height: 8),
@@ -166,7 +169,8 @@ class SelectField<T> extends StatelessWidget {
             value: display,
             child: Material(
               color:
-                  theme.inputDecorationTheme.fillColor ?? OtterColors.grayLight,
+                  theme.inputDecorationTheme.fillColor ??
+                  OtterColors.surfaceAlt(isDark),
               borderRadius: BorderRadius.circular(OtterColors.radiusMd),
               child: InkWell(
                 onTap: () => _openPicker(context),
@@ -175,12 +179,12 @@ class SelectField<T> extends StatelessWidget {
                   decoration: InputDecoration(
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(OtterColors.radiusMd),
-                      borderSide: const BorderSide(color: OtterColors.grayMid),
+                      borderSide: BorderSide(color: borderColor),
                     ),
-                    suffixIcon: const Icon(
+                    suffixIcon: Icon(
                       LucideIcons.chevronDown,
                       size: 20,
-                      color: OtterColors.sberGray,
+                      color: OtterColors.muted(isDark),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -199,8 +203,8 @@ class SelectField<T> extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 16,
                             color: display.isNotEmpty
-                                ? OtterColors.sberBlack
-                                : OtterColors.sberGray,
+                                ? OtterColors.text(isDark)
+                                : OtterColors.muted(isDark),
                           ),
                         ),
                       ),

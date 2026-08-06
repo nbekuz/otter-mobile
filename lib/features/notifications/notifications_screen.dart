@@ -253,9 +253,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                                         Text(
                                           item.body,
                                           style: TextStyle(
-                                            color: isDark
-                                                ? Colors.white70
-                                                : OtterColors.sberGray,
+                                            color: OtterColors.muted(isDark),
                                           ),
                                         ),
                                       ],
@@ -307,7 +305,7 @@ class _BulkActionsBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final labelColor = isDark ? Colors.white70 : OtterColors.sberGray;
+    final labelColor = OtterColors.muted(isDark);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
@@ -393,6 +391,7 @@ class _SelectBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     final box = Container(
       width: 22,
       height: 22,
@@ -401,7 +400,7 @@ class _SelectBox extends StatelessWidget {
         color: value ? OtterColors.sberGreen : Colors.transparent,
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
-          color: value ? OtterColors.sberGreen : OtterColors.grayMid,
+          color: value ? OtterColors.sberGreen : OtterColors.border(isDark),
           width: 2,
         ),
       ),
