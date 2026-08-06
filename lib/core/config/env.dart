@@ -1,11 +1,20 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 abstract final class Env {
+  static bool loadedFromFile = false;
+
   static Future<void> load() async {
     try {
       await dotenv.load(fileName: '.env');
-    } catch (_) {
-      // .env optional in tests
+      loadedFromFile = true;
+    } catch (e) {
+      // .env optional in tests; Windows Google Sign-In needs a local .env.
+      loadedFromFile = false;
+      // ignore: avoid_print
+      print(
+        '[Env] Failed to load .env ($e). '
+        'Copy .env.example → .env and fill FIREBASE_GOOGLE_DESKTOP_CLIENT_SECRET.',
+      );
     }
   }
 

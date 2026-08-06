@@ -33,6 +33,8 @@ Future<void> main() async {
     await FirebaseBootstrap.init();
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   } catch (e, st) {
+    // Keep booting so email/password login still works. Google Sign-In uses
+    // [FirebaseBootstrap.windowsConfigError] when env is incomplete.
     debugPrint('[FirebaseBootstrap] init failed: $e\n$st');
   }
   if (defaultTargetPlatform == TargetPlatform.android &&

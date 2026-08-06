@@ -73,13 +73,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return 'Неверный email или пароль';
   }
 
-  void _showCredentialError(String message) {
-    setState(() {
-      _emailError = message;
-      _passwordError = message;
-    });
-  }
-
   bool _validate() {
     final emailError = validateEmail(_email.text);
     String? passwordError;
@@ -151,12 +144,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await ref.read(appSettingsProvider.notifier).load();
       if (mounted) context.go('/app');
     } catch (e) {
-      if (mounted) {
-        final message = e is StateError
-            ? e.message
-            : getApiErrorMessage(e, 'Ошибка Google входа');
-        _showCredentialError(message);
-      }
+      if (!mounted) return;
+      final message = e is StateError
+          ? e.message
+          : getApiErrorMessage(e, 'Ошибка Google входа');
+      // Config / OAuth errors are global — not Email/Password field validation.
+      setState(() {
+        _emailError = null;
+        _passwordError = null;
+      });
+      showAppToast(context, message);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -266,9 +263,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               dismissOnPress: false,
               onPressed: _login,
             ),
+            if (FirebaseBootstrap.windowsConfigError != null) ...[
+              const SizedBox(height: 16),
+              _WindowsGoogleConfigBanner(
+                message: FirebaseBootstrap.windowsConfigError!,
+              ),
+            ],
             const SizedBox(height: 16),
             OutlinedButton.icon(
-              onPressed: _loading ? null : _googleLogin,
+              onPressed: _loading ||
+                      FirebaseBootstrap.windowsConfigError != null
+                  ? null
+                  : _googleLogin,
               icon: const Icon(LucideIcons.globe),
               label: const Text('Войти через Google'),
               style: OutlinedButton.styleFrom(
@@ -290,6 +296,49 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             const LegalAcceptanceText(),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _WindowsGoogleConfigBanner extends StatelessWidget {
+  const _WindowsGoogleConfigBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: OtterColors.dangerSoft(isDark),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: OtterColors.priorityHigh.withValues(alpha: isDark ? 0.35 : 0.25),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            LucideIcons.circleAlert,
+            size: 18,
+            color: isDark ? const Color(0xFFFF6B6B) : const Color(0xFFDC2626),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: OtterColors.text(isDark),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

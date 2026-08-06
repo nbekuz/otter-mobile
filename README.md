@@ -12,7 +12,10 @@ Flutter-клиент планировщика **Оттер** для **Android** 
 
 ```bash
 cd otter-mobile
-cp .env.example .env   # при необходимости отредактируйте
+cp .env.example .env
+# Windows Google Sign-In: обязательно заполните FIREBASE_GOOGLE_DESKTOP_CLIENT_SECRET
+# (Google Cloud → Credentials → Desktop OAuth client → Client secret).
+# Файл .env в Git не попадает — на каждой машине создаётся локально.
 flutter pub get
 flutter run -d windows
 # или
@@ -27,12 +30,14 @@ flutter run -d android
 - Gradle: плагин `com.google.gms.google-services`.
 - Google Sign-In: в `.env` задан `FIREBASE_GOOGLE_SERVER_CLIENT_ID` (Web OAuth client из того же JSON).
 
-**Windows** (Firebase Web app + Google Sign-In через `google_sign_in_dartio`):
+**Windows** (Firebase Web app + ручной OAuth 2.0 PKCE / loopback):
 
-- В `.env`: `FIREBASE_API_KEY`, `FIREBASE_APP_ID`, `FIREBASE_AUTH_DOMAIN` (из Firebase Console → Web app).
-- Google Sign-In: `FIREBASE_GOOGLE_WEB_CLIENT_ID` — **Web OAuth client ID** из Google Cloud Console (тот же, что `FIREBASE_GOOGLE_SERVER_CLIENT_ID`, если отдельно не задан).
-- В Google Cloud → Credentials → Web client → **Authorized redirect URIs** добавьте `http://127.0.0.1` и `http://localhost` (loopback для desktop OAuth).
-- В Firebase Console → Authentication → Sign-in method → **Google** — включён.
+- В `.env`: `FIREBASE_API_KEY`, `FIREBASE_APP_ID`, `FIREBASE_AUTH_DOMAIN` (Firebase Console → Web app).
+- Google Sign-In использует **Desktop** OAuth client (не Web):
+  - `FIREBASE_GOOGLE_DESKTOP_CLIENT_ID` — Client ID (есть default в коде / `.env.example`)
+  - `FIREBASE_GOOGLE_DESKTOP_CLIENT_SECRET` — **обязателен**, только в локальном `.env`
+- Google Cloud → Credentials → Desktop client: redirect на loopback (`http://127.0.0.1`) разрешён для installed apps.
+- Firebase Console → Authentication → Sign-in method → **Google** — включён.
 
 Для release-сборки Android добавьте SHA-1 отпечаток в Firebase Console → Project settings → Your apps.
 
