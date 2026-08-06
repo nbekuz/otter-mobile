@@ -11,6 +11,7 @@ import '../../core/layout/responsive.dart';
 import '../../core/providers/providers.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../../core/theme/otter_colors.dart';
+import '../../core/theme/otter_theme.dart';
 import '../../core/theme/priority_colors.dart';
 import '../../core/utils/recurrence.dart';
 import '../../core/utils/time_utils.dart';
@@ -66,14 +67,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
       groups: tasksState.groups,
     );
     final date = state.date ?? DateTime.now();
-    final isDark = OtterColors.isDarkOf(context);
+    // Prefer settings.theme — MaterialApp themeMode can lag behind AppShell.
+    final isDark =
+        ref.watch(appSettingsProvider.select((s) => s.theme == 'dark'));
 
-    return Scaffold(
-      backgroundColor: OtterColors.pageBg(isDark),
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
+    return Theme(
+      data: isDark ? OtterTheme.dark() : OtterTheme.light(),
+      child: Scaffold(
+        backgroundColor: OtterColors.pageBg(isDark),
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
             _Header(
               state: state,
               date: date,
@@ -286,6 +291,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
           ],
         ),
       ),
+      ),
     );
   }
 
@@ -332,7 +338,8 @@ class _Header extends ConsumerWidget {
     final isDay = state.view == CalendarView.day;
     final title = state.displayLabel;
     final inbox = ref.watch(notificationsInboxProvider);
-    final isDark = OtterColors.isDarkOf(context);
+    final isDark =
+        ref.watch(appSettingsProvider.select((s) => s.theme == 'dark'));
     final surface = OtterColors.surface(isDark);
     final chipBg = OtterColors.surfaceAlt(isDark);
 
@@ -407,13 +414,45 @@ class _Header extends ConsumerWidget {
                   color: OtterColors.muted(isDark),
                 ),
                 style: IconButton.styleFrom(backgroundColor: chipBg),
+                color: OtterColors.surface(isDark),
+                surfaceTintColor: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 onSelected: onSetView,
-                itemBuilder: (context) => CalendarView.values
-                    .map(
-                      (v) =>
-                          PopupMenuItem(value: v, child: Text(_viewLabel(v))),
-                    )
-                    .toList(),
+                itemBuilder: (context) => CalendarView.values.map((v) {
+                  final selected = state.view == v;
+                  return PopupMenuItem<CalendarView>(
+                    value: v,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? OtterColors.sberGreen
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _viewLabel(v),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: selected
+                              ? Colors.white
+                              : OtterColors.text(isDark),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
             ],
           ),
@@ -1027,7 +1066,8 @@ class _DayViewState extends State<_DayView> {
               bottom: Responsive.isWide(context) ? 8 : 100,
             ),
             child: ColoredBox(
-              color: OtterColors.surface(isDark),
+              // Web day/week grid sits on page bg (no white card).
+              color: OtterColors.pageBg(isDark),
                   child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -2490,12 +2530,9 @@ class _WeekViewState extends State<_WeekView> {
               8,
               Responsive.isWide(context) ? 8 : 100,
             ),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: OtterColors.surface(isDark),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: OtterColors.border(isDark)),
-              ),
+            child: ColoredBox(
+              // Web: transparent over page bg — no bordered surface card.
+              color: OtterColors.pageBg(isDark),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: Column(

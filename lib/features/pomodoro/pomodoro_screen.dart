@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/layout/responsive.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
+import '../../core/theme/otter_theme.dart';
 import '../../data/models/api/api_models.dart';
 import '../../data/models/ui/ui_models.dart';
 import '../../shared/widgets/app_bottom_sheet.dart';
@@ -71,15 +72,19 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = OtterColors.isDarkOf(context);
+    final isDark =
+        ref.watch(appSettingsProvider.select((s) => s.theme == 'dark'));
     final state = ref.watch(pomodoroStateProvider);
     final selectedTask = _selectedTask(state);
     final progress = state.progress.clamp(0.0, 1.0);
     final wide = Responsive.isWide(context);
+    final sheetTheme = isDark ? OtterTheme.dark() : OtterTheme.light();
 
-    return Scaffold(
-      backgroundColor: OtterColors.pageBg(isDark),
-      body: SafeArea(
+    return Theme(
+      data: sheetTheme,
+      child: Scaffold(
+        backgroundColor: OtterColors.pageBg(isDark),
+        body: SafeArea(
         child: Column(
           children: [
             Padding(
@@ -174,17 +179,22 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 
   Future<void> _openTaskPicker(BuildContext context) async {
     final searchController = TextEditingController();
+    final isDark =
+        ref.read(appSettingsProvider).theme == 'dark';
     await showAppBottomSheet<void>(
       context: context,
+      backgroundColor: OtterColors.surface(isDark),
       builder: (ctx) {
-        return StatefulBuilder(
+        return Theme(
+          data: isDark ? OtterTheme.dark() : OtterTheme.light(),
+          child: StatefulBuilder(
           builder: (context, setModalState) {
-            final isDark = OtterColors.isDarkOf(context);
             final query = searchController.text.toLowerCase();
             final tasks = _activeTasks()
                 .where(
@@ -219,7 +229,11 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                           controller: searchController,
                           onTapOutside: dismissKeyboardOnTapOutside,
                           onEditingComplete: KeyboardDismisser.dismiss,
-                          style: TextStyle(color: OtterColors.text(isDark)),
+                          style: TextStyle(
+                            color: OtterColors.text(isDark),
+                            fontWeight: FontWeight.w500,
+                          ),
+                          cursorColor: OtterColors.sberGreen,
                           decoration: InputDecoration(
                             hintText: 'Поиск...',
                             hintStyle: TextStyle(color: OtterColors.muted(isDark)),
@@ -232,7 +246,22 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                             fillColor: OtterColors.surfaceAlt(isDark),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide.none,
+                              borderSide: BorderSide(
+                                color: OtterColors.border(isDark),
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide(
+                                color: OtterColors.border(isDark),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: const BorderSide(
+                                color: OtterColors.sberGreen,
+                                width: 2,
+                              ),
                             ),
                           ),
                           onChanged: (_) => setModalState(() {}),
@@ -295,6 +324,10 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                                 )
                               : null,
                           selected: selected,
+                          selectedTileColor: OtterColors.elevated(isDark),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           onTap: () {
                             ref
                                 .read(pomodoroStateProvider.notifier)
@@ -309,6 +342,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
               ),
             );
           },
+        ),
         );
       },
     );
@@ -319,12 +353,16 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
     BuildContext context,
     PomodoroUiState state,
   ) async {
+    final isDark =
+        ref.read(appSettingsProvider).theme == 'dark';
     await showAppBottomSheet<void>(
       context: context,
+      backgroundColor: OtterColors.surface(isDark),
       builder: (ctx) {
-        return StatefulBuilder(
+        return Theme(
+          data: isDark ? OtterTheme.dark() : OtterTheme.light(),
+          child: StatefulBuilder(
           builder: (context, setModalState) {
-            final isDark = OtterColors.isDarkOf(context);
             final current = ref.watch(pomodoroStateProvider);
             return Padding(
               padding: EdgeInsets.only(
@@ -349,6 +387,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                     const SizedBox(height: 20),
                     _SettingsSection(
                       title: 'Длительность: ${current.settings.duration} мин',
+                      isDark: isDark,
                       child: Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -358,6 +397,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                             label: '$d мин',
                             selected: selected,
                             selectedColor: OtterColors.sberGreen,
+                            isDark: isDark,
                             onTap: () async {
                               await ref
                                   .read(pomodoroStateProvider.notifier)
@@ -371,6 +411,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                     _SettingsSection(
                       title:
                           'Короткий перерыв: ${current.settings.shortBreak} мин',
+                      isDark: isDark,
                       child: Wrap(
                         spacing: 8,
                         children: [3, 5, 7, 10].map((d) {
@@ -379,6 +420,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                             label: '$d мин',
                             selected: selected,
                             selectedColor: OtterColors.sberBlue,
+                            isDark: isDark,
                             onTap: () async {
                               await ref
                                   .read(pomodoroStateProvider.notifier)
@@ -430,6 +472,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                           label: '${sound.emoji} ${sound.title}',
                           selected: selected,
                           selectedColor: OtterColors.sberGreen,
+                          isDark: isDark,
                           onTap: () async {
                             await ref
                                 .read(pomodoroStateProvider.notifier)
@@ -447,18 +490,23 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                       },
                       style: FilledButton.styleFrom(
                         backgroundColor: OtterColors.sberGreen,
+                        foregroundColor: Colors.white,
                         minimumSize: const Size.fromHeight(48),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
                       ),
-                      child: const Text('Готово'),
+                      child: const Text(
+                        'Готово',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ],
                 ),
               ),
             );
           },
+        ),
         );
       },
     );
@@ -650,8 +698,13 @@ class _TaskSoundRow extends StatelessWidget {
       child: InkWell(
         onTap: onPickTask,
         borderRadius: BorderRadius.circular(28),
-        child: Padding(
+        child: Container(
+          alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: OtterColors.border(isDark)),
+          ),
           child: Row(
             children: [
               const Icon(
@@ -662,6 +715,7 @@ class _TaskSoundRow extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
@@ -697,33 +751,48 @@ class _TaskSoundRow extends StatelessWidget {
   }
 
   Widget _soundButtons(bool isDark) {
-    return Wrap(
-      alignment: WrapAlignment.end,
-      spacing: 8,
-      runSpacing: 8,
-      children: workSounds.map((sound) {
-        final selected = selectedWorkSound == sound.key;
-        return InkWell(
-          onTap: () => onSelectWorkSound(sound),
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: selected
-                  ? OtterColors.sberGreen
-                  : OtterColors.elevated(isDark),
-              borderRadius: BorderRadius.circular(8),
+    // Keep all sound chips on one row (scale down if space is tight).
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerRight,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < workSounds.length; i++) ...[
+            if (i > 0) const SizedBox(width: 6),
+            Builder(
+              builder: (context) {
+                final sound = workSounds[i];
+                final selected = selectedWorkSound == sound.key;
+                return InkWell(
+                  onTap: () => onSelectWorkSound(sound),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: 36,
+                    height: 32,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? OtterColors.sberGreen
+                          : OtterColors.elevated(isDark),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      sound.emoji,
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1,
+                        color:
+                            selected ? Colors.white : OtterColors.muted(isDark),
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
-            child: Text(
-              sound.emoji,
-              style: TextStyle(
-                fontSize: 14,
-                color: selected ? Colors.white : OtterColors.muted(isDark),
-              ),
-            ),
-          ),
-        );
-      }).toList(),
+          ],
+        ],
+      ),
     );
   }
 
@@ -731,6 +800,7 @@ class _TaskSoundRow extends StatelessWidget {
     if (compactRow) {
       // Web lg: icon + label + sound chips in one horizontal bar.
       return Container(
+        alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
           color: OtterColors.surface(isDark),
@@ -745,16 +815,15 @@ class _TaskSoundRow extends StatelessWidget {
               color: OtterColors.muted(isDark),
             ),
             const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Звук фоновый',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: OtterColors.muted(isDark),
-                ),
+            Text(
+              'Звук фоновый',
+              style: TextStyle(
+                fontSize: 14,
+                color: OtterColors.muted(isDark),
               ),
             ),
-            Flexible(child: _soundButtons(isDark)),
+            const SizedBox(width: 12),
+            Expanded(child: _soundButtons(isDark)),
           ],
         ),
       );
@@ -765,6 +834,7 @@ class _TaskSoundRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: OtterColors.surface(isDark),
         borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: OtterColors.border(isDark)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -787,7 +857,10 @@ class _TaskSoundRow extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          _soundButtons(isDark),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _soundButtons(isDark),
+          ),
         ],
       ),
     );
@@ -797,13 +870,15 @@ class _TaskSoundRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = OtterColors.isDarkOf(context);
     if (sideBySide) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: _taskCard(isDark)),
-          const SizedBox(width: 12),
-          Expanded(child: _soundCard(compactRow: true, isDark: isDark)),
-        ],
+      return IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: _taskCard(isDark)),
+            const SizedBox(width: 12),
+            Expanded(child: _soundCard(compactRow: true, isDark: isDark)),
+          ],
+        ),
       );
     }
 
@@ -818,14 +893,18 @@ class _TaskSoundRow extends StatelessWidget {
 }
 
 class _SettingsSection extends StatelessWidget {
-  const _SettingsSection({required this.title, required this.child});
+  const _SettingsSection({
+    required this.title,
+    required this.child,
+    required this.isDark,
+  });
 
   final String title;
   final Widget child;
+  final bool isDark;
 
   @override
   Widget build(BuildContext context) {
-    final isDark = OtterColors.isDarkOf(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
@@ -852,23 +931,24 @@ class _ChipButton extends StatelessWidget {
     required this.selected,
     required this.selectedColor,
     required this.onTap,
+    required this.isDark,
   });
 
   final String label;
   final bool selected;
   final Color selectedColor;
   final VoidCallback onTap;
+  final bool isDark;
 
   @override
   Widget build(BuildContext context) {
-    final isDark = OtterColors.isDarkOf(context);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? selectedColor : Colors.transparent,
+          color: selected ? selectedColor : OtterColors.elevated(isDark),
           border: Border.all(
             color: selected ? selectedColor : OtterColors.border(isDark),
           ),

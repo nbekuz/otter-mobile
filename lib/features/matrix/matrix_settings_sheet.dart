@@ -12,6 +12,11 @@ import '../../shared/widgets/primary_button.dart';
 import 'matrix_block_setting.dart';
 import 'matrix_constants.dart';
 
+/// Stronger secondary text than [OtterColors.muted] — light gray reads too
+/// faintly on Windows; closer to web body/label contrast.
+Color _matrixSettingsSecondary(bool isDark) =>
+    isDark ? const Color(0xFFC0C7D1) : const Color(0xFF5C5C62);
+
 Future<void> showMatrixSettingsSheet(
   BuildContext context,
   WidgetRef ref,
@@ -142,9 +147,10 @@ class _MatrixSettingsSheetState extends ConsumerState<_MatrixSettingsSheet> {
             'В каждом блоке выбранные условия работают как множественный фильтр (ИЛИ): '
             'задача попадает в блок, если подходит хотя бы одно из них — по дате или по приоритету.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: 12,
-              color: OtterColors.muted(isDark),
-              height: 1.4,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: _matrixSettingsSecondary(isDark),
+              height: 1.45,
             ),
           ),
           const SizedBox(height: 16),
@@ -291,12 +297,20 @@ class _BlockSection extends StatelessWidget {
         const SizedBox(height: 12),
         Text(
           'Название блока',
-          style: TextStyle(fontSize: 12, color: OtterColors.muted(isDark)),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: _matrixSettingsSecondary(isDark),
+          ),
         ),
         const SizedBox(height: 4),
         TextField(
           controller: titleController,
-          style: TextStyle(fontSize: 14, color: OtterColors.text(isDark)),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: OtterColors.text(isDark),
+          ),
           onTapOutside: dismissKeyboardOnTapOutside,
           onEditingComplete: KeyboardDismisser.dismiss,
           decoration: InputDecoration(
@@ -323,7 +337,11 @@ class _BlockSection extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           'Фильтр по дате',
-          style: TextStyle(fontSize: 12, color: OtterColors.muted(isDark)),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: _matrixSettingsSecondary(isDark),
+          ),
         ),
         const SizedBox(height: 4),
         Wrap(
@@ -342,7 +360,11 @@ class _BlockSection extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           'Фильтр по приоритету',
-          style: TextStyle(fontSize: 12, color: OtterColors.muted(isDark)),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: _matrixSettingsSecondary(isDark),
+          ),
         ),
         const SizedBox(height: 4),
         Wrap(
@@ -379,7 +401,9 @@ class _FilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = OtterColors.isDarkOf(context);
-    final unselectedBg = OtterColors.surface(isDark);
+    final unselectedBg = OtterColors.surfaceAlt(isDark);
+    final unselectedBorder =
+        isDark ? OtterColors.darkBorder : const Color(0xFFB0B0B5);
     // Web: w-20 px-2 py-1 rounded-xl text-xs font-medium border
     return Material(
       color: selected ? selectedColor : unselectedBg,
@@ -393,7 +417,7 @@ class _FilterChip extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? Colors.transparent : OtterColors.border(isDark),
+              color: selected ? Colors.transparent : unselectedBorder,
             ),
             color: selected ? selectedColor : unselectedBg,
           ),
@@ -403,8 +427,10 @@ class _FilterChip extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: selected ? Colors.white : OtterColors.muted(isDark),
+              fontWeight: FontWeight.w600,
+              color: selected
+                  ? Colors.white
+                  : _matrixSettingsSecondary(isDark),
             ),
           ),
         ),

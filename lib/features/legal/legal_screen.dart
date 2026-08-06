@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/providers/legal_provider.dart';
+import '../../core/layout/responsive.dart';
 import '../../core/theme/otter_colors.dart';
 import '../../data/legal/static_legal_documents.dart';
 import '../../data/models/api/api_models.dart';
@@ -87,34 +88,48 @@ class _DocumentsHub extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        for (final doc in hubStaticLegalDocuments)
-          Card(
-            color: surface,
-            margin: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              leading: const Icon(
-                LucideIcons.fileText,
-                color: OtterColors.sberGray,
+    final wide = Responsive.isWide(context);
+    final isDark = OtterColors.isDarkOf(context);
+    final textColor = OtterColors.text(isDark);
+    final muted = OtterColors.muted(isDark);
+
+    return ResponsiveContent(
+      maxWidth: wide ? 1400 : Responsive.pageMaxWidth(context),
+      padding: EdgeInsets.symmetric(
+        horizontal: wide ? 24 : 16,
+        vertical: 16,
+      ),
+      child: ListView(
+        children: [
+          for (final doc in hubStaticLegalDocuments)
+            Card(
+              color: surface,
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: Icon(
+                  LucideIcons.fileText,
+                  color: muted,
+                ),
+                title: Text(
+                  doc.title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: textColor,
+                  ),
+                ),
+                subtitle: Text(
+                  formatStaticLegalUpdatedAt(doc.updatedAt) ?? doc.updatedAt,
+                  style: TextStyle(fontSize: 12, color: muted),
+                ),
+                trailing: Icon(
+                  LucideIcons.chevronRight,
+                  color: muted,
+                ),
+                onTap: () => context.push('/legal/${doc.slug.id}'),
               ),
-              title: Text(
-                doc.title,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(
-                formatStaticLegalUpdatedAt(doc.updatedAt) ?? doc.updatedAt,
-                style: const TextStyle(fontSize: 12),
-              ),
-              trailing: const Icon(
-                LucideIcons.chevronRight,
-                color: OtterColors.sberGray,
-              ),
-              onTap: () => context.push('/legal/${doc.slug.id}'),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -128,6 +143,8 @@ class _DocumentDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final updated = formatLegalUpdatedAt(doc.updatedAt);
+    final isDark = OtterColors.isDarkOf(context);
+    final bodyColor = OtterColors.muted(isDark);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -141,19 +158,19 @@ class _DocumentDetail extends StatelessWidget {
               if (updated != null) ...[
                 Text(
                   'Обновлено: $updated',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: OtterColors.sberGray,
+                    color: bodyColor,
                   ),
                 ),
                 const SizedBox(height: 12),
               ],
               Text(
                 doc.content,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   height: 1.55,
-                  color: OtterColors.sberGray,
+                  color: bodyColor,
                 ),
               ),
             ],

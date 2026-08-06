@@ -88,10 +88,13 @@ abstract final class OtterTheme {
         bodyColor: OtterColors.darkText,
         displayColor: OtterColors.darkText,
       ),
+      iconTheme: const IconThemeData(color: OtterColors.darkText),
+      primaryIconTheme: const IconThemeData(color: OtterColors.darkText),
       appBarTheme: const AppBarTheme(
         backgroundColor: OtterColors.darkBg,
         foregroundColor: OtterColors.darkText,
         elevation: 0,
+        iconTheme: IconThemeData(color: OtterColors.darkText),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: OtterColors.sberGreen,

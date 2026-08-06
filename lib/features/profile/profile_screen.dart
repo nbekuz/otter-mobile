@@ -26,7 +26,6 @@ class ProfileScreen extends ConsumerStatefulWidget {
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   late final TextEditingController _firstName;
   late final TextEditingController _lastName;
-  final _newPassword = TextEditingController();
   bool _loading = false;
   final _picker = ImagePicker();
 
@@ -50,7 +49,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   void dispose() {
     _firstName.dispose();
     _lastName.dispose();
-    _newPassword.dispose();
     super.dispose();
   }
 
@@ -259,22 +257,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  Future<void> _changePassword() async {
-    if (_newPassword.text.length < 8) {
-      showAppToast(context, 'Минимум 8 символов');
-      return;
-    }
-    try {
-      await ref.read(authServiceProvider).changePassword(_newPassword.text);
-      _newPassword.clear();
-      if (mounted) {
-        showAppToast(context, 'Пароль изменён', type: AppToastType.success);
-      }
-    } catch (e) {
-      if (mounted) showAppToast(context, getApiErrorMessage(e));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authStateProvider);
@@ -352,23 +334,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               label: 'Сохранить',
               loading: _loading,
               onPressed: _saveProfile,
-            ),
-            const SizedBox(height: 32),
-            const Text(
-              'Новый пароль',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            InputField(
-              controller: _newPassword,
-              label: 'Пароль',
-              obscure: true,
-            ),
-            const SizedBox(height: 12),
-            PrimaryButton(
-              label: 'Сменить пароль',
-              outline: true,
-              onPressed: _changePassword,
             ),
           ],
         ),

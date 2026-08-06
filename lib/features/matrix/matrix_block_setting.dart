@@ -65,6 +65,10 @@ class MatrixBlockUiSetting {
   factory MatrixBlockUiSetting.fromApi(ApiMatrixSetting api) {
     final block = MatrixBlockX.fromApi(api.block);
     final fallback = defaults()[block]!;
+    // Match web `apiMatrixToBlocks`: keep empty `date_filters` as-is.
+    // Falling back to defaults when the API sends [] inflated desktop counts
+    // (e.g. «Срочно не важно» showed ~59 overdue/today/tomorrow tasks while
+    // web stayed at 0 and used matrix_block / matrix/ assignment only).
     final dateFilters = api.dateFilters
         .map((s) => s.trim())
         .where((s) => s.isNotEmpty && s != 'all')
@@ -77,7 +81,7 @@ class MatrixBlockUiSetting {
       id: api.id,
       block: block,
       title: api.title.isNotEmpty ? api.title : fallback.title,
-      dateFilters: dateFilters.isEmpty ? fallback.dateFilters : dateFilters,
+      dateFilters: dateFilters,
       priorityFilters: priorityFilters,
     );
   }

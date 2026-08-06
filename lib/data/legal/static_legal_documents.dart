@@ -3,7 +3,8 @@ import 'package:flutter/services.dart';
 enum StaticLegalSlug {
   termsOfUse('terms-of-use'),
   privacyPolicy('privacy-policy'),
-  publicOffer('public-offer');
+  publicOffer('public-offer'),
+  personalDataConsent('personal-data-consent');
 
   const StaticLegalSlug(this.id);
   final String id;
@@ -45,7 +46,7 @@ const staticLegalDocuments = <StaticLegalDocument>[
   StaticLegalDocument(
     slug: StaticLegalSlug.privacyPolicy,
     title: 'Политика конфиденциальности',
-    updatedAt: '2026-07-08',
+    updatedAt: '2026-06-17',
     assetPath: 'assets/legal/privacy-policy.md',
     docxAssetPath: 'assets/legal/Политика_конфиденциальности_17_06_26.docx',
   ),
@@ -54,7 +55,12 @@ const staticLegalDocuments = <StaticLegalDocument>[
     title: 'Публичная оферта',
     updatedAt: '2026-07-08',
     assetPath: 'assets/legal/public-offer.md',
-    listedInHub: false,
+  ),
+  StaticLegalDocument(
+    slug: StaticLegalSlug.personalDataConsent,
+    title: 'Согласие на обработку персональных данных',
+    updatedAt: '2026-07-08',
+    assetPath: 'assets/legal/personal-data-consent.md',
   ),
 ];
 

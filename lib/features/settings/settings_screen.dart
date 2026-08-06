@@ -21,6 +21,7 @@ import '../../core/locale/app_languages.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
+import '../../core/utils/app_downloads.dart';
 import '../../core/utils/open_url.dart';
 import '../../core/utils/password_policy.dart';
 import '../../core/utils/task_export.dart';
@@ -29,6 +30,7 @@ import '../../data/models/ui/ui_models.dart';
 import '../../shared/widgets/app_bottom_sheet.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../../shared/widgets/bottom_nav.dart';
+import '../../shared/widgets/brand_logo.dart';
 import '../../shared/widgets/keyboard_dismisser.dart';
 import '../../shared/widgets/otter_checkbox.dart';
 import '../../shared/widgets/primary_button.dart';
@@ -100,10 +102,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       children: [
         Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Text(
                 'Настройки',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: OtterColors.text(isDark),
+                ),
               ),
             ),
             TextButton(
@@ -204,8 +210,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _SettingsRow(
               icon: LucideIcons.paintbrush,
               label: 'Вид',
-              value: _calendarViewLabel(settings.calendarDefaultView),
-              onTap: () => _openViewSettings(settings),
+              onTap: _showViewComingSoon,
             ),
             _SettingsRow(
               icon: LucideIcons.clock,
@@ -809,89 +814,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  String _calendarViewLabel(String view) => switch (view) {
-        'week' => 'Неделя',
-        'month' => 'Месяц',
-        'year' => 'Год',
-        _ => 'День',
-      };
-
-  Future<void> _openViewSettings(AppSettings settings) async {
-    await showAppBottomSheet<void>(
-      context: context,
-      builder: (ctx) {
-        return Consumer(
-          builder: (context, ref, _) {
-            final s = ref.watch(appSettingsProvider);
-            const options = <(String, String, IconData)>[
-              ('day', 'День', LucideIcons.calendarDays),
-              ('week', 'Неделя', LucideIcons.columns3),
-              ('month', 'Месяц', LucideIcons.calendar),
-              ('year', 'Год', LucideIcons.calendarRange),
-            ];
-
-            void setView(String id) {
-              ref.read(appSettingsProvider.notifier).applyLocal(
-                    s.copyWith(calendarDefaultView: id),
-                  );
-            }
-
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Вид',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.2,
-                          ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Какой вид календаря открывать при входе в раздел «Календарь».',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: OtterColors.sberGray,
-                            height: 1.35,
-                          ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'КАЛЕНДАРЬ ПО УМОЛЧАНИЮ',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: OtterColors.sberGray,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.6,
-                          ),
-                    ),
-                    const SizedBox(height: 10),
-                    GridView.count(
-                      crossAxisCount: 2,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      mainAxisSpacing: 10,
-                      crossAxisSpacing: 10,
-                      childAspectRatio: 2.35,
-                      children: [
-                        for (final opt in options)
-                          _ViewOptionCard(
-                            label: opt.$2,
-                            icon: opt.$3,
-                            selected: s.calendarDefaultView == opt.$1,
-                            onTap: () => setView(opt.$1),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+  void _showViewComingSoon() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Уже разрабатываем, скоро будет готово 😊'),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(milliseconds: 2500),
+      ),
     );
   }
 
@@ -1343,40 +1272,146 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _showAbout() async {
     final info = await PackageInfo.fromPlatform();
     if (!mounted) return;
+    final isDark = OtterColors.isDarkOf(context);
+
     await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('О приложении'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Оттер',
-              style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
+      builder: (ctx) {
+        var loadingWindows = false;
+        var loadingMobile = false;
+
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            Future<void> openRustore() async {
+              setLocal(() => loadingMobile = true);
+              try {
+                final url = await AppDownloads.fetchRustoreUrl();
+                if (!ctx.mounted) return;
+                if (url == null) {
+                  showAppToast(ctx, AppDownloads.rustoreUnavailable);
+                  return;
+                }
+                await openExternalUrl(url);
+              } catch (_) {
+                if (ctx.mounted) {
+                  showAppToast(ctx, AppDownloads.rustoreUnavailable);
+                }
+              } finally {
+                if (ctx.mounted) setLocal(() => loadingMobile = false);
+              }
+            }
+
+            Future<void> openWindows() async {
+              setLocal(() => loadingWindows = true);
+              try {
+                final url = await AppDownloads.fetchWindowsDownloadUrl();
+                if (!ctx.mounted) return;
+                if (url == null) {
+                  showAppToast(ctx, AppDownloads.windowsUnavailable);
+                  return;
+                }
+                await openExternalUrl(url);
+              } catch (_) {
+                if (ctx.mounted) {
+                  showAppToast(ctx, AppDownloads.windowsUnavailable);
+                }
+              } finally {
+                if (ctx.mounted) setLocal(() => loadingWindows = false);
+              }
+            }
+
+            return Dialog(
+              backgroundColor: OtterColors.surface(isDark),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: BrandLogo(
+                          size: LogoSize.lg,
+                          showName: true,
+                          lightText: isDark,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Версия ${info.version}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: OtterColors.muted(isDark),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      _AboutLinkButton(
+                        icon: LucideIcons.smartphone,
+                        label: loadingMobile
+                            ? 'Загрузка…'
+                            : AppDownloads.rustoreLabel,
+                        isDark: isDark,
+                        onTap: loadingMobile ? null : openRustore,
+                      ),
+                      const SizedBox(height: 8),
+                      _AboutLinkButton(
+                        icon: LucideIcons.download,
+                        label: loadingWindows
+                            ? 'Загрузка…'
+                            : AppDownloads.windowsLabel,
+                        isDark: isDark,
+                        onTap: loadingWindows ? null : openWindows,
+                      ),
+                      const SizedBox(height: 8),
+                      _AboutLinkButton(
+                        icon: LucideIcons.globe,
+                        label: AppDownloads.siteLabel,
+                        isDark: isDark,
+                        onTap: () =>
+                            openExternalUrl(AppDownloads.publicSiteUrl),
+                      ),
+                      const SizedBox(height: 8),
+                      _AboutLinkButton(
+                        icon: LucideIcons.fileText,
+                        label: 'Юридические документы',
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          context.push('/app/legal');
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: OtterColors.elevated(isDark),
+                            foregroundColor: OtterColors.text(isDark),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: const Text(
+                            'Закрыть',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-            ),
-            const SizedBox(height: 8),
-            Text('Версия ${info.version}'),
-            const SizedBox(height: 16),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(LucideIcons.fileText),
-              title: const Text('Юридические документы'),
-              onTap: () {
-                Navigator.pop(ctx);
-                context.push('/app/legal');
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Закрыть'),
-          ),
-        ],
-      ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1958,41 +1993,53 @@ class _SettingsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Prefer settings-driven dark surfaces over Theme brightness alone.
     final isDark = OtterColors.isDarkOf(context);
+    final labelFg = labelColor ?? OtterColors.text(isDark);
+    final valueFg =
+        isDark ? const Color(0xFFC0C7D1) : const Color(0xFF5C5C62);
+    final iconFg = iconColor ?? OtterColors.muted(isDark);
     return InkWell(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: iconColor ?? OtterColors.muted(isDark)),
+            Icon(icon, size: 20, color: iconFg),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: labelColor ?? OtterColors.text(isDark),
+                  color: labelFg,
                 ),
               ),
             ),
             if (value != null) ...[
-              Flexible(
+              const SizedBox(width: 12),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.sizeOf(context).width * 0.42,
+                ),
                 child: Text(
                   value!,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.right,
                   style: TextStyle(
-                    fontSize: 12,
-                    color: OtterColors.muted(isDark),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: valueFg,
                   ),
                 ),
               ),
               const SizedBox(width: 8),
             ],
-            Icon(trailingIcon, size: 16, color: OtterColors.border(isDark)),
+            Icon(trailingIcon, size: 16, color: OtterColors.muted(isDark)),
           ],
         ),
       ),
@@ -2060,13 +2107,15 @@ class _ThemeBlock extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: OtterColors.surfaceAlt(isDark),
+              color: isDark
+                  ? OtterColors.sberBlue.withValues(alpha: 0.18)
+                  : OtterColors.surfaceAlt(isDark),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(
               isDark ? LucideIcons.sun : LucideIcons.moon,
               size: 20,
-              color: OtterColors.text(isDark),
+              color: isDark ? OtterColors.sberBlue : OtterColors.text(isDark),
             ),
           ),
           const SizedBox(width: 12),
@@ -2384,79 +2433,6 @@ class _GroupToggle extends ConsumerWidget {
   }
 }
 
-class _ViewOptionCard extends StatelessWidget {
-  const _ViewOptionCard({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = OtterColors.isDarkOf(context);
-    return Material(
-      color: selected
-          ? OtterColors.greenTint(isDark)
-          : OtterColors.surface(isDark),
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: selected
-                  ? OtterColors.sberGreen
-                  : OtterColors.border(isDark),
-              width: selected ? 1.5 : 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                size: 20,
-                color: selected
-                    ? OtterColors.sberGreen
-                    : OtterColors.muted(isDark),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: selected
-                        ? OtterColors.sberGreen
-                        : OtterColors.text(isDark),
-                  ),
-                ),
-              ),
-              if (selected)
-                const Icon(
-                  LucideIcons.check,
-                  size: 18,
-                  color: OtterColors.sberGreen,
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _DateTimeSettingsSheet extends ConsumerStatefulWidget {
   const _DateTimeSettingsSheet();
 
@@ -2715,6 +2691,51 @@ class _DateTimeSettingsSheetState
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AboutLinkButton extends StatelessWidget {
+  const _AboutLinkButton({
+    required this.icon,
+    required this.label,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool isDark;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: OtterColors.elevated(isDark),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, size: 16, color: OtterColors.muted(isDark)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: OtterColors.text(isDark),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

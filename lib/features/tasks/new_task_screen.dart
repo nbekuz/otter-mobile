@@ -682,19 +682,30 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
         child: Padding(
           // Lift entire screen (sticky footer included) above the IME.
           padding: EdgeInsets.only(bottom: keyboardInset),
-          child: ResponsiveContent(
-            maxWidth: Responsive.isWide(context) ? 720 : double.infinity,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildHeader(),
-                Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Full-bleed header like web `page-header-top` (outside max-w card).
+              _buildHeader(),
+              Expanded(
+                child: ResponsiveContent(
+                  maxWidth: Responsive.isWide(context) ? 768 : double.infinity,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: Responsive.isWide(context) ? 16 : 0,
+                  ),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                    padding: EdgeInsets.fromLTRB(
+                      Responsive.isWide(context) ? 0 : 12,
+                      8,
+                      Responsive.isWide(context) ? 0 : 12,
+                      12,
+                    ),
                     child: Container(
                       decoration: BoxDecoration(
                         color: OtterColors.surface(isDark),
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(
+                          Responsive.isWide(context) ? 24 : 16,
+                        ),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.04),
@@ -707,7 +718,6 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // Scroll title/tabs/fields; keep footer pinned above keyboard.
                           Expanded(
                             child: LayoutBuilder(
                               builder: (context, constraints) {
@@ -748,8 +758,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -758,10 +768,21 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
 
   Widget _buildHeader() {
     final isDark = OtterColors.isDarkOf(context);
+    final wide = Responsive.isWide(context);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
-      color: OtterColors.surface(isDark),
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(wide ? 24 : 12, wide ? 16 : 8, wide ? 24 : 16, wide ? 16 : 8),
+      decoration: BoxDecoration(
+        color: OtterColors.surface(isDark),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
       child: Row(
         children: [
           Material(
@@ -771,8 +792,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
               onTap: _goBack,
               customBorder: const CircleBorder(),
               child: SizedBox(
-                width: 36,
-                height: 36,
+                width: wide ? 40 : 36,
+                height: wide ? 40 : 36,
                 child: Icon(
                   LucideIcons.chevronLeft,
                   size: 20,
@@ -781,12 +802,12 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               widget.isEditMode ? 'Редактирование задачи' : 'Новая задача',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: wide ? 20 : 18,
                 fontWeight: FontWeight.bold,
                 color: OtterColors.text(isDark),
               ),
@@ -1679,74 +1700,88 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
 
   Widget _buildMatrixTab() {
     final isDark = OtterColors.isDarkOf(context);
+    final wide = Responsive.isWide(context);
     final settings = ref.watch(matrixSettingsProvider).blocks;
 
+    // Match web: grid-cols-4, compact chips (dot + small label).
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _SectionLabel('Блок матрицы'),
-        const SizedBox(height: 8),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
-          // Slightly taller so larger labels can wrap without shrinking.
-          childAspectRatio: 1.5,
-          children: kMatrixBlockThemes.map((theme) {
-            final selected = _matrix == theme.block;
-            final title = settings[theme.block]?.title ?? theme.defaultTitle;
-            return Material(
-              color: selected
-                  ? theme.accent.withValues(alpha: 0.08)
-                  : OtterColors.surface(isDark),
-              borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                onTap: () {
-                  KeyboardDismisser.dismiss();
-                  setState(() => _matrix = theme.block);
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: selected ? theme.accent : OtterColors.border(isDark),
-                      width: selected ? 2 : 1,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: theme.accent,
-                          shape: BoxShape.circle,
+        SizedBox(height: wide ? 12 : 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < kMatrixBlockThemes.length; i++) ...[
+              if (i > 0) SizedBox(width: wide ? 6 : 4),
+              Expanded(
+                child: Builder(
+                  builder: (context) {
+                    final theme = kMatrixBlockThemes[i];
+                    final selected = _matrix == theme.block;
+                    final title =
+                        settings[theme.block]?.title ?? theme.defaultTitle;
+                    return Material(
+                      color: selected
+                          ? theme.accent.withValues(alpha: 0.08)
+                          : OtterColors.surface(isDark),
+                      borderRadius: BorderRadius.circular(wide ? 16 : 12),
+                      child: InkWell(
+                        onTap: () {
+                          KeyboardDismisser.dismiss();
+                          setState(() => _matrix = theme.block);
+                        },
+                        borderRadius: BorderRadius.circular(wide ? 16 : 12),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: wide ? 6 : 4,
+                            vertical: wide ? 8 : 6,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius:
+                                BorderRadius.circular(wide ? 16 : 12),
+                            border: Border.all(
+                              color: selected
+                                  ? theme.accent
+                                  : OtterColors.border(isDark),
+                              width: 2,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: theme.accent,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                title,
+                                textAlign: TextAlign.center,
+                                softWrap: true,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: wide ? 10 : 9,
+                                  height: 1.2,
+                                  fontWeight: FontWeight.w500,
+                                  color: OtterColors.text(isDark),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      const Spacer(),
-                      Text(
-                        title,
-                        softWrap: true,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          height: 1.3,
-                          color: OtterColors.text(isDark),
-                        ),
-                      ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ),
-            );
-          }).toList(),
+            ],
+          ],
         ),
       ],
     );

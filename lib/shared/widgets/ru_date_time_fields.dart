@@ -104,6 +104,7 @@ class _RuDateFieldState extends State<RuDateField> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     return _LabeledField(
       label: widget.label,
       child: TextField(
@@ -111,6 +112,11 @@ class _RuDateFieldState extends State<RuDateField> {
         focusNode: _focus,
         keyboardType: TextInputType.datetime,
         textInputAction: TextInputAction.next,
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          color: OtterColors.text(isDark),
+        ),
         onTapOutside: dismissKeyboardOnTapOutside,
         onEditingComplete: () {
           _commit();
@@ -272,6 +278,7 @@ class _RuTimeFieldState extends State<RuTimeField> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     return _LabeledField(
       label: widget.label,
       child: TextField(
@@ -279,6 +286,11 @@ class _RuTimeFieldState extends State<RuTimeField> {
         focusNode: _focus,
         keyboardType: TextInputType.number,
         textInputAction: TextInputAction.next,
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          color: OtterColors.text(isDark),
+        ),
         inputFormatters: [
           FilteringTextInputFormatter.allow(RegExp(r'[\d:]')),
           LengthLimitingTextInputFormatter(5),
@@ -323,15 +335,17 @@ class _LabeledField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (label == null) return child;
+    final isDark = OtterColors.isDarkOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label!.toUpperCase(),
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: OtterColors.sberGray,
+            letterSpacing: 0.4,
+            color: OtterColors.muted(isDark),
           ),
         ),
         const SizedBox(height: 6),

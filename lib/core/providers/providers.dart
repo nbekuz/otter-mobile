@@ -886,6 +886,8 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
       if (viewChanged) {
         _ref.read(calendarStateProvider.notifier).applyViewDefaultsFromSettings();
       }
+      _ref.read(themeModeProvider.notifier).state = state.theme;
+      unawaited(syncWindowsTitleBarTheme(state.theme == 'dark'));
     } catch (_) {
       state = normalized.copyWith(notifications: prevNotifications);
     }
@@ -2125,7 +2127,13 @@ class MatrixNotifier extends StateNotifier<Map<String, List<Task>>> {
       final assigned =
           incomplete.where((t) => t.matrixBlock == block).toList();
       final byId = <String, Task>{};
-      for (final t in [...matched, ...assigned]) {
+      for (final t in matched) {
+        // Drag = move: don't keep a task in this block via filters when it
+        // is explicitly assigned to another quadrant.
+        if (t.matrixBlock != null && t.matrixBlock != block) continue;
+        byId[t.id] = t;
+      }
+      for (final t in assigned) {
         byId[t.id] = t;
       }
       return byId.values.toList();
@@ -2196,9 +2204,15 @@ class MatrixNotifier extends StateNotifier<Map<String, List<Task>>> {
       if (existing != null) break;
     }
     if (existing != null) {
-      _ref
-          .read(tasksStateProvider.notifier)
-          .upsertLocalTask(existing.copyWith(matrixBlock: block));
+      final moved = existing.copyWith(matrixBlock: block);
+      _ref.read(tasksStateProvider.notifier).upsertLocalTask(moved);
+      // Instant exclusive move in the grid (remove from all other blocks).
+      final next = <String, List<Task>>{
+        for (final e in state.entries)
+          e.key: [for (final t in e.value) if (t.id != taskId) t],
+      };
+      next[block.id] = [moved, ...?next[block.id]];
+      state = next;
     }
 
     try {
@@ -2209,6 +2223,7 @@ class MatrixNotifier extends StateNotifier<Map<String, List<Task>>> {
       if (existing != null) {
         _ref.read(tasksStateProvider.notifier).upsertLocalTask(existing);
       }
+      await load();
       rethrow;
     }
     await load();

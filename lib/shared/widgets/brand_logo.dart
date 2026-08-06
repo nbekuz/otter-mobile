@@ -16,6 +16,7 @@ class BrandLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Match web BrandLogo.vue sizes: sm h-9, md h-11, lg h-16.
     final dim = switch (size) {
       LogoSize.sm => 36.0,
       LogoSize.md => 44.0,
@@ -26,10 +27,11 @@ class BrandLogo extends StatelessWidget {
       LogoSize.md => 20.0,
       LogoSize.lg => 28.0,
     };
-
+    final radius = size == LogoSize.lg ? 22.0 : 16.0;
     final dpr = MediaQuery.devicePixelRatioOf(context);
 
-    // Match web BrandLogo tone: brightness-0 (black) / invert (white).
+    // Same artwork as web (`logo.svg` embeds this PNG). Decode at 2–3×
+    // display size so Windows desktop scaling keeps crisp contours.
     final logo = ColorFiltered(
       colorFilter: ColorFilter.mode(
         lightText ? Colors.white : Colors.black,
@@ -42,7 +44,7 @@ class BrandLogo extends StatelessWidget {
         fit: BoxFit.contain,
         filterQuality: FilterQuality.high,
         isAntiAlias: true,
-        cacheWidth: (dim * dpr).round(),
+        cacheWidth: (dim * dpr * 3).round().clamp(128, 1024),
       ),
     );
 
@@ -50,7 +52,8 @@ class BrandLogo extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(size == LogoSize.lg ? 22 : 16),
+          borderRadius: BorderRadius.circular(radius),
+          clipBehavior: Clip.antiAlias,
           child: logo,
         ),
         if (showName) ...[
@@ -59,7 +62,7 @@ class BrandLogo extends StatelessWidget {
             'Оттер',
             style: TextStyle(
               fontSize: textSize,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
               height: 1.1,
               letterSpacing: -0.3,
               color: lightText ? Colors.white : OtterColors.sberBlack,

@@ -10,6 +10,7 @@ import '../../core/theme/priority_colors.dart';
 import '../../data/models/ui/ui_models.dart';
 import '../../shared/widgets/keyboard_dismisser.dart';
 import '../../shared/widgets/task_group.dart';
+import '../../shared/widgets/task_item.dart';
 import 'task_detail_sheet.dart';
 
 class TasksScreen extends ConsumerStatefulWidget {
@@ -387,13 +388,12 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
       ],
       if (showingSearch && state.searchQuery.isNotEmpty)
         ...state.searchResults.map(
-          (t) => TaskGroupWidget(
-            title: t.title,
-            tasks: [t],
-            initiallyExpanded: true,
-            onComplete: onComplete,
-            onDelete: onDelete,
-            onOpen: onOpen,
+          (t) => TaskItem(
+            key: ValueKey('search-${t.id}'),
+            task: t,
+            onComplete: () => onComplete(t),
+            onDelete: () => onDelete(t),
+            onTap: () => onOpen(t),
           ),
         )
       else

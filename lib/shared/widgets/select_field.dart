@@ -133,19 +133,22 @@ class SelectField<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final isDark = OtterColors.isDarkOf(context);
     final display = itemLabel(value);
     final borderColor = OtterColors.border(isDark);
+    final fill = OtterColors.surfaceAlt(isDark);
+    final textColor = OtterColors.text(isDark);
+    final muted = OtterColors.muted(isDark);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: theme.textTheme.bodyMedium?.copyWith(
+          style: TextStyle(
+            fontSize: 14,
             fontWeight: FontWeight.w500,
-            color: OtterColors.muted(isDark),
+            color: muted,
           ),
         ),
         const SizedBox(height: 8),
@@ -168,23 +171,27 @@ class SelectField<T> extends StatelessWidget {
             label: label,
             value: display,
             child: Material(
-              color:
-                  theme.inputDecorationTheme.fillColor ??
-                  OtterColors.surfaceAlt(isDark),
+              color: fill,
               borderRadius: BorderRadius.circular(OtterColors.radiusMd),
               child: InkWell(
                 onTap: () => _openPicker(context),
                 borderRadius: BorderRadius.circular(OtterColors.radiusMd),
                 child: InputDecorator(
                   decoration: InputDecoration(
+                    filled: true,
+                    fillColor: fill,
                     enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(OtterColors.radiusMd),
+                      borderSide: BorderSide(color: borderColor),
+                    ),
+                    border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(OtterColors.radiusMd),
                       borderSide: BorderSide(color: borderColor),
                     ),
                     suffixIcon: Icon(
                       LucideIcons.chevronDown,
                       size: 20,
-                      color: OtterColors.muted(isDark),
+                      color: muted,
                     ),
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -202,9 +209,8 @@ class SelectField<T> extends StatelessWidget {
                           display.isNotEmpty ? display : (hint ?? ''),
                           style: TextStyle(
                             fontSize: 16,
-                            color: display.isNotEmpty
-                                ? OtterColors.text(isDark)
-                                : OtterColors.muted(isDark),
+                            fontWeight: FontWeight.w500,
+                            color: display.isNotEmpty ? textColor : muted,
                           ),
                         ),
                       ),

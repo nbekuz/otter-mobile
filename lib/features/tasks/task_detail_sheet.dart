@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
+import '../../core/theme/otter_theme.dart';
 import '../../core/theme/priority_colors.dart';
 import '../../core/utils/media_url.dart';
 import '../../core/utils/time_utils.dart';
@@ -50,6 +52,15 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   String? _notification;
   late RepeatType _repeat;
   late MatrixBlock _matrix;
+  late final TextEditingController _customIntervalCtrl;
+  late final TextEditingController _customMonthDayCtrl;
+  int _customRepeatInterval = 1;
+  String _customRepeatUnit = 'week';
+  List<int> _customWeekdays = [1];
+  int? _customMonthDay;
+  String? _repeatIntervalError;
+  String? _repeatWeekdaysError;
+  String? _repeatMonthDayError;
   String? _imagePath;
   String? _existingImageUrl;
   String? _attachmentName;
@@ -58,7 +69,9 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   final List<int> _serverAttachmentIds = [];
   bool _clearImage = false;
   bool _saving = false;
+  bool _closePromptOpen = false;
   String? _error;
+  String _formSnapshot = '';
   final _timeSync = TaskTimeSync();
 
   static const _notifyOptions = [
@@ -80,12 +93,53 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
     (value: RepeatType.custom, label: 'Настроить повторение'),
   ];
 
+  static const _weekDays = [
+    (value: 1, label: 'Пн'),
+    (value: 2, label: 'Вт'),
+    (value: 3, label: 'Ср'),
+    (value: 4, label: 'Чт'),
+    (value: 5, label: 'Пт'),
+    (value: 6, label: 'Сб'),
+    (value: 7, label: 'Вс'),
+  ];
+
   @override
   void initState() {
     super.initState();
+    _customIntervalCtrl = TextEditingController(text: '1');
+    _customMonthDayCtrl = TextEditingController();
     _syncFromTask(widget.task);
+    _formSnapshot = _serializeForm();
     Future.microtask(() => ref.read(matrixSettingsProvider.notifier).load());
   }
+
+  Map<String, Object?> _formPayload() {
+    final weekdays = List<int>.from(_customWeekdays)..sort();
+    return {
+      'title': _title.text,
+      'description': _description.text,
+      'priority': _priority.name,
+      'notification': _notification ?? '',
+      'repeat': _repeat.name,
+      'matrix': _matrix.name,
+      'dueDate': _formatDate(_dueDate),
+      'dueTime': _formatTime(_dueTime),
+      'durationStart': _formatTime(_durationStart),
+      'durationEnd': _formatTime(_durationEnd),
+      'customInterval': _customIntervalCtrl.text,
+      'customUnit': _customRepeatUnit,
+      'customWeekdays': weekdays,
+      'customMonthDay': _customMonthDayCtrl.text,
+      'imagePath': _imagePath,
+      'clearImage': _clearImage,
+      'attachmentName': _attachmentName,
+      'existingImageUrl': _existingImageUrl,
+    };
+  }
+
+  String _serializeForm() => jsonEncode(_formPayload());
+
+  bool get _isDirty => _serializeForm() != _formSnapshot;
 
   void _syncFromTask(Task task) {
     _title = TextEditingController(text: task.title);
@@ -94,6 +148,17 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
     _notification = task.notification ?? '';
     _repeat = task.repeat;
     _matrix = task.matrixBlock ?? MatrixBlock.notUrgentNotImportant;
+    _customRepeatInterval = task.repeatCustom?.interval ?? 1;
+    _customRepeatUnit = task.repeatCustom?.unit ?? 'week';
+    _customWeekdays = task.repeatCustom?.weekdays?.isNotEmpty == true
+        ? List<int>.from(task.repeatCustom!.weekdays!)
+        : (task.repeatDays?.isNotEmpty == true
+              ? List<int>.from(task.repeatDays!)
+              : [1]);
+    _customMonthDay = task.repeatCustom?.monthDay;
+    _customIntervalCtrl.text = '$_customRepeatInterval';
+    _customMonthDayCtrl.text =
+        _customMonthDay == null ? '' : '$_customMonthDay';
     _existingImageUrl = task.imageUrl;
     _attachmentId = task.attachmentId;
     _attachmentName = task.attachmentName;
@@ -148,6 +213,8 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   void dispose() {
     _title.dispose();
     _description.dispose();
+    _customIntervalCtrl.dispose();
+    _customMonthDayCtrl.dispose();
     super.dispose();
   }
 
@@ -202,6 +269,37 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
       return;
     }
 
+    if (_repeat == RepeatType.custom) {
+      _customRepeatInterval = int.tryParse(_customIntervalCtrl.text) ?? 1;
+      final intervalError = validateRepeatInterval(_customRepeatInterval);
+      if (intervalError != null) {
+        setState(() {
+          _repeatIntervalError = intervalError;
+          _error = intervalError;
+        });
+        return;
+      }
+      if (_customRepeatUnit == 'week' && _customWeekdays.isEmpty) {
+        setState(() {
+          _repeatWeekdaysError = 'Выберите хотя бы один день недели';
+          _error = _repeatWeekdaysError;
+        });
+        return;
+      }
+      if (_customRepeatUnit == 'month') {
+        _customMonthDay = int.tryParse(_customMonthDayCtrl.text);
+        if (_customMonthDay == null ||
+            _customMonthDay! < 1 ||
+            _customMonthDay! > 31) {
+          setState(() {
+            _repeatMonthDayError = 'Укажите день месяца от 1 до 31';
+            _error = _repeatMonthDayError;
+          });
+          return;
+        }
+      }
+    }
+
     TaskDuration? duration;
     if (_durationStart != null && _durationEnd != null) {
       duration = TaskDuration(
@@ -239,11 +337,19 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
               clearNotification:
                   _notification == null || _notification!.isEmpty,
               repeat: _repeat,
-              repeatDays: _repeat == RepeatType.custom
-                  ? widget.task.repeatDays
+              repeatDays: _repeat == RepeatType.custom && _customRepeatUnit == 'week'
+                  ? List<int>.from(_customWeekdays)
                   : null,
               repeatCustom: _repeat == RepeatType.custom
-                  ? widget.task.repeatCustom
+                  ? RepeatCustom(
+                      interval: _customRepeatInterval,
+                      unit: _customRepeatUnit,
+                      weekdays: _customRepeatUnit == 'week'
+                          ? List<int>.from(_customWeekdays)
+                          : null,
+                      monthDay:
+                          _customRepeatUnit == 'month' ? _customMonthDay : null,
+                    )
                   : null,
               matrixBlock: _matrix,
               imagePath: _imagePath,
@@ -326,6 +432,10 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   InputDecoration _textDecoration({String? hint, required bool isDark}) {
     return InputDecoration(
       hintText: hint,
+      hintStyle: TextStyle(
+        color: OtterColors.muted(isDark),
+        fontWeight: FontWeight.w500,
+      ),
       filled: true,
       fillColor: OtterColors.surfaceAlt(isDark),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -403,16 +513,141 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
     if (mounted) Navigator.pop(context);
   }
 
+  Future<void> _requestClose() async {
+    if (_saving || _closePromptOpen) return;
+    if (!_isDirty) {
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+
+    _closePromptOpen = true;
+    final action = await _showUnsavedChangesDialog();
+    _closePromptOpen = false;
+    if (!mounted) return;
+
+    switch (action) {
+      case _UnsavedAction.save:
+        await _save();
+      case _UnsavedAction.discard:
+        Navigator.of(context).pop();
+      case _UnsavedAction.cancel:
+      case null:
+        break;
+    }
+  }
+
+  Future<_UnsavedAction?> _showUnsavedChangesDialog() {
+    final isDark = OtterColors.isDarkOf(context);
+    return showDialog<_UnsavedAction>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: OtterColors.surface(isDark),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Сохранить изменения?',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: OtterColors.text(isDark),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Есть несохранённые правки в задаче.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: OtterColors.muted(isDark),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    onPressed: () =>
+                        Navigator.pop(ctx, _UnsavedAction.save),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: OtterColors.sberGreen,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text(
+                      'Сохранить',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton(
+                    onPressed: () =>
+                        Navigator.pop(ctx, _UnsavedAction.discard),
+                    style: FilledButton.styleFrom(
+                      foregroundColor: OtterColors.text(isDark),
+                      backgroundColor: OtterColors.elevated(isDark),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text(
+                      'Не сохранять',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.pop(ctx, _UnsavedAction.cancel),
+                    child: Text(
+                      'Отмена',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: OtterColors.muted(isDark),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
-    final isDark = OtterColors.isDarkOf(context);
-    final surfaceAltColor = OtterColors.surface(isDark);
+    final settingsDark =
+        ref.watch(appSettingsProvider.select((s) => s.theme == 'dark'));
+    final isDark = settingsDark || OtterColors.isDarkOf(context);
+    final sheetTheme = isDark ? OtterTheme.dark() : OtterTheme.light();
+    final surfaceAltColor = OtterColors.surfaceAlt(isDark);
     final borderSubtle = OtterColors.border(isDark);
     final notifyValue = _notification ?? '';
     final completed = widget.task.completed;
 
-    return Padding(
+    return Theme(
+      data: sheetTheme,
+      child: PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _requestClose();
+      },
+      child: Padding(
       padding: EdgeInsets.fromLTRB(16, 16, 16, bottom + 16),
       child: SingleChildScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -723,72 +958,308 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
               items: _repeatOptions.map((e) => e.value).toList(),
               itemLabel: (v) =>
                   _repeatOptions.firstWhere((e) => e.value == v).label,
-              onChanged: (v) => setState(() => _repeat = v),
+              onChanged: (v) => setState(() {
+                _repeat = v;
+                _repeatIntervalError = null;
+                _repeatWeekdaysError = null;
+                _repeatMonthDayError = null;
+                _error = null;
+              }),
             ),
+            if (_repeat == RepeatType.custom) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: OtterColors.greenTint(isDark),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: OtterColors.sberGreen.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'НАСТРОИТЬ ПОВТОРЕНИЕ',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.6,
+                        color: OtterColors.muted(isDark),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          'Каждые',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: OtterColors.muted(isDark),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 72,
+                          child: TextField(
+                            controller: _customIntervalCtrl,
+                            keyboardType: TextInputType.number,
+                            onTapOutside: dismissKeyboardOnTapOutside,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: OtterColors.text(isDark),
+                            ),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              errorText: _repeatIntervalError,
+                              filled: true,
+                              fillColor: OtterColors.surface(isDark),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onChanged: (_) => setState(() {
+                              _repeatIntervalError = null;
+                              _error = null;
+                            }),
+                          ),
+                        ),
+                        _DetailUnitChip(
+                          label: 'Недели',
+                          selected: _customRepeatUnit == 'week',
+                          isDark: isDark,
+                          onTap: () => setState(() {
+                            _customRepeatUnit = 'week';
+                            _repeatIntervalError = null;
+                            _repeatWeekdaysError = null;
+                            _error = null;
+                          }),
+                        ),
+                        _DetailUnitChip(
+                          label: 'Месяца',
+                          selected: _customRepeatUnit == 'month',
+                          isDark: isDark,
+                          onTap: () => setState(() {
+                            _customRepeatUnit = 'month';
+                            _repeatIntervalError = null;
+                            _repeatMonthDayError = null;
+                            _error = null;
+                          }),
+                        ),
+                      ],
+                    ),
+                    if (_customRepeatUnit == 'week') ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        'ДНИ НЕДЕЛИ',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.6,
+                          color: OtterColors.muted(isDark),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _weekDays.map((day) {
+                          final selected = _customWeekdays.contains(day.value);
+                          return InkWell(
+                            onTap: () {
+                              KeyboardDismisser.dismiss();
+                              setState(() {
+                                if (selected) {
+                                  final next = _customWeekdays
+                                      .where((d) => d != day.value)
+                                      .toList();
+                                  // Keep at least one day selected like web.
+                                  _customWeekdays =
+                                      next.isEmpty ? [day.value] : next;
+                                } else {
+                                  _customWeekdays = [..._customWeekdays, day.value]
+                                    ..sort();
+                                }
+                                _repeatWeekdaysError = null;
+                                _error = null;
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: selected
+                                    ? OtterColors.sberGreen
+                                    : OtterColors.surface(isDark),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: selected
+                                      ? OtterColors.sberGreen
+                                      : (_repeatWeekdaysError != null
+                                          ? OtterColors.priorityHigh
+                                          : OtterColors.border(isDark)),
+                                ),
+                              ),
+                              child: Text(
+                                day.label,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: selected
+                                      ? Colors.white
+                                      : OtterColors.muted(isDark),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      if (_repeatWeekdaysError != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          _repeatWeekdaysError!,
+                          style: const TextStyle(
+                            color: OtterColors.priorityHigh,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ],
+                    if (_customRepeatUnit == 'month') ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        'ДЕНЬ МЕСЯЦА',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.6,
+                          color: OtterColors.muted(isDark),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: 112,
+                        child: TextField(
+                          controller: _customMonthDayCtrl,
+                          keyboardType: TextInputType.number,
+                          onTapOutside: dismissKeyboardOnTapOutside,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: OtterColors.text(isDark),
+                          ),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            errorText: _repeatMonthDayError,
+                            filled: true,
+                            fillColor: OtterColors.surface(isDark),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onChanged: (_) => setState(() {
+                            _repeatMonthDayError = null;
+                            _error = null;
+                          }),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
 
             _fieldLabel('Матрица Эйзенхауэра', isDark),
             Builder(
               builder: (context) {
                 final settings = ref.watch(matrixSettingsProvider).blocks;
-                return GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8,
-                  childAspectRatio: 1.55,
-                  children: kMatrixBlockThemes.map((theme) {
-                    final selected = _matrix == theme.block;
-                    final title =
-                        settings[theme.block]?.title ?? theme.defaultTitle;
-                    return Material(
-                      color: selected
-                          ? theme.accent.withValues(alpha: 0.08)
-                          : surfaceAltColor,
-                      borderRadius: BorderRadius.circular(12),
-                      child: InkWell(
-                        onTap: () => setState(() => _matrix = theme.block),
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: selected ? theme.accent : borderSubtle,
-                              width: selected ? 2 : 1,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: theme.accent,
-                                  shape: BoxShape.circle,
+                // Match web TaskDetailModal: compact grid-cols-4 chips.
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var i = 0; i < kMatrixBlockThemes.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 4),
+                      Expanded(
+                        child: Builder(
+                          builder: (context) {
+                            final theme = kMatrixBlockThemes[i];
+                            final selected = _matrix == theme.block;
+                            final title = settings[theme.block]?.title ??
+                                theme.defaultTitle;
+                            return Material(
+                              color: selected
+                                  ? theme.accent.withValues(alpha: 0.08)
+                                  : surfaceAltColor,
+                              borderRadius: BorderRadius.circular(12),
+                              child: InkWell(
+                                onTap: () =>
+                                    setState(() => _matrix = theme.block),
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: selected
+                                          ? theme.accent
+                                          : borderSubtle,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 10,
+                                        height: 10,
+                                        decoration: BoxDecoration(
+                                          color: theme.accent,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        title,
+                                        textAlign: TextAlign.center,
+                                        softWrap: true,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          height: 1.2,
+                                          fontWeight: FontWeight.w500,
+                                          color: OtterColors.text(isDark),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                              const Spacer(),
-                              Text(
-                                title,
-                                softWrap: true,
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.25,
-                                  color: OtterColors.text(isDark),
-                                ),
-                              ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
                       ),
-                    );
-                  }).toList(),
+                    ],
+                  ],
                 );
               },
             ),
@@ -804,9 +1275,9 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                 ),
               ),
             ],
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
-            // Footer like web TaskDetailModal: Save | Complete | Delete + Cancel
+            // Footer like web: Save | Complete | Delete | Cancel in one row.
             Row(
               children: [
                 Expanded(
@@ -814,7 +1285,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                     onPressed: _saving ? null : _save,
                     style: FilledButton.styleFrom(
                       backgroundColor: OtterColors.sberGreen,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -823,13 +1294,13 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                       _saving ? '…' : 'Сохранить',
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
-                        fontSize: 14,
+                        fontSize: 12,
                         color: Colors.white,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Expanded(
                   child: FilledButton(
                     onPressed: _saving ? null : _toggleComplete,
@@ -840,7 +1311,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                       backgroundColor: completed
                           ? OtterColors.sberBlue.withValues(alpha: 0.12)
                           : OtterColors.greenTint(isDark),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -849,12 +1320,12 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                       completed ? 'Восстановить' : 'Выполнено',
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
-                        fontSize: 14,
+                        fontSize: 12,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Expanded(
                   child: FilledButton(
                     onPressed: _saving ? null : _delete,
@@ -862,7 +1333,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                       foregroundColor: OtterColors.priorityHigh,
                       backgroundColor:
                           OtterColors.priorityHigh.withValues(alpha: 0.08),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -871,31 +1342,83 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                       'Удалить',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
-                        fontSize: 14,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _saving ? null : _requestClose,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: OtterColors.text(isDark),
+                      backgroundColor: OtterColors.elevated(isDark),
+                      side: BorderSide.none,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text(
+                      'Отмена',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
                       ),
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: _saving ? null : () => Navigator.pop(context),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: OtterColors.text(isDark),
-                backgroundColor: OtterColors.elevated(isDark),
-                side: BorderSide.none,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: const Text(
-                'Отмена',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-              ),
-            ),
           ],
+        ),
+      ),
+    ),
+    ),
+    );
+  }
+}
+
+enum _UnsavedAction { save, discard, cancel }
+
+class _DetailUnitChip extends StatelessWidget {
+  const _DetailUnitChip({
+    required this.label,
+    required this.selected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? OtterColors.sberGreen : OtterColors.surface(isDark),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? OtterColors.sberGreen : OtterColors.border(isDark),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: selected ? Colors.white : OtterColors.text(isDark),
+            ),
+          ),
         ),
       ),
     );

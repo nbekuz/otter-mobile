@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/layout/responsive.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
+import '../../core/theme/otter_theme.dart';
 import '../../shared/widgets/bottom_nav.dart';
 import '../../shared/widgets/brand_logo.dart';
 
@@ -25,27 +26,30 @@ class AppShell extends ConsumerWidget {
     final wide = Responsive.isWide(context);
 
     final bg = OtterColors.pageBg(isDark);
+    // Keep Theme brightness in sync with settings.theme so labels/icons that
+    // use Theme.of / isDarkOf stay readable on manually tinted dark surfaces.
+    final themed = isDark ? OtterTheme.dark() : OtterTheme.light();
 
     return Theme(
-      data: Theme.of(context),
+      data: themed,
       child: Scaffold(
         backgroundColor: bg,
         // Form routes need raw IME viewInsets so footers can pad above the keyboard.
         resizeToAvoidBottomInset: !_hideBottomNav(path),
         body: wide
             ? Padding(
-                // Tight desktop chrome so more content fits the viewport.
-                padding: const EdgeInsets.fromLTRB(4, 4, 4, 4),
+                // Match web layout: lg:px-3 lg:py-2 + gap-4 between sidebar and content.
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _Sidebar(path: path, auth: auth, isDark: isDark),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: OtterColors.pageBg(isDark),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(24),
                           border: Border.all(
                             color: isDark
                                 ? OtterColors.border(isDark)
@@ -56,14 +60,14 @@ class AppShell extends ConsumerWidget {
                               : [
                                   BoxShadow(
                                     color: const Color(0xFF0F172A)
-                                        .withValues(alpha: 0.08),
-                                    blurRadius: 24,
-                                    offset: const Offset(0, 8),
+                                        .withValues(alpha: 0.10),
+                                    blurRadius: 48,
+                                    offset: const Offset(0, 20),
                                   ),
                                 ],
                         ),
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(24),
                           child: Material(
                             color: OtterColors.pageBg(isDark),
                             child: child,
@@ -153,11 +157,12 @@ class _Sidebar extends ConsumerWidget {
         .toList();
 
     return Container(
-      width: 268,
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      // Match web aside: lg:w-72 (288) + lg:p-6 + lg:rounded-[32px]
+      width: 288,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(32),
         boxShadow: isDark
             ? null
             : [
@@ -180,14 +185,14 @@ class _Sidebar extends ConsumerWidget {
             isPremium: settings.isPremium,
             active: path.startsWith('/app/profile'),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
                 for (final item in items)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 2),
+                    padding: const EdgeInsets.only(bottom: 4),
                     child: _NavRow(
                       label: item.label,
                       icon: item.icon,
@@ -201,12 +206,12 @@ class _Sidebar extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 16),
           Container(
-            padding: const EdgeInsets.all(6),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: OtterColors.elevated(isDark),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
               border: isDark
                   ? Border.all(color: OtterColors.border(isDark))
                   : null,
@@ -217,7 +222,7 @@ class _Sidebar extends ConsumerWidget {
                   isDark: isDark,
                   onTap: () => context.push('/app/settings?openPremium=1'),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 _SidebarLink(
                   label: 'FAQ',
                   icon: LucideIcons.helpCircle,
@@ -225,7 +230,7 @@ class _Sidebar extends ConsumerWidget {
                   isDark: isDark,
                   onTap: () => context.go('/app/faq'),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 _SidebarLink(
                   label: 'Рекомендовать друзьям',
                   icon: LucideIcons.share2,
@@ -236,28 +241,32 @@ class _Sidebar extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 24),
+          // Match web: w-full rounded-2xl py-4 text-base font-semibold
           SizedBox(
-            height: 48,
+            width: double.infinity,
+            height: 56,
             child: FilledButton.icon(
               onPressed: () => context.push(
                 '/app/new-task?returnTo=${Uri.encodeComponent(path)}',
               ),
-              icon: const Icon(LucideIcons.plus, size: 18, color: Colors.white),
+              icon: const Icon(LucideIcons.plus, size: 20, color: Colors.white),
               label: const Text(
                 'Новая задача',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 15,
+                  fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               style: FilledButton.styleFrom(
                 backgroundColor: OtterColors.sberGreen,
-                minimumSize: const Size.fromHeight(48),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 56),
+                maximumSize: const Size(double.infinity, 56),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(16),
                 ),
               ),
             ),
@@ -298,11 +307,11 @@ class _NavRow extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
               Icon(icon, size: 20, color: color),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   label,

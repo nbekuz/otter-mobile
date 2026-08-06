@@ -1,23 +1,26 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/layout/responsive.dart';
+import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
+import '../../core/theme/otter_theme.dart';
 import '../../data/legal/static_legal_documents.dart';
 
-class StaticLegalScreen extends StatefulWidget {
+class StaticLegalScreen extends ConsumerStatefulWidget {
   const StaticLegalScreen({super.key, required this.slug});
 
   final String slug;
 
   @override
-  State<StaticLegalScreen> createState() => _StaticLegalScreenState();
+  ConsumerState<StaticLegalScreen> createState() => _StaticLegalScreenState();
 }
 
-class _StaticLegalScreenState extends State<StaticLegalScreen> {
+class _StaticLegalScreenState extends ConsumerState<StaticLegalScreen> {
   String? _content;
   String? _error;
 
@@ -25,6 +28,16 @@ class _StaticLegalScreenState extends State<StaticLegalScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant StaticLegalScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.slug != widget.slug) {
+      _content = null;
+      _error = null;
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -50,15 +63,23 @@ class _StaticLegalScreenState extends State<StaticLegalScreen> {
     final blocks = _content == null
         ? const <LegalContentBlock>[]
         : parseLegalMarkdown(_content!);
+    final wide = Responsive.isWide(context);
+    final isDark = ref.watch(appSettingsProvider).theme == 'dark';
+    final bg = OtterColors.pageBg(isDark);
+    final surface = OtterColors.surface(isDark);
+    final titleColor = OtterColors.text(isDark);
+    final muted = OtterColors.muted(isDark);
 
-    return Scaffold(
-      backgroundColor: OtterColors.grayLight,
+    return Theme(
+      data: isDark ? OtterTheme.dark() : OtterTheme.light(),
+      child: Scaffold(
+      backgroundColor: bg,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
+              padding: EdgeInsets.fromLTRB(8, 8, wide ? 24 : 16, 8),
               child: Row(
                 children: [
                   IconButton(
@@ -69,18 +90,25 @@ class _StaticLegalScreenState extends State<StaticLegalScreen> {
                         context.go('/');
                       }
                     },
-                    icon: const Icon(LucideIcons.chevronLeft),
+                    icon: Icon(
+                      LucideIcons.chevronLeft,
+                      color: titleColor,
+                    ),
                     style: IconButton.styleFrom(
-                      backgroundColor: OtterColors.grayLight,
+                      backgroundColor: isDark
+                          ? OtterColors.darkElevated
+                          : OtterColors.grayLight,
+                      foregroundColor: titleColor,
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       doc?.title ?? 'Документ',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
+                        color: titleColor,
                       ),
                     ),
                   ),
@@ -89,7 +117,9 @@ class _StaticLegalScreenState extends State<StaticLegalScreen> {
             ),
             Expanded(
               child: ResponsiveContent(
-                maxWidth: 800,
+                // Web-like wide reading column so privacy tables fit on Windows.
+                maxWidth: wide ? 1400 : Responsive.pageMaxWidth(context),
+                padding: EdgeInsets.symmetric(horizontal: wide ? 24 : 16),
                 child: _error != null
                     ? Center(
                         child: Text(
@@ -100,27 +130,32 @@ class _StaticLegalScreenState extends State<StaticLegalScreen> {
                     : _content == null
                     ? const Center(child: CircularProgressIndicator())
                     : ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        padding: const EdgeInsets.only(bottom: 24),
                         children: [
                           if (updated != null)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 12),
                               child: Text(
                                 'Обновлено: $updated',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
-                                  color: OtterColors.sberGray,
+                                  color: muted,
                                 ),
                               ),
                             ),
                           Card(
+                            color: surface,
+                            margin: EdgeInsets.zero,
                             child: Padding(
-                              padding: const EdgeInsets.all(16),
+                              padding: EdgeInsets.all(wide ? 24 : 16),
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   for (final block in blocks)
-                                    _LegalBlockView(block: block),
+                                    _LegalBlockView(
+                                      block: block,
+                                      isDark: isDark,
+                                    ),
                                 ],
                               ),
                             ),
@@ -132,17 +167,26 @@ class _StaticLegalScreenState extends State<StaticLegalScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 }
 
 class _LegalBlockView extends StatelessWidget {
-  const _LegalBlockView({required this.block});
+  const _LegalBlockView({required this.block, required this.isDark});
 
   final LegalContentBlock block;
+  final bool isDark;
 
   @override
   Widget build(BuildContext context) {
+    final headingColor = OtterColors.text(isDark);
+    final bodyColor = OtterColors.muted(isDark);
+    final tableHeaderBg =
+        isDark ? OtterColors.darkElevated : OtterColors.grayLight;
+    final tableBorder =
+        isDark ? OtterColors.darkBorder : OtterColors.grayMid;
+
     if (block is LegalHeadingBlock) {
       final heading = block as LegalHeadingBlock;
       final fontSize = switch (heading.level) {
@@ -158,7 +202,7 @@ class _LegalBlockView extends StatelessWidget {
             fontSize: fontSize,
             height: 1.55,
             fontWeight: FontWeight.w600,
-            color: OtterColors.sberBlack,
+            color: headingColor,
           ),
         ),
       );
@@ -169,10 +213,10 @@ class _LegalBlockView extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 10),
         child: _LegalRichText(
           pieces: (block as LegalParagraphBlock).pieces,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14,
             height: 1.55,
-            color: OtterColors.sberGray,
+            color: bodyColor,
           ),
         ),
       );
@@ -191,21 +235,21 @@ class _LegalBlockView extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       '•  ',
                       style: TextStyle(
                         fontSize: 14,
                         height: 1.55,
-                        color: OtterColors.sberGray,
+                        color: bodyColor,
                       ),
                     ),
                     Expanded(
                       child: _LegalRichText(
                         pieces: item,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           height: 1.55,
-                          color: OtterColors.sberGray,
+                          color: bodyColor,
                         ),
                       ),
                     ),
@@ -219,51 +263,77 @@ class _LegalBlockView extends StatelessWidget {
 
     if (block is LegalTableBlock) {
       final table = block as LegalTableBlock;
+      final columnCount = table.headers.length;
+      final columnWidths = <int, TableColumnWidth>{
+        for (var i = 0; i < columnCount; i++)
+          i: i == 0 && columnCount >= 3
+              ? const FlexColumnWidth(0.55)
+              : const FlexColumnWidth(1.6),
+      };
+
       return Padding(
         padding: const EdgeInsets.only(bottom: 12),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Table(
-            border: TableBorder.all(color: OtterColors.grayMid),
-            defaultColumnWidth: const IntrinsicColumnWidth(),
-            children: [
-              TableRow(
-                decoration: const BoxDecoration(color: OtterColors.grayLight),
-                children: [
-                  for (final header in table.headers)
-                    Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: _LegalRichText(
-                        pieces: header,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          height: 1.4,
-                          fontWeight: FontWeight.w600,
-                          color: OtterColors.sberBlack,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              for (final row in table.rows)
-                TableRow(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final tableWidth = constraints.maxWidth.isFinite
+                ? constraints.maxWidth
+                : MediaQuery.sizeOf(context).width;
+
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: tableWidth,
+                child: Table(
+                  border: TableBorder.all(color: tableBorder),
+                  columnWidths: columnWidths,
+                  defaultVerticalAlignment: TableCellVerticalAlignment.top,
                   children: [
-                    for (final cell in row)
-                      Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: _LegalRichText(
-                          pieces: cell,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            height: 1.4,
-                            color: OtterColors.sberGray,
+                    TableRow(
+                      decoration: BoxDecoration(color: tableHeaderBg),
+                      children: [
+                        for (final header in table.headers)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            child: _LegalRichText(
+                              pieces: header,
+                              style: TextStyle(
+                                fontSize: 13,
+                                height: 1.4,
+                                fontWeight: FontWeight.w600,
+                                color: headingColor,
+                              ),
+                            ),
                           ),
-                        ),
+                      ],
+                    ),
+                    for (final row in table.rows)
+                      TableRow(
+                        children: [
+                          for (final cell in row)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              child: _LegalRichText(
+                                pieces: cell,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  height: 1.4,
+                                  color: bodyColor,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                   ],
                 ),
-            ],
-          ),
+              ),
+            );
+          },
         ),
       );
     }
@@ -283,11 +353,26 @@ class _LegalRichText extends StatefulWidget {
 }
 
 class _LegalRichTextState extends State<_LegalRichText> {
-  late final List<TapGestureRecognizer?> _recognizers;
+  late List<TapGestureRecognizer?> _recognizers;
 
   @override
   void initState() {
     super.initState();
+    _rebuildRecognizers();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LegalRichText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.pieces != widget.pieces) {
+      for (final recognizer in _recognizers) {
+        recognizer?.dispose();
+      }
+      _rebuildRecognizers();
+    }
+  }
+
+  void _rebuildRecognizers() {
     _recognizers = [
       for (final piece in widget.pieces)
         piece.href == null
@@ -325,7 +410,8 @@ class _LegalRichTextState extends State<_LegalRichText> {
             TextSpan(
               text: widget.pieces[i].text,
               style: widget.style.copyWith(
-                fontWeight: widget.pieces[i].bold || widget.pieces[i].href != null
+                fontWeight:
+                    widget.pieces[i].bold || widget.pieces[i].href != null
                     ? FontWeight.w600
                     : widget.style.fontWeight,
                 color: widget.pieces[i].href != null
