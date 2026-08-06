@@ -252,7 +252,10 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
     Navigator.of(context).pop();
   }
 
-  Widget _buildContent() {
+  Widget _buildContent(bool isDark) {
+    final muted = OtterColors.muted(isDark);
+    final text = OtterColors.text(isDark);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -260,25 +263,29 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Expanded(
+            Expanded(
               child: Text(
                 'Восстановление пароля',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: text,
+                ),
               ),
             ),
             Material(
-              color: OtterColors.grayLight,
+              color: OtterColors.elevated(isDark),
               borderRadius: BorderRadius.circular(20),
               child: InkWell(
                 onTap: _close,
                 borderRadius: BorderRadius.circular(20),
-                child: const SizedBox(
+                child: SizedBox(
                   width: 36,
                   height: 36,
                   child: Icon(
                     LucideIcons.x,
                     size: 18,
-                    color: OtterColors.sberGray,
+                    color: muted,
                   ),
                 ),
               ),
@@ -287,10 +294,10 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
         ),
         const SizedBox(height: 16),
         if (_step == _ForgotStep.email) ...[
-          const Text(
+          Text(
             'Введите email — мы отправим письмо с кодом '
             '(например: «ВАШ КОД 310696»).',
-            style: TextStyle(color: OtterColors.sberGray, height: 1.4),
+            style: TextStyle(color: muted, height: 1.4),
           ),
           const SizedBox(height: 16),
           InputField(
@@ -304,13 +311,13 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
         ] else if (_step == _ForgotStep.code) ...[
           Text.rich(
             TextSpan(
-              style: const TextStyle(color: OtterColors.sberGray, height: 1.4),
+              style: TextStyle(color: muted, height: 1.4),
               children: [
                 const TextSpan(text: 'Код отправлен на '),
                 TextSpan(
                   text: _email.text.trim(),
-                  style: const TextStyle(
-                    color: OtterColors.sberBlack,
+                  style: TextStyle(
+                    color: text,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -318,9 +325,9 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Введите 6 цифр из письма (только код).',
-            style: TextStyle(color: OtterColors.sberGray, fontSize: 12),
+            style: TextStyle(color: muted, fontSize: 12),
           ),
           const SizedBox(height: 20),
           OtpCodeInput(
@@ -358,13 +365,13 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
         ] else ...[
           Text.rich(
             TextSpan(
-              style: const TextStyle(color: OtterColors.sberGray, height: 1.4),
+              style: TextStyle(color: muted, height: 1.4),
               children: [
                 const TextSpan(text: 'Новый пароль для '),
                 TextSpan(
                   text: _email.text.trim(),
-                  style: const TextStyle(
-                    color: OtterColors.sberBlack,
+                  style: TextStyle(
+                    color: text,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -372,10 +379,10 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             '8–20 символов: заглавная и строчная латинские буквы, '
             'цифра и один специальный символ.',
-            style: TextStyle(color: OtterColors.sberGray, fontSize: 12),
+            style: TextStyle(color: muted, fontSize: 12),
           ),
           const SizedBox(height: 16),
           InputField(
@@ -421,6 +428,7 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
+    final isDark = OtterColors.isDarkOf(context);
     final maxHeight =
         mq.size.height - mq.viewInsets.bottom - mq.padding.vertical - 32;
 
@@ -428,7 +436,7 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
       padding: EdgeInsets.fromLTRB(24, 0, 24, mq.viewInsets.bottom),
       child: Center(
         child: Material(
-          color: Colors.white,
+          color: OtterColors.surface(isDark),
           elevation: 16,
           shadowColor: Colors.black26,
           borderRadius: BorderRadius.circular(OtterColors.radiusLg),
@@ -441,7 +449,7 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
             child: SingleChildScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.all(24),
-              child: _buildContent(),
+              child: _buildContent(isDark),
             ),
           ),
         ),
@@ -475,6 +483,7 @@ class _CodeStepActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final muted = OtterColors.muted(OtterColors.isDarkOf(context));
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -493,8 +502,8 @@ class _CodeStepActions extends StatelessWidget {
                   child: Text(
                     resendTimerLabel,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: OtterColors.sberGray,
+                    style: TextStyle(
+                      color: muted,
                       fontSize: 14,
                     ),
                   ),

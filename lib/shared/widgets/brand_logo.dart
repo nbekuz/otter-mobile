@@ -29,14 +29,16 @@ class BrandLogo extends StatelessWidget {
     };
     final radius = size == LogoSize.lg ? 22.0 : 16.0;
     final dpr = MediaQuery.devicePixelRatioOf(context);
+    final isDark = OtterColors.isDarkOf(context);
+    final invert = lightText || isDark;
+    final markColor = invert ? Colors.white : Colors.black;
+    final nameColor =
+        lightText ? Colors.white : OtterColors.text(isDark);
 
     // Same artwork as web (`logo.svg` embeds this PNG). Decode at 2–3×
     // display size so Windows desktop scaling keeps crisp contours.
     final logo = ColorFiltered(
-      colorFilter: ColorFilter.mode(
-        lightText ? Colors.white : Colors.black,
-        BlendMode.srcIn,
-      ),
+      colorFilter: ColorFilter.mode(markColor, BlendMode.srcIn),
       child: Image.asset(
         'assets/img/logo.png',
         width: dim,
@@ -65,7 +67,7 @@ class BrandLogo extends StatelessWidget {
               fontWeight: FontWeight.w800,
               height: 1.1,
               letterSpacing: -0.3,
-              color: lightText ? Colors.white : OtterColors.sberBlack,
+              color: nameColor,
             ),
           ),
         ],

@@ -54,6 +54,14 @@ abstract final class OtterTheme {
           borderRadius: BorderRadius.circular(OtterColors.radiusMd),
         ),
       ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+      ),
     );
   }
 
@@ -120,6 +128,29 @@ abstract final class OtterTheme {
           horizontal: 16,
           vertical: 16,
         ),
+      ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: OtterColors.darkSurface,
+        headerBackgroundColor: OtterColors.darkElevated,
+        dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) {
+            return OtterColors.darkMuted.withValues(alpha: 0.4);
+          }
+          if (states.contains(WidgetState.selected)) return Colors.white;
+          return OtterColors.darkText;
+        }),
+        todayForegroundColor: const WidgetStatePropertyAll(OtterColors.sberGreen),
+        yearForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return Colors.white;
+          return OtterColors.darkText;
+        }),
+      ),
+      timePickerTheme: const TimePickerThemeData(
+        backgroundColor: OtterColors.darkSurface,
+        hourMinuteTextColor: OtterColors.darkText,
+        dialBackgroundColor: OtterColors.darkElevated,
+        dialTextColor: OtterColors.darkText,
+        dayPeriodTextColor: OtterColors.darkText,
       ),
       cardTheme: CardThemeData(
         color: OtterColors.darkSurface,

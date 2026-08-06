@@ -176,6 +176,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     return PopScope(
       canPop: !_loading,
       child: ResponsivePage(
@@ -188,20 +189,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   onPressed: _loading ? null : _goBack,
                   icon: const Icon(LucideIcons.chevronLeft),
                   style: IconButton.styleFrom(
-                    backgroundColor: OtterColors.grayLight,
+                    backgroundColor: OtterColors.elevated(isDark),
+                    foregroundColor: OtterColors.text(isDark),
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Text(
+                Text(
                   'Войти',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: OtterColors.text(isDark),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'Введите данные вашей учётной записи для входа в Оттер',
-              style: TextStyle(color: OtterColors.sberGray, height: 1.5),
+              style: TextStyle(color: OtterColors.muted(isDark), height: 1.5),
             ),
             const SizedBox(height: 24),
             InputField(

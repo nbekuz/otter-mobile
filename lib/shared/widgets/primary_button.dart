@@ -53,9 +53,11 @@ class PrimaryButton extends StatelessWidget {
       width: double.infinity,
       child: FilledButton(
         onPressed: _wrappedOnPressed,
-        style: FilledButton.styleFrom(
+          style: FilledButton.styleFrom(
           backgroundColor: OtterColors.sberGreen,
-          disabledBackgroundColor: OtterColors.grayMid,
+          disabledBackgroundColor: OtterColors.isDarkOf(context)
+              ? OtterColors.darkBorder
+              : OtterColors.grayMid,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(

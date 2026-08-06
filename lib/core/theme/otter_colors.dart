@@ -52,4 +52,33 @@ abstract final class OtterColors {
 
   static Color greenTintStrong(bool isDark) =>
       isDark ? darkGreenTintStrong : sberGreenLight;
+
+  /// Soft accent wash on dark surfaces (Windows / desktop dark mode).
+  static Color softTint(bool isDark, Color accent, {Color? light}) {
+    if (isDark) {
+      return Color.alphaBlend(accent.withValues(alpha: 0.18), darkSurface);
+    }
+    return light ?? accent.withValues(alpha: 0.12);
+  }
+
+  static Color blueTint(bool isDark) =>
+      softTint(isDark, sberBlue, light: sberBlueLight);
+
+  static Color dangerSoft(bool isDark) => softTint(
+        isDark,
+        priorityHigh,
+        light: const Color(0xFFFEF2F2),
+      );
+
+  static Color warningSoft(bool isDark) => softTint(
+        isDark,
+        priorityMedium,
+        light: const Color(0xFFFFF7E0),
+      );
+
+  static Color yellowSoft(bool isDark) => softTint(
+        isDark,
+        const Color(0xFFFBBF24),
+        light: const Color(0xFFFFFBEB),
+      );
 }

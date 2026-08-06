@@ -36,14 +36,15 @@ class ResponsivePage extends StatelessWidget {
   const ResponsivePage({
     super.key,
     required this.child,
-    this.backgroundColor = Colors.white,
+    this.backgroundColor,
     this.maxWidth,
     this.padding = const EdgeInsets.all(24),
     this.fillHeight = false,
   });
 
   final Widget child;
-  final Color backgroundColor;
+  /// Defaults to the active theme scaffold color (respects Windows dark mode).
+  final Color? backgroundColor;
   final double? maxWidth;
   final EdgeInsetsGeometry padding;
 
@@ -59,9 +60,11 @@ class ResponsivePage extends StatelessWidget {
         MediaQuery.sizeOf(context).height -
         MediaQuery.paddingOf(context).vertical -
         paddingValue.vertical;
+    final bg =
+        backgroundColor ?? Theme.of(context).scaffoldBackgroundColor;
 
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: bg,
       // No page-level GestureDetector for keyboard dismiss: on Android, IME
       // close + layout shift can re-target the tap onto the back button and
       // pop the auth screen instead of showing field errors.

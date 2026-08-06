@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../core/layout/responsive.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/providers/providers.dart';
+import '../../core/theme/otter_colors.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../../shared/widgets/input_field.dart';
 import '../../shared/widgets/primary_button.dart';
@@ -56,19 +57,24 @@ class _ProfileFillScreenState extends ConsumerState<ProfileFillScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     return ResponsivePage(
       fillHeight: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
+          Text(
             'Завершите профиль',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: OtterColors.text(isDark),
+            ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Укажите имя и фамилию для продолжения',
-            style: TextStyle(color: Colors.grey),
+            style: TextStyle(color: OtterColors.muted(isDark)),
           ),
           const SizedBox(height: 24),
           InputField(

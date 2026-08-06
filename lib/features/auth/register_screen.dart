@@ -137,6 +137,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = OtterColors.isDarkOf(context);
     return PopScope(
       canPop: !_loading,
       child: ResponsivePage(
@@ -149,13 +150,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   onPressed: _loading ? null : _goBack,
                   icon: const Icon(LucideIcons.chevronLeft),
                   style: IconButton.styleFrom(
-                    backgroundColor: OtterColors.grayLight,
+                    backgroundColor: OtterColors.elevated(isDark),
+                    foregroundColor: OtterColors.text(isDark),
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Text(
+                Text(
                   'Регистрация',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: OtterColors.text(isDark),
+                  ),
                 ),
               ],
             ),

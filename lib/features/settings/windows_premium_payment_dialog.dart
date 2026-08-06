@@ -70,11 +70,16 @@ class _WindowsPremiumPaymentDialogState
   @override
   Widget build(BuildContext context) {
     final premium = ref.watch(premiumStateProvider);
+    final isDark = OtterColors.isDarkOf(context);
 
     return PopScope(
       canPop: false,
       child: AlertDialog(
-        title: const Text('Ожидаем оплату'),
+        backgroundColor: OtterColors.surface(isDark),
+        title: Text(
+          'Ожидаем оплату',
+          style: TextStyle(color: OtterColors.text(isDark)),
+        ),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 360),
           child: Column(
@@ -85,12 +90,16 @@ class _WindowsPremiumPaymentDialogState
               Text(
                 premium.paymentPollingMessage ?? 'Завершите оплату в браузере.',
                 textAlign: TextAlign.center,
+                style: TextStyle(color: OtterColors.text(isDark)),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Это окно закроется автоматически после подтверждения платежа.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: OtterColors.sberGray, fontSize: 12),
+                style: TextStyle(
+                  color: OtterColors.muted(isDark),
+                  fontSize: 12,
+                ),
               ),
             ],
           ),
