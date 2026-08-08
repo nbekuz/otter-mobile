@@ -33,9 +33,20 @@ Future<void> showTaskDetailSheet(BuildContext context, Task task) {
 }
 
 class TaskDetailSheet extends ConsumerStatefulWidget {
-  const TaskDetailSheet({super.key, required this.task});
+  const TaskDetailSheet({
+    super.key,
+    required this.task,
+    this.embedded = false,
+    this.onClosed,
+  });
 
   final Task task;
+
+  /// When true, renders as an inline desktop editor panel (web split view).
+  final bool embedded;
+
+  /// Called instead of [Navigator.pop] when [embedded] is true.
+  final VoidCallback? onClosed;
 
   @override
   ConsumerState<TaskDetailSheet> createState() => _TaskDetailSheetState();
@@ -111,6 +122,29 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
     _syncFromTask(widget.task);
     _formSnapshot = _serializeForm();
     Future.microtask(() => ref.read(matrixSettingsProvider.notifier).load());
+  }
+
+  @override
+  void didUpdateWidget(covariant TaskDetailSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.task.id != widget.task.id) {
+      _title.dispose();
+      _description.dispose();
+      _syncFromTask(widget.task);
+      _formSnapshot = _serializeForm();
+      _error = null;
+      setState(() {});
+    }
+  }
+
+  void _finishClose() {
+    if (widget.embedded) {
+      widget.onClosed?.call();
+      return;
+    }
+    if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
   }
 
   Map<String, Object?> _formPayload() {
@@ -361,7 +395,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
           );
       if (mounted) {
         await ref.read(matrixStateProvider.notifier).load();
-        Navigator.pop(context);
+        _finishClose();
       }
     } catch (e) {
       if (mounted) {
@@ -505,18 +539,18 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
     } else {
       await ref.read(tasksStateProvider.notifier).deleteTask(task.id);
     }
-    if (mounted) Navigator.pop(context);
+    if (mounted) _finishClose();
   }
 
   Future<void> _toggleComplete() async {
     await ref.read(tasksStateProvider.notifier).completeTask(widget.task);
-    if (mounted) Navigator.pop(context);
+    if (mounted) _finishClose();
   }
 
   Future<void> _requestClose() async {
     if (_saving || _closePromptOpen) return;
     if (!_isDirty) {
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) _finishClose();
       return;
     }
 
@@ -529,7 +563,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
       case _UnsavedAction.save:
         await _save();
       case _UnsavedAction.discard:
-        Navigator.of(context).pop();
+        _finishClose();
       case _UnsavedAction.cancel:
       case null:
         break;
@@ -639,22 +673,23 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
     final notifyValue = _notification ?? '';
     final completed = widget.task.completed;
 
-    return Theme(
-      data: sheetTheme,
-      child: PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        _requestClose();
-      },
-      child: Padding(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, bottom + 16),
-      child: SingleChildScrollView(
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        child: Column(
+    final form = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: widget.embedded ? MainAxisSize.max : MainAxisSize.min,
           children: [
+            if (widget.embedded) ...[
+              Text(
+                widget.task.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: OtterColors.text(isDark),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             // Priority chip (web TaskDetailModal)
             Align(
               alignment: Alignment.centerLeft,
@@ -723,8 +758,8 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
             _fieldLabel('Описание', isDark),
             TextField(
               controller: _description,
-              minLines: 3,
-              maxLines: 5,
+              minLines: widget.embedded ? 2 : 3,
+              maxLines: widget.embedded ? 4 : 5,
               style: TextStyle(color: OtterColors.text(isDark)),
               onTapOutside: dismissKeyboardOnTapOutside,
               decoration: _textDecoration(hint: 'Детали, ссылки…', isDark: isDark),
@@ -800,60 +835,46 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                               : Container(
                                   width: 56,
                                   height: 56,
-                                  color: surfaceAltColor,
+                                  color: OtterColors.elevated(isDark),
                                   alignment: Alignment.center,
-                                  child: Icon(
-                                    LucideIcons.file,
-                                    size: 24,
-                                    color: OtterColors.muted(isDark),
-                                  ),
+                                  child: const Icon(LucideIcons.file, size: 24),
                                 ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: InkWell(
-                        onTap: _imagePath == null &&
-                                _existingImageUrl != null &&
-                                !_clearImage
-                            ? _openExistingAttachment
-                            : null,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _attachmentName ??
-                                  _imagePath?.split('/').last ??
-                                  'Вложение',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: _imagePath == null &&
-                                        _existingImageUrl != null &&
-                                        !_clearImage
-                                    ? OtterColors.sberGreen
-                                    : OtterColors.text(isDark),
-                              ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _attachmentName ??
+                                _imagePath?.split(Platform.pathSeparator).last ??
+                                'Вложение',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: OtterColors.text(isDark),
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _attachmentIsImage
-                                  ? 'Изображение прикреплено'
-                                  : 'Файл прикреплен',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: OtterColors.muted(isDark),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              if (_existingImageUrl != null &&
+                                  _imagePath == null &&
+                                  !_clearImage)
+                                TextButton(
+                                  onPressed: _openExistingAttachment,
+                                  child: const Text('Открыть'),
+                                ),
+                              TextButton(
+                                onPressed: _clearAttachment,
+                                child: const Text('Удалить'),
                               ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ),
-                    IconButton(
-                      tooltip: 'Удалить вложение',
-                      onPressed: _clearAttachment,
-                      icon: const Icon(LucideIcons.x, size: 18),
                     ),
                   ],
                 ),
@@ -1372,10 +1393,31 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
               ],
             ),
           ],
-        ),
+    );
+
+    final scrollable = SingleChildScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: widget.embedded
+          ? const EdgeInsets.fromLTRB(20, 12, 20, 16)
+          : EdgeInsets.fromLTRB(16, 16, 16, bottom + 16),
+      child: form,
+    );
+
+    return Theme(
+      data: sheetTheme,
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          _requestClose();
+        },
+        child: widget.embedded
+            ? Material(
+                color: OtterColors.surface(isDark),
+                child: scrollable,
+              )
+            : scrollable,
       ),
-    ),
-    ),
     );
   }
 }

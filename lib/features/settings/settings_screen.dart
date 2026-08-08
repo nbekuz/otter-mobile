@@ -23,6 +23,7 @@ import '../../core/network/api_exception.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
 import '../../core/utils/app_downloads.dart';
+import '../../core/utils/contact_email.dart';
 import '../../core/utils/open_url.dart';
 import '../../core/utils/password_policy.dart';
 import '../../core/utils/task_export.dart';
@@ -804,7 +805,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (message.isEmpty) return;
     KeyboardDismisser.dismiss();
     try {
-      await ref.read(settingsServiceProvider).sendHelpMessage(message);
+      final auth = ref.read(authStateProvider);
+      // Persist ticket in admin (best-effort).
+      try {
+        await ref.read(settingsServiceProvider).sendHelpMessage(message);
+      } catch (_) {}
+      // Deliver to support inbox — this is the user-facing requirement.
+      await deliverSupportEmail(
+        message: message,
+        fromEmail: auth.user?.email,
+        fromName: auth.user?.name,
+      );
       _contactController.clear();
       if (mounted) {
         ScaffoldMessenger.of(

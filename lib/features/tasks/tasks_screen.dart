@@ -22,10 +22,13 @@ class TasksScreen extends ConsumerStatefulWidget {
 
 class _TasksScreenState extends ConsumerState<TasksScreen> {
   static const _searchTapGroup = Object();
+  static const _allGroupId = 'all';
 
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
   bool _searchVisible = false;
+  String _activeGroupId = _allGroupId;
+  String? _selectedTaskId;
 
   @override
   void initState() {
@@ -80,6 +83,60 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     return 'Доброй ночи';
   }
 
+  List<_DesktopGroup> _desktopGroups(TasksState state, AppSettings settings) {
+    final allTasks = <Task>[
+      for (final key in TaskGroupKey.values)
+        ...?state.groups[key],
+    ];
+    // Deduplicate by id while preserving order.
+    final seen = <String>{};
+    final uniqueAll = <Task>[];
+    for (final task in allTasks) {
+      if (seen.add(task.id)) uniqueAll.add(task);
+    }
+
+    final groups = <_DesktopGroup>[
+      _DesktopGroup(
+        id: _allGroupId,
+        title: 'Все задачи',
+        color: const Color(0xFF5856D6),
+        tasks: uniqueAll,
+      ),
+      for (final key in TaskGroupKey.values)
+        if (settings.visibleGroups.contains(
+          key == TaskGroupKey.nodate ? 'nodate' : key.name,
+        ))
+          _DesktopGroup(
+            id: key == TaskGroupKey.nodate ? 'nodate' : key.name,
+            title: key == TaskGroupKey.completed ? 'Готово' : key.titleRu,
+            color: taskGroupAccent(key),
+            tasks: state.groups[key] ?? const [],
+          ),
+    ];
+    return groups;
+  }
+
+  _DesktopGroup? _activeGroup(List<_DesktopGroup> groups) {
+    return groups.cast<_DesktopGroup?>().firstWhere(
+          (g) => g?.id == _activeGroupId,
+          orElse: () => groups.isEmpty ? null : groups.first,
+        );
+  }
+
+  Task? _selectedTask(TasksState state) {
+    final id = _selectedTaskId;
+    if (id == null) return null;
+    for (final group in state.groups.values) {
+      for (final task in group) {
+        if (task.id == id) return task;
+      }
+    }
+    for (final task in state.searchResults) {
+      if (task.id == id) return task;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(tasksStateProvider);
@@ -89,6 +146,21 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     final showingSearch = _searchVisible || state.searchQuery.isNotEmpty;
     final groups = TaskGroupKey.values;
     final wide = Responsive.isWide(context);
+    final desktopGroups = _desktopGroups(state, settings);
+    final active = _activeGroup(desktopGroups);
+    final selected = _selectedTask(state);
+
+    // Keep selection valid when active group changes.
+    if (wide &&
+        selected != null &&
+        active != null &&
+        _activeGroupId != _allGroupId &&
+        !active.tasks.any((t) => t.id == selected.id)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _selectedTaskId = null);
+      });
+    }
 
     final overdue = state.groups[TaskGroupKey.overdue]?.length ?? 0;
     final today = state.groups[TaskGroupKey.today]?.length ?? 0;
@@ -190,7 +262,6 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                     onChanged: (q) =>
                         ref.read(tasksStateProvider.notifier).search(q),
                     onEditingComplete: () {
-                      // Keep field ready for more typing; only hide IME.
                       KeyboardDismisser.dismiss();
                     },
                     decoration: InputDecoration(
@@ -210,6 +281,21 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                           : null,
                     ),
                   ),
+                ),
+              )
+            else if (wide)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+                child: _DesktopGroupChips(
+                  groups: desktopGroups,
+                  activeId: active?.id ?? _allGroupId,
+                  isDark: isDark,
+                  onSelect: (id) {
+                    setState(() {
+                      _activeGroupId = id;
+                      _selectedTaskId = null;
+                    });
+                  },
                 ),
               )
             else
@@ -247,14 +333,18 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                       onRefresh: () =>
                           ref.read(tasksStateProvider.notifier).loadGrouped(),
                       child: wide && !showingSearch
-                          ? _WideTaskGroups(
-                              groups: groups,
-                              settings: settings,
-                              state: state,
-                              bottomPadding: wide ? 16 : 100,
+                          ? _DesktopSplitTasks(
+                              isDark: isDark,
+                              group: active,
+                              selectedTask: selected,
+                              onSelectTask: (task) {
+                                setState(() => _selectedTaskId = task.id);
+                              },
+                              onClearSelection: () {
+                                setState(() => _selectedTaskId = null);
+                              },
                               onComplete: _complete,
                               onDelete: _delete,
-                              onOpen: _openDetail,
                             )
                           : ListView(
                               padding: EdgeInsets.fromLTRB(
@@ -329,13 +419,23 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
       } else if (choice == 'series') {
         await ref.read(tasksStateProvider.notifier).deleteSeries(task.id);
       }
+      if (_selectedTaskId == task.id) {
+        setState(() => _selectedTaskId = null);
+      }
       return;
     }
     await ref.read(tasksStateProvider.notifier).deleteTask(task.id);
+    if (_selectedTaskId == task.id) {
+      setState(() => _selectedTaskId = null);
+    }
   }
 
   void _openDetail(Task task) {
     _closeSearch();
+    if (Responsive.isWide(context)) {
+      setState(() => _selectedTaskId = task.id);
+      return;
+    }
     showTaskDetailSheet(context, task);
   }
 
@@ -436,64 +536,404 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
   }
 }
 
-class _WideTaskGroups extends StatelessWidget {
-  const _WideTaskGroups({
-    required this.groups,
-    required this.settings,
-    required this.state,
-    required this.bottomPadding,
-    required this.onComplete,
-    required this.onDelete,
-    required this.onOpen,
+class _DesktopGroup {
+  const _DesktopGroup({
+    required this.id,
+    required this.title,
+    required this.color,
+    required this.tasks,
   });
 
-  final List<TaskGroupKey> groups;
-  final AppSettings settings;
-  final TasksState state;
-  final double bottomPadding;
-  final Future<void> Function(Task) onComplete;
-  final Future<void> Function(Task) onDelete;
-  final void Function(Task) onOpen;
+  final String id;
+  final String title;
+  final Color color;
+  final List<Task> tasks;
+}
+
+class _DesktopGroupChips extends StatelessWidget {
+  const _DesktopGroupChips({
+    required this.groups,
+    required this.activeId,
+    required this.isDark,
+    required this.onSelect,
+  });
+
+  final List<_DesktopGroup> groups;
+  final String activeId;
+  final bool isDark;
+  final ValueChanged<String> onSelect;
 
   @override
   Widget build(BuildContext context) {
-    final visibleGroups = groups
-        .where(
-          (key) => settings.visibleGroups.contains(
-            key == TaskGroupKey.nodate ? 'nodate' : key.name,
-          ),
-        )
-        .toList();
-    final split = (visibleGroups.length / 2).ceil();
-    final left = visibleGroups.take(split).toList();
-    final right = visibleGroups.skip(split).toList();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final count = groups.isEmpty ? 1 : groups.length;
+        return Row(
+          children: [
+            for (var i = 0; i < groups.length; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              Expanded(
+                child: _DesktopGroupChip(
+                  group: groups[i],
+                  selected: groups[i].id == activeId,
+                  isDark: isDark,
+                  onTap: () => onSelect(groups[i].id),
+                ),
+              ),
+            ],
+            if (count == 0) const Spacer(),
+          ],
+        );
+      },
+    );
+  }
+}
 
-    Widget columnFor(List<TaskGroupKey> keys) {
-      return ListView(
-        padding: EdgeInsets.fromLTRB(12, 0, 12, bottomPadding),
-        children: [
-          for (final key in keys)
-            TaskGroupWidget(
-              key: ValueKey('wide-group-${key.name}'),
-              title: key.titleRu,
-              tasks: state.groups[key] ?? [],
-              accentColor: taskGroupAccent(key),
-              surfaceColor: taskGroupSurfaceTint(key),
-              initiallyExpanded: false,
-              onComplete: onComplete,
-              onDelete: onDelete,
-              onOpen: onOpen,
+class _DesktopGroupChip extends StatelessWidget {
+  const _DesktopGroupChip({
+    required this.group,
+    required this.selected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final _DesktopGroup group;
+  final bool selected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected
+          ? OtterColors.sberGreen.withValues(alpha: isDark ? 0.18 : 0.12)
+          : (isDark ? OtterColors.darkSurface : Colors.white),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected
+                  ? OtterColors.sberGreen
+                  : (isDark ? OtterColors.darkBorder : Colors.transparent),
             ),
-        ],
-      );
-    }
+            boxShadow: isDark || selected
+                ? null
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${group.tasks.length}',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: group.color,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                group.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: OtterColors.muted(isDark),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: columnFor(left)),
-        Expanded(child: columnFor(right)),
-      ],
+class _DesktopSplitTasks extends StatelessWidget {
+  const _DesktopSplitTasks({
+    required this.isDark,
+    required this.group,
+    required this.selectedTask,
+    required this.onSelectTask,
+    required this.onClearSelection,
+    required this.onComplete,
+    required this.onDelete,
+  });
+
+  final bool isDark;
+  final _DesktopGroup? group;
+  final Task? selectedTask;
+  final ValueChanged<Task> onSelectTask;
+  final VoidCallback onClearSelection;
+  final Future<void> Function(Task) onComplete;
+  final Future<void> Function(Task) onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final tasks = group?.tasks ?? const <Task>[];
+    final surface = isDark ? OtterColors.darkSurface : Colors.white;
+    final border = isDark ? OtterColors.darkBorder : OtterColors.grayMid.withValues(alpha: 0.6);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: border),
+          boxShadow: isDark
+              ? null
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: 380,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 12, 8),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: group?.color ?? OtterColors.sberGray,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              group?.title ?? 'Задачи',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: OtterColors.text(isDark),
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: OtterColors.elevated(isDark),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              '${tasks.length}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: OtterColors.muted(isDark),
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: onClearSelection,
+                            child: const Text(
+                              'Снять выбор',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: OtterColors.sberGreen,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: tasks.isEmpty
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Text(
+                                  'В этом разделе пока нет задач',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: OtterColors.muted(isDark),
+                                  ),
+                                ),
+                              ),
+                            )
+                          : ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                              itemCount: tasks.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (context, index) {
+                                final task = tasks[index];
+                                final selected = selectedTask?.id == task.id;
+                                return _DesktopTaskRow(
+                                  task: task,
+                                  selected: selected,
+                                  isDark: isDark,
+                                  onTap: () => onSelectTask(task),
+                                  onComplete: () => onComplete(task),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              VerticalDivider(
+                width: 1,
+                thickness: 1,
+                color: isDark
+                    ? OtterColors.darkBorder
+                    : OtterColors.grayLight,
+              ),
+              Expanded(
+                child: selectedTask == null
+                    ? Center(
+                        child: Text(
+                          'Выберите задачу слева',
+                          style: TextStyle(
+                            color: OtterColors.muted(isDark),
+                            fontSize: 14,
+                          ),
+                        ),
+                      )
+                    : TaskDetailSheet(
+                        key: ValueKey('desktop-detail-${selectedTask!.id}'),
+                        task: selectedTask!,
+                        embedded: true,
+                        onClosed: onClearSelection,
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopTaskRow extends StatelessWidget {
+  const _DesktopTaskRow({
+    required this.task,
+    required this.selected,
+    required this.isDark,
+    required this.onTap,
+    required this.onComplete,
+  });
+
+  final Task task;
+  final bool selected;
+  final bool isDark;
+  final VoidCallback onTap;
+  final VoidCallback onComplete;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = priorityColor(task.priority);
+    return Material(
+      color: selected
+          ? OtterColors.sberGreen.withValues(alpha: isDark ? 0.18 : 0.12)
+          : (isDark ? OtterColors.darkSurfaceAlt : Colors.white),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border(
+              left: (!task.completed && task.priority != Priority.none)
+                  ? BorderSide(color: accent, width: 3)
+                  : BorderSide(
+                      color: selected
+                          ? OtterColors.sberGreen
+                          : (isDark
+                              ? OtterColors.darkBorder
+                              : OtterColors.grayLight),
+                    ),
+              top: BorderSide(
+                color: selected
+                    ? OtterColors.sberGreen
+                    : (isDark ? OtterColors.darkBorder : OtterColors.grayLight),
+              ),
+              right: BorderSide(
+                color: selected
+                    ? OtterColors.sberGreen
+                    : (isDark ? OtterColors.darkBorder : OtterColors.grayLight),
+              ),
+              bottom: BorderSide(
+                color: selected
+                    ? OtterColors.sberGreen
+                    : (isDark ? OtterColors.darkBorder : OtterColors.grayLight),
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              InkWell(
+                onTap: onComplete,
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: task.completed ? accent : Colors.transparent,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: accent),
+                  ),
+                  child: task.completed
+                      ? const Icon(LucideIcons.check, size: 12, color: Colors.white)
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  task.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: task.completed
+                        ? OtterColors.muted(isDark)
+                        : selected
+                            ? OtterColors.sberGreen
+                            : OtterColors.text(isDark),
+                    decoration:
+                        task.completed ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

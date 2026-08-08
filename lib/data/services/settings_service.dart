@@ -75,10 +75,11 @@ class SettingsService {
   }
 
   Future<void> sendHelpMessage(String message, {String? screenshotPath}) async {
+    final trimmed = message.trim();
     if (screenshotPath != null) {
-      // multipart if needed
+      // multipart if needed — screenshot path reserved for future upload
     }
-    await _client.post('help/', data: {'message': message});
+    await _client.post('help/', data: {'message': trimmed});
   }
 
   Future<String> callStubAction() async {

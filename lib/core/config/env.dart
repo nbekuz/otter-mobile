@@ -28,7 +28,11 @@ abstract final class Env {
 
   static String get apiBaseUrl {
     final raw = _envOr('API_BASE_URL', 'https://admin.ottertime.ru/api/v1/');
-    return raw.endsWith('/') ? raw : '$raw/';
+    // Normalize accidental `https://host//api/...` from mis-copied .env values.
+    final uri = Uri.parse(raw);
+    final normalized = uri.replace(path: uri.path).toString();
+    final withSlash = normalized.endsWith('/') ? normalized : '$normalized/';
+    return withSlash.replaceAll(RegExp(r'(?<!:)/{2,}'), '/');
   }
 
   /// RuStore Console application id (https://console.rustore.ru/apps/{id}).
