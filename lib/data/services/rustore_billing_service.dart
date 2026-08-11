@@ -63,13 +63,16 @@ class RuStoreBillingService {
     }
   }
 
-  Future<List<SubscriptionProduct>> getSubscriptions() async {
+  Future<List<SubscriptionProduct>> getSubscriptions([
+    List<String>? productIds,
+  ]) async {
     await _ensureReady();
-    BillingLogger.info('Loading products ${RuStoreConfig.productIds}');
+    final ids = (productIds == null || productIds.isEmpty)
+        ? RuStoreConfig.productIds
+        : productIds;
+    BillingLogger.info('Loading products $ids');
     try {
-      final response = await RustoreBillingClient.products(
-        RuStoreConfig.productIds,
-      );
+      final response = await RustoreBillingClient.products(ids);
       if ((response.code ?? 0) != 0 && response.products.isEmpty) {
         final msg = response.errorMessage ??
             response.errorDescription ??
@@ -83,10 +86,10 @@ class RuStoreBillingService {
           .map(_mapProduct)
           .toList();
 
-      // Stable monthly → yearly order.
+      // Stable order matching requested product ids.
       products.sort((a, b) {
-        final ai = RuStoreConfig.productIds.indexOf(a.productId);
-        final bi = RuStoreConfig.productIds.indexOf(b.productId);
+        final ai = ids.indexOf(a.productId);
+        final bi = ids.indexOf(b.productId);
         return ai.compareTo(bi);
       });
 
@@ -103,11 +106,26 @@ class RuStoreBillingService {
     }
   }
 
-  Future<PurchaseResult> purchase(String productId) async {
+  /// Starts RuStore Pay flow.
+  ///
+  /// [appUserId] must be the backend user id (string). Passed as
+  /// `developerPayload` — flutter_rustore_billing has no separate appUserId.
+  Future<PurchaseResult> purchase(
+    String productId, {
+    String? appUserId,
+    String? orderId,
+  }) async {
     await _ensureReady();
-    BillingLogger.info('Purchase started productId=$productId');
+    BillingLogger.info(
+      'Purchase started productId=$productId appUserId=$appUserId',
+    );
     try {
-      final result = await RustoreBillingClient.purchase(productId);
+      // Call pigeon API directly so orderId is forwarded (wrapper drops it).
+      final result = await rustore.RustoreBilling().purchase(
+            productId,
+            developerPayload: appUserId,
+            orderId: orderId,
+          );
 
       final success = result.successPurchase;
       if (success != null) {
@@ -125,13 +143,21 @@ class RuStoreBillingService {
           );
         }
 
+        final purchaseId = success.purchaseId.trim();
+        if (purchaseId.isEmpty) {
+          BillingLogger.error('Purchase success without purchaseId');
+          return PurchaseResult.failed(
+            'RuStore не вернул purchaseId.',
+          );
+        }
+
         BillingLogger.info(
-          'Purchase success purchaseId=${success.purchaseId} '
-          'token=${BillingLogger.truncateToken(success.subscriptionToken)}',
+          'Purchase success purchaseId=$purchaseId '
+          'orderId=${success.orderId}',
         );
         return PurchaseResult.success(
           productId: success.productId,
-          purchaseId: success.purchaseId,
+          purchaseId: purchaseId,
           orderId: success.orderId,
           subscriptionToken: success.subscriptionToken,
         );
@@ -144,16 +170,20 @@ class RuStoreBillingService {
           return PurchaseResult.cancelled();
         }
         if (finish == 'SUCCESSFUL_PAYMENT' || finish == 'SUCCESS') {
-          // Invoice-only success — resolve token from purchases list.
+          // Invoice-only success — resolve purchaseId from purchases list.
           final purchases = await getPurchases();
           final match = purchases.cast<BillingPurchase?>().firstWhere(
-                (p) => p?.productId == productId && p!.isActive,
+                (p) =>
+                    p != null &&
+                    p.productId == productId &&
+                    p.isActive &&
+                    (p.purchaseId ?? '').trim().isNotEmpty,
                 orElse: () => null,
               );
           if (match != null) {
             return PurchaseResult.success(
               productId: productId,
-              purchaseId: match.purchaseId ?? invoice.invoiceId,
+              purchaseId: match.purchaseId!,
               orderId: match.orderId,
               subscriptionToken: match.subscriptionToken,
               purchase: match,
@@ -209,12 +239,13 @@ class RuStoreBillingService {
   }
 
   /// Loads active subscription purchases (restore helper for the service API).
+  /// Backend verify uses [BillingPurchase.purchaseId], not subscriptionToken.
   Future<List<BillingPurchase>> restorePurchases() async {
     BillingLogger.info('Restore purchases started');
     final purchases = await getPurchases();
     final active = purchases
         .where((p) => p.isSubscription && p.isActive && !p.isExpired)
-        .where((p) => (p.subscriptionToken ?? '').isNotEmpty)
+        .where((p) => (p.purchaseId ?? '').trim().isNotEmpty)
         .toList();
     BillingLogger.info('Restore purchases found active=${active.length}');
     return active;

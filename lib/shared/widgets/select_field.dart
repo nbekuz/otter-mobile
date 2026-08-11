@@ -18,10 +18,11 @@ Future<T?> showSelectSheet<T>({
   required T selected,
   SelectItemBuilder<T>? itemBuilder,
 }) {
-  final isDark = OtterColors.isDarkOf(context);
   return showAppBottomSheet<T>(
     context: context,
     builder: (ctx) {
+      // Read after showAppBottomSheet Theme wrap so dark mode is correct.
+      final isDark = OtterColors.isDarkOf(ctx);
       return SafeArea(
         child: SingleChildScrollView(
           child: Column(

@@ -1,9 +1,17 @@
 class ApiException implements Exception {
-  ApiException(this.message, {this.statusCode, this.fieldErrors});
+  ApiException(
+    this.message, {
+    this.statusCode,
+    this.fieldErrors,
+    this.code,
+  });
 
   final String message;
   final int? statusCode;
   final Map<String, String>? fieldErrors;
+
+  /// Machine-readable error/success code from the API (e.g. ACTIVE_SUBSCRIPTION_EXISTS).
+  final String? code;
 
   @override
   String toString() => message;

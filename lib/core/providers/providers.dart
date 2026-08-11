@@ -448,7 +448,10 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
         subscription: subscription,
         features: features,
         selectedTariffCode: selected,
-        selectedSubscriptionId: RuStoreConfig.productIdForTariff(selected),
+        selectedSubscriptionId: rustoreProductIdForTariffCode(
+          selected,
+          tariffs: tariffs,
+        ),
         loading: false,
       );
       _syncPremiumToSettings(subscription);
@@ -464,8 +467,10 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   Future<void> loadStoreSubscriptions() async {
     if (!isRustoreBillingActive) return;
     try {
-      final products =
-          await _ref.read(rustoreBillingServiceProvider).getSubscriptions();
+      final productIds = rustoreProductIdsFromTariffs(state.tariffs);
+      final products = await _ref
+          .read(rustoreBillingServiceProvider)
+          .getSubscriptions(productIds);
       var selectedId = state.selectedSubscriptionId;
       if (!products.any((p) => p.productId == selectedId) &&
           products.isNotEmpty) {
@@ -474,7 +479,10 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
       state = state.copyWith(
         subscriptions: products,
         selectedSubscriptionId: selectedId,
-        selectedTariffCode: RuStoreConfig.tariffCodeForProduct(selectedId),
+        selectedTariffCode: tariffCodeForRustoreProduct(
+          selectedId,
+          tariffs: state.tariffs,
+        ),
         clearPurchaseError: true,
       );
     } catch (e) {
@@ -486,14 +494,20 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   void selectTariff(String code) {
     state = state.copyWith(
       selectedTariffCode: code,
-      selectedSubscriptionId: RuStoreConfig.productIdForTariff(code),
+      selectedSubscriptionId: rustoreProductIdForTariffCode(
+        code,
+        tariffs: state.tariffs,
+      ),
     );
   }
 
   void selectSubscription(String productId) {
     state = state.copyWith(
       selectedSubscriptionId: productId,
-      selectedTariffCode: RuStoreConfig.tariffCodeForProduct(productId),
+      selectedTariffCode: tariffCodeForRustoreProduct(
+        productId,
+        tariffs: state.tariffs,
+      ),
     );
   }
 
@@ -561,6 +575,7 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
     }
     final productId = state.selectedSubscription?.productId ??
         state.selectedSubscriptionId;
+    final appUserId = _ref.read(authStateProvider).user?.id;
     state = state.copyWith(
       purchaseInProgress: true,
       actionLoading: true,
@@ -569,7 +584,10 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
     );
     try {
       final billing = _ref.read(rustoreBillingServiceProvider);
-      final result = await billing.purchase(productId);
+      final result = await billing.purchase(
+        productId,
+        appUserId: appUserId,
+      );
       if (result.isCancelled) {
         state = state.copyWith(
           purchaseInProgress: false,
@@ -631,7 +649,8 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
       final billing = _ref.read(rustoreBillingServiceProvider);
       final active = await billing.restorePurchases();
       if (active.isEmpty) {
-        // Still refresh server state — user may already be premium.
+        // Backend may still restore by app user / prior purchase.
+        await _sendRestore();
         await refreshSubscription();
         if (!state.isPremium) {
           throw const ExpiredSubscriptionException(
@@ -646,7 +665,7 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
       }
 
       for (final purchase in active) {
-        await _verifyBillingPurchase(purchase);
+        await _restoreBillingPurchase(purchase);
       }
       await refreshSubscription();
       state = state.copyWith(
@@ -674,13 +693,11 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   }
 
   Future<void> _verifyPurchaseResult(PurchaseResult result) async {
-    var token = result.subscriptionToken;
-    var orderId = result.orderId ?? '';
-    var purchaseTime = DateTime.now().toUtc().toIso8601String();
-    var developerPayload = '';
+    var purchaseId = result.purchaseId?.trim() ?? '';
+    var orderId = result.orderId;
     final productId = result.productId ?? state.selectedSubscriptionId;
 
-    if (token == null || token.isEmpty) {
+    if (purchaseId.isEmpty) {
       final purchases =
           await _ref.read(rustoreBillingServiceProvider).getPurchases();
       final match = purchases.cast<BillingPurchase?>().firstWhere(
@@ -688,73 +705,102 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
                 p != null &&
                 (p.purchaseId == result.purchaseId ||
                     p.productId == productId) &&
-                (p.subscriptionToken ?? '').isNotEmpty,
+                (p.purchaseId ?? '').trim().isNotEmpty,
             orElse: () => null,
           );
       if (match == null) {
         throw const VerificationFailedException(
-          'Не получен токен покупки из RuStore.',
+          'Не получен purchaseId из RuStore.',
         );
       }
-      token = match.subscriptionToken;
+      purchaseId = match.purchaseId!.trim();
       orderId = match.orderId ?? orderId;
-      purchaseTime = match.purchaseTime ?? purchaseTime;
-      developerPayload = match.developerPayload ?? '';
     }
 
     await _sendVerify(
       productId: productId,
-      purchaseToken: token!,
+      purchaseId: purchaseId,
       orderId: orderId,
-      purchaseTime: purchaseTime,
-      developerPayload: developerPayload,
     );
   }
 
-  Future<void> _verifyBillingPurchase(BillingPurchase purchase) async {
-    final token = purchase.subscriptionToken;
+  Future<void> _restoreBillingPurchase(BillingPurchase purchase) async {
+    final purchaseId = purchase.purchaseId?.trim();
     final productId = purchase.productId;
-    if (token == null || token.isEmpty || productId == null) {
+    if (purchaseId == null ||
+        purchaseId.isEmpty ||
+        productId == null ||
+        productId.isEmpty) {
       throw const VerificationFailedException();
     }
     if (purchase.isExpired) {
       throw const ExpiredSubscriptionException();
     }
-    await _sendVerify(
-      productId: productId,
-      purchaseToken: token,
-      orderId: purchase.orderId ?? purchase.purchaseId ?? '',
-      purchaseTime:
-          purchase.purchaseTime ?? DateTime.now().toUtc().toIso8601String(),
-      developerPayload: purchase.developerPayload ?? '',
+    await _sendRestore(
+      RustoreVerifyRequest(
+        productId: productId,
+        purchaseId: purchaseId,
+        orderId: purchase.orderId,
+        packageName: RuStoreConfig.packageName,
+      ),
     );
   }
 
   Future<void> _sendVerify({
     required String productId,
-    required String purchaseToken,
-    required String orderId,
-    required String purchaseTime,
-    required String developerPayload,
+    required String purchaseId,
+    String? orderId,
   }) async {
     BillingLogger.info(
       'Backend verification started productId=$productId '
-      'token=${BillingLogger.truncateToken(purchaseToken)}',
+      'purchaseId=$purchaseId',
     );
     try {
-      await _ref.read(premiumServiceProvider).verifySubscription(
-            SubscriptionVerifyRequest(
-              productId: productId,
-              purchaseToken: purchaseToken,
-              orderId: orderId,
-              purchaseTime: purchaseTime,
-              developerPayload: developerPayload,
-              packageName: RuStoreConfig.packageName,
-            ),
-          );
-      BillingLogger.info('Backend verification success');
+      final response =
+          await _ref.read(premiumServiceProvider).verifyRustorePurchase(
+                RustoreVerifyRequest(
+                  productId: productId,
+                  purchaseId: purchaseId,
+                  orderId: orderId,
+                  packageName: RuStoreConfig.packageName,
+                ),
+              );
+      BillingLogger.info('Backend verification success code=${response.code}');
+      if (response.subscription != null) {
+        // Apply only after backend confirms — never from SDK alone.
+        final sub = await _ref.read(premiumServiceProvider).fetchSubscription();
+        state = state.copyWith(subscription: sub);
+        _syncPremiumToSettings(sub);
+      }
+    } on ApiException catch (e) {
+      BillingLogger.error('Backend verification failed', e);
+      if (e.code == 'ACTIVE_SUBSCRIPTION_EXISTS' || e.statusCode == 409) {
+        await refreshSubscription();
+      }
+      throw VerificationFailedException(e.message);
     } catch (e, st) {
       BillingLogger.error('Backend verification failed', e, st);
+      throw VerificationFailedException(billingErrorMessage(e));
+    }
+  }
+
+  Future<void> _sendRestore([RustoreVerifyRequest? request]) async {
+    BillingLogger.info(
+      'Backend restore started purchaseId=${request?.purchaseId}',
+    );
+    try {
+      final response = await _ref
+          .read(premiumServiceProvider)
+          .restoreRustorePurchase(request);
+      BillingLogger.info('Backend restore success code=${response.code}');
+    } on ApiException catch (e) {
+      BillingLogger.error('Backend restore failed', e);
+      if (e.code == 'ACTIVE_SUBSCRIPTION_EXISTS' || e.statusCode == 409) {
+        return;
+      }
+      throw VerificationFailedException(e.message);
+    } catch (e, st) {
+      BillingLogger.error('Backend restore failed', e, st);
       throw VerificationFailedException(billingErrorMessage(e));
     }
   }

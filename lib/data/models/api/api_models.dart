@@ -526,6 +526,7 @@ class ApiTariff {
     required this.promoDays,
     required this.isRecurring,
     required this.sortOrder,
+    this.rustoreProductId,
   });
 
   final String code;
@@ -538,6 +539,9 @@ class ApiTariff {
   final bool isRecurring;
   final int sortOrder;
 
+  /// RuStore Console product id (`otter_month` / `otter_year`). Android only.
+  final String? rustoreProductId;
+
   factory ApiTariff.fromJson(Map<String, dynamic> json) => ApiTariff(
     code: json['code'] as String? ?? '',
     title: json['title'] as String? ?? '',
@@ -548,6 +552,10 @@ class ApiTariff {
     promoDays: json['promo_days'] as int? ?? 0,
     isRecurring: json['is_recurring'] as bool? ?? false,
     sortOrder: json['sort_order'] as int? ?? 0,
+    rustoreProductId: (json['rustore_product_id'] as String?)?.trim().isEmpty ==
+            true
+        ? null
+        : (json['rustore_product_id'] as String?)?.trim(),
   );
 
   String get priceLabel {
@@ -571,6 +579,7 @@ class ApiSubscription {
     this.cancelledAt,
     required this.isPremium,
     required this.updatedAt,
+    this.provider,
   });
 
   final String status;
@@ -581,6 +590,9 @@ class ApiSubscription {
   final String? cancelledAt;
   final bool isPremium;
   final String updatedAt;
+
+  /// Billing provider: `rustore`, `robokassa`, or null when none.
+  final String? provider;
 
   factory ApiSubscription.fromJson(Map<String, dynamic> json) =>
       ApiSubscription(
@@ -594,6 +606,7 @@ class ApiSubscription {
         cancelledAt: json['cancelled_at'] as String?,
         isPremium: json['is_premium'] as bool? ?? false,
         updatedAt: json['updated_at'] as String? ?? '',
+        provider: json['provider'] as String?,
       );
 
   String? get expiresAt => premiumUntil ?? promoUntil;

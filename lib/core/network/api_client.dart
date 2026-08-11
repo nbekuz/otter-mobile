@@ -124,19 +124,20 @@ class ApiClient {
     final data = e.response?.data;
     if (data is Map) {
       final map = Map<String, dynamic>.from(data);
+      final code = map['code'] is String ? map['code'] as String : null;
       final detail = map['detail'];
       if (detail is String && detail.trim().isNotEmpty) {
-        return ApiException(detail, statusCode: status);
+        return ApiException(detail, statusCode: status, code: code);
       }
       if (detail is List) {
         final msg = detail.whereType<String>().join(' ').trim();
         if (msg.isNotEmpty) {
-          return ApiException(msg, statusCode: status);
+          return ApiException(msg, statusCode: status, code: code);
         }
       }
       final fieldErrors = <String, String>{};
       for (final entry in map.entries) {
-        if (entry.key == 'detail') continue;
+        if (entry.key == 'detail' || entry.key == 'code') continue;
         final v = entry.value;
         if (v is List && v.isNotEmpty) {
           final first = v.first;
@@ -145,7 +146,7 @@ class ApiClient {
           } else if (first is Map && first['message'] is String) {
             fieldErrors[entry.key] = first['message'] as String;
           }
-        } else if (v is String) {
+        } else if (v is String && entry.key != 'provider') {
           fieldErrors[entry.key] = v;
         }
       }
@@ -154,11 +155,29 @@ class ApiClient {
           fieldErrors.values.first,
           statusCode: status,
           fieldErrors: fieldErrors,
+          code: code,
+        );
+      }
+      if (code != null && code.isNotEmpty) {
+        return ApiException(
+          _messageForApiCode(code),
+          statusCode: status,
+          code: code,
         );
       }
     }
     return ApiException(e.message ?? 'Ошибка запроса', statusCode: status);
   }
+
+  String _messageForApiCode(String code) => switch (code) {
+        'ACTIVE_SUBSCRIPTION_EXISTS' =>
+          'У вас уже есть активная подписка Premium.',
+        'INVALID_PRODUCT' => 'Неизвестный продукт RuStore.',
+        'PURCHASE_NOT_FOUND' => 'Покупка не найдена в RuStore.',
+        'VERIFICATION_FAILED' => 'Не удалось проверить покупку.',
+        'SUBSCRIPTION_EXPIRED' => 'Срок подписки в RuStore истёк.',
+        _ => code,
+      };
 }
 
 class _AuthInterceptor extends Interceptor {

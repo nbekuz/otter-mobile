@@ -3,78 +3,71 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-import '../../core/providers/legal_provider.dart';
 import '../../core/layout/responsive.dart';
+import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
+import '../../core/theme/otter_theme.dart';
 import '../../data/legal/static_legal_documents.dart';
-import '../../data/models/api/api_models.dart';
 
-class LegalScreen extends ConsumerStatefulWidget {
+/// Hub of static legal documents (same sources as web /legal/*).
+/// Opens each doc via [StaticLegalScreen] — never the outdated API payload.
+class LegalScreen extends ConsumerWidget {
   const LegalScreen({super.key});
 
   @override
-  ConsumerState<LegalScreen> createState() => _LegalScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark =
+        ref.watch(appSettingsProvider.select((s) => s.theme == 'dark'));
+    final bg = OtterColors.pageBg(isDark);
+    final surface = OtterColors.surface(isDark);
+    final titleColor = OtterColors.text(isDark);
 
-class _LegalScreenState extends ConsumerState<LegalScreen> {
-  @override
-  Widget build(BuildContext context) {
-    final legal = ref.watch(legalProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? OtterColors.darkBg : OtterColors.grayLight;
-    final surface = isDark ? OtterColors.darkSurface : Colors.white;
-    final selected = legal.selectedDocument;
-
-    return Scaffold(
-      backgroundColor: bg,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      if (selected != null) {
-                        ref.read(legalProvider.notifier).clearSelection();
-                      } else if (context.canPop()) {
-                        context.pop();
-                      } else {
-                        context.go('/app');
-                      }
-                    },
-                    icon: const Icon(LucideIcons.chevronLeft),
-                    style: IconButton.styleFrom(
-                      backgroundColor: isDark
-                          ? OtterColors.darkSurfaceAlt
-                          : OtterColors.grayLight,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      selected?.title ?? 'Юридические документы',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: isDark
-                            ? OtterColors.darkText
-                            : OtterColors.sberBlack,
+    return Theme(
+      data: isDark ? OtterTheme.dark() : OtterTheme.light(),
+      child: Scaffold(
+        backgroundColor: bg,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 16, 8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () {
+                        if (context.canPop()) {
+                          context.pop();
+                        } else {
+                          context.go('/app');
+                        }
+                      },
+                      icon: Icon(LucideIcons.chevronLeft, color: titleColor),
+                      style: IconButton.styleFrom(
+                        backgroundColor: isDark
+                            ? OtterColors.darkSurfaceAlt
+                            : OtterColors.grayLight,
+                        foregroundColor: titleColor,
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Юридические документы',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: titleColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Expanded(
-              child: selected != null
-                  ? _DocumentDetail(doc: selected, surface: surface)
-                  : _DocumentsHub(surface: surface),
-            ),
-          ],
+              Expanded(child: _DocumentsHub(surface: surface)),
+            ],
+          ),
         ),
       ),
     );
@@ -129,53 +122,6 @@ class _DocumentsHub extends StatelessWidget {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-class _DocumentDetail extends StatelessWidget {
-  const _DocumentDetail({required this.doc, required this.surface});
-
-  final ApiLegalDocument doc;
-  final Color surface;
-
-  @override
-  Widget build(BuildContext context) {
-    final updated = formatLegalUpdatedAt(doc.updatedAt);
-    final isDark = OtterColors.isDarkOf(context);
-    final bodyColor = OtterColors.muted(isDark);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Card(
-        color: surface,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (updated != null) ...[
-                Text(
-                  'Обновлено: $updated',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: bodyColor,
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-              Text(
-                doc.content,
-                style: TextStyle(
-                  fontSize: 14,
-                  height: 1.55,
-                  color: bodyColor,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

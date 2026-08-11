@@ -12,6 +12,7 @@ import '../../core/layout/responsive.dart';
 import '../../core/network/api_exception.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
+import '../../core/theme/otter_theme.dart';
 import '../../core/theme/priority_colors.dart';
 import '../../core/utils/media_url.dart';
 import '../../core/utils/time_utils.dart';
@@ -663,18 +664,26 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = OtterColors.isDarkOf(context);
+    // Prefer settings.theme — MaterialApp themeMode can lag behind AppShell.
+    final isDark =
+        ref.watch(appSettingsProvider.select((s) => s.theme == 'dark'));
+    final themed = isDark ? OtterTheme.dark() : OtterTheme.light();
 
     if (_loading && widget.isEditMode && _title.text.isEmpty) {
-      return Scaffold(
-        backgroundColor: OtterColors.pageBg(isDark),
-        body: const Center(child: CircularProgressIndicator()),
+      return Theme(
+        data: themed,
+        child: Scaffold(
+          backgroundColor: OtterColors.pageBg(isDark),
+          body: const Center(child: CircularProgressIndicator()),
+        ),
       );
     }
 
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
-    return Scaffold(
+    return Theme(
+      data: themed,
+      child: Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: OtterColors.pageBg(isDark),
       body: SafeArea(
@@ -762,6 +771,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -1483,8 +1493,11 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             controller: _customNotifyCtrl,
             keyboardType: TextInputType.number,
             onTapOutside: dismissKeyboardOnTapOutside,
+            style: TextStyle(color: OtterColors.text(isDark)),
+            cursorColor: OtterColors.sberGreen,
             decoration: InputDecoration(
               labelText: 'Минут до срока',
+              labelStyle: TextStyle(color: OtterColors.muted(isDark)),
               filled: true,
               fillColor: OtterColors.surfaceAlt(isDark),
               border: OutlineInputBorder(
@@ -1575,8 +1588,11 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                         controller: _customIntervalCtrl,
                         keyboardType: TextInputType.number,
                         onTapOutside: dismissKeyboardOnTapOutside,
+                        style: TextStyle(color: OtterColors.text(isDark)),
+                        cursorColor: OtterColors.sberGreen,
                         decoration: InputDecoration(
                           labelText: 'Интервал',
+                          labelStyle: TextStyle(color: OtterColors.muted(isDark)),
                           errorText: _repeatIntervalError,
                           filled: true,
                           fillColor: OtterColors.surface(isDark),
@@ -1677,8 +1693,11 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                     controller: _customMonthDayCtrl,
                     keyboardType: TextInputType.number,
                     onTapOutside: dismissKeyboardOnTapOutside,
+                    style: TextStyle(color: OtterColors.text(isDark)),
+                    cursorColor: OtterColors.sberGreen,
                     decoration: InputDecoration(
                       labelText: 'День месяца',
+                      labelStyle: TextStyle(color: OtterColors.muted(isDark)),
                       errorText: _repeatMonthDayError,
                       filled: true,
                       fillColor: OtterColors.surface(isDark),

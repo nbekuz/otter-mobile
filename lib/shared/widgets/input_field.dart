@@ -42,6 +42,7 @@ class InputField extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = OtterColors.isDarkOf(context);
     final muted = OtterColors.muted(isDark);
+    final textColor = OtterColors.text(isDark);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -63,6 +64,8 @@ class InputField extends StatelessWidget {
           obscureText: obscure && !obscureVisible,
           keyboardType: keyboardType,
           maxLength: maxLength,
+          style: TextStyle(color: textColor, fontSize: 16),
+          cursorColor: OtterColors.sberGreen,
           textInputAction: textInputAction ??
               (obscure ? TextInputAction.done : TextInputAction.next),
           onSubmitted: onSubmitted,
@@ -71,6 +74,7 @@ class InputField extends StatelessWidget {
           onTapOutside: dismissKeyboardOnTapOutside,
           decoration: InputDecoration(
             hintText: hint,
+            hintStyle: TextStyle(color: muted),
             errorText: error,
             errorMaxLines: 3,
             counterText: maxLength != null ? '' : null,
