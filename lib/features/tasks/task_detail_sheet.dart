@@ -117,6 +117,9 @@ class TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   @override
   void initState() {
     super.initState();
+    // Keep controllers for State lifetime (GlobalKey reuses this State on desktop task switch).
+    _title = TextEditingController();
+    _description = TextEditingController();
     _customIntervalCtrl = TextEditingController(text: '1');
     _customMonthDayCtrl = TextEditingController();
     _syncFromTask(widget.task);
@@ -128,8 +131,7 @@ class TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   void didUpdateWidget(covariant TaskDetailSheet oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.task.id != widget.task.id) {
-      _title.dispose();
-      _description.dispose();
+      // Update in place — dispose/recreate broke the right pane (late final + attached fields).
       _syncFromTask(widget.task);
       _formSnapshot = _serializeForm();
       _error = null;
@@ -176,8 +178,8 @@ class TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   bool get _isDirty => _serializeForm() != _formSnapshot;
 
   void _syncFromTask(Task task) {
-    _title = TextEditingController(text: task.title);
-    _description = TextEditingController(text: task.description ?? '');
+    _title.text = task.title;
+    _description.text = task.description ?? '';
     _priority = task.priority;
     _notification = task.notification ?? '';
     _repeat = task.repeat;
@@ -209,9 +211,8 @@ class TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
     }
     _clearImage = false;
     _imagePath = null;
-    if (task.dueDate != null) {
-      _dueDate = DateTime.tryParse(task.dueDate!);
-    }
+    _dueDate =
+        task.dueDate != null ? DateTime.tryParse(task.dueDate!) : null;
     _dueTime = _parseTime(task.dueTime);
     _durationStart = _parseTime(task.duration?.start);
     _durationEnd = _parseTime(task.duration?.end);
