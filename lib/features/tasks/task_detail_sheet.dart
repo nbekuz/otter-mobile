@@ -1439,7 +1439,12 @@ class TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
         child: widget.embedded
             ? Material(
                 color: OtterColors.surface(isDark),
-                child: scrollable,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: scrollable),
+                  ],
+                ),
               )
             : scrollable,
       ),

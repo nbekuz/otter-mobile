@@ -333,41 +333,45 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
             Expanded(
               child: state.loading && state.groups.isEmpty
                   ? const Center(child: CircularProgressIndicator())
-                  : RefreshIndicator(
-                      onRefresh: () =>
-                          ref.read(tasksStateProvider.notifier).loadGrouped(),
-                      child: wide && !showingSearch
-                          ? _DesktopSplitTasks(
-                              isDark: isDark,
-                              group: active,
-                              selectedTask: selected,
-                              detailKey: _desktopDetailKey,
-                              onSelectTask: _selectDesktopTask,
-                              onClearSelection: _clearDesktopSelection,
-                              onForceClearSelection: () {
-                                setState(() => _selectedTaskId = null);
-                              },
+                  : wide && !showingSearch
+                      // Desktop split is not a scroll view — wrapping it in
+                      // RefreshIndicator on Windows can leave an unpainted
+                      // grey strip between the list and detail panes.
+                      ? _DesktopSplitTasks(
+                          isDark: isDark,
+                          group: active,
+                          selectedTask: selected,
+                          detailKey: _desktopDetailKey,
+                          onSelectTask: _selectDesktopTask,
+                          onClearSelection: _clearDesktopSelection,
+                          onForceClearSelection: () {
+                            setState(() => _selectedTaskId = null);
+                          },
+                          onComplete: _complete,
+                          onDelete: _delete,
+                        )
+                      : RefreshIndicator(
+                          onRefresh: () => ref
+                              .read(tasksStateProvider.notifier)
+                              .loadGrouped(),
+                          child: ListView(
+                            padding: EdgeInsets.fromLTRB(
+                              12,
+                              0,
+                              12,
+                              wide ? 16 : 100,
+                            ),
+                            children: _buildTaskListChildren(
+                              groups: groups,
+                              settings: settings,
+                              state: state,
+                              showingSearch: showingSearch,
                               onComplete: _complete,
                               onDelete: _delete,
-                            )
-                          : ListView(
-                              padding: EdgeInsets.fromLTRB(
-                                12,
-                                0,
-                                12,
-                                wide ? 16 : 100,
-                              ),
-                              children: _buildTaskListChildren(
-                                groups: groups,
-                                settings: settings,
-                                state: state,
-                                showingSearch: showingSearch,
-                                onComplete: _complete,
-                                onDelete: _delete,
-                                onOpen: _openDetail,
-                              ),
+                              onOpen: _openDetail,
                             ),
-                    ),
+                          ),
+                        ),
             ),
           ],
         ),
@@ -724,10 +728,14 @@ class _DesktopSplitTasksState extends State<_DesktopSplitTasks> {
   double _leftFraction = 0.5;
 
   double _clampLeftWidth(double desired, double totalWidth) {
-    final minByPx = totalWidth <= 0
-        ? _minLeftPx
-        : (_minLeftPx / totalWidth).clamp(_minFraction, _maxFraction);
-    final minF = minByPx > _minFraction ? minByPx : _minFraction;
+    if (totalWidth <= 0 || !totalWidth.isFinite) {
+      return _minLeftPx;
+    }
+    final minByFraction = (_minLeftPx / totalWidth).clamp(
+      _minFraction,
+      _maxFraction,
+    );
+    final minF = minByFraction > _minFraction ? minByFraction : _minFraction;
     final fraction = (desired / totalWidth).clamp(minF, _maxFraction);
     return fraction * totalWidth;
   }
@@ -778,136 +786,149 @@ class _DesktopSplitTasksState extends State<_DesktopSplitTasks> {
                 totalWidth,
               );
 
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    width: leftWidth,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 14, 12, 8),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 10,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: group?.color ?? OtterColors.sberGray,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  group?.title ?? 'Задачи',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: OtterColors.text(isDark),
+              return ColoredBox(
+                color: surface,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ColoredBox(
+                      color: surface,
+                      child: SizedBox(
+                        width: leftWidth,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 14, 12, 8),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 10,
+                                    height: 10,
+                                    decoration: BoxDecoration(
+                                      color: group?.color ?? OtterColors.sberGray,
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: OtterColors.elevated(isDark),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Text(
-                                  '${tasks.length}',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: OtterColors.muted(isDark),
-                                  ),
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: () {
-                                  // ignore: discarded_futures
-                                  widget.onClearSelection();
-                                },
-                                child: const Text(
-                                  'Снять выбор',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: OtterColors.sberGreen,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          child: tasks.isEmpty
-                              ? Center(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(24),
+                                  const SizedBox(width: 8),
+                                  Expanded(
                                     child: Text(
-                                      'В этом разделе пока нет задач',
-                                      textAlign: TextAlign.center,
+                                      group?.title ?? 'Задачи',
                                       style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: OtterColors.text(isDark),
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: OtterColors.elevated(isDark),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      '${tasks.length}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
                                         color: OtterColors.muted(isDark),
                                       ),
                                     ),
                                   ),
-                                )
-                              : ListView.separated(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                                  itemCount: tasks.length,
-                                  separatorBuilder: (_, _) =>
-                                      const SizedBox(height: 8),
-                                  itemBuilder: (context, index) {
-                                    final task = tasks[index];
-                                    final selected =
-                                        selectedTask?.id == task.id;
-                                    return _DesktopTaskRow(
-                                      task: task,
-                                      selected: selected,
-                                      isDark: isDark,
-                                      onTap: () {
-                                        // ignore: discarded_futures
-                                        widget.onSelectTask(task);
-                                      },
-                                      onComplete: () =>
-                                          widget.onComplete(task),
-                                    );
-                                  },
-                                ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _DesktopSplitResizeHandle(
-                    isDark: isDark,
-                    onDrag: (dx) => _onResizeDrag(dx, totalWidth),
-                  ),
-                  Expanded(
-                    child: selectedTask == null
-                        ? Center(
-                            child: Text(
-                              'Выберите задачу слева',
-                              style: TextStyle(
-                                color: OtterColors.muted(isDark),
-                                fontSize: 14,
+                                  TextButton(
+                                    onPressed: () {
+                                      // ignore: discarded_futures
+                                      widget.onClearSelection();
+                                    },
+                                    child: const Text(
+                                      'Снять выбор',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: OtterColors.sberGreen,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          )
-                        : TaskDetailSheet(
-                            key: widget.detailKey,
-                            task: selectedTask,
-                            embedded: true,
-                            onClosed: widget.onForceClearSelection,
-                          ),
-                  ),
-                ],
+                            Expanded(
+                              child: tasks.isEmpty
+                                  ? Center(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(24),
+                                        child: Text(
+                                          'В этом разделе пока нет задач',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            color: OtterColors.muted(isDark),
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : ListView.separated(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        12,
+                                        0,
+                                        12,
+                                        16,
+                                      ),
+                                      itemCount: tasks.length,
+                                      separatorBuilder: (_, _) =>
+                                          const SizedBox(height: 8),
+                                      itemBuilder: (context, index) {
+                                        final task = tasks[index];
+                                        final selected =
+                                            selectedTask?.id == task.id;
+                                        return _DesktopTaskRow(
+                                          task: task,
+                                          selected: selected,
+                                          isDark: isDark,
+                                          onTap: () {
+                                            // ignore: discarded_futures
+                                            widget.onSelectTask(task);
+                                          },
+                                          onComplete: () =>
+                                              widget.onComplete(task),
+                                        );
+                                      },
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    _DesktopSplitResizeHandle(
+                      isDark: isDark,
+                      onDrag: (dx) => _onResizeDrag(dx, totalWidth),
+                    ),
+                    Expanded(
+                      child: ColoredBox(
+                        color: surface,
+                        child: selectedTask == null
+                            ? Center(
+                                child: Text(
+                                  'Выберите задачу слева',
+                                  style: TextStyle(
+                                    color: OtterColors.muted(isDark),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              )
+                            : TaskDetailSheet(
+                                key: widget.detailKey,
+                                task: selectedTask,
+                                embedded: true,
+                                onClosed: widget.onForceClearSelection,
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
               );
             },
           ),
@@ -953,13 +974,16 @@ class _DesktopSplitResizeHandleState extends State<_DesktopSplitResizeHandle> {
         onHorizontalDragCancel: () => setState(() => _dragging = false),
         child: SizedBox(
           width: 6,
-          child: Center(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 120),
-              width: active ? 3 : 1,
-              color: active
-                  ? OtterColors.sberGreen.withValues(alpha: 0.35)
-                  : line,
+          child: ColoredBox(
+            color: widget.isDark ? OtterColors.darkSurface : Colors.white,
+            child: Center(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                width: active ? 3 : 1,
+                color: active
+                    ? OtterColors.sberGreen.withValues(alpha: 0.35)
+                    : line,
+              ),
             ),
           ),
         ),
