@@ -26,6 +26,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
 
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
+  final _desktopDetailKey = GlobalKey<TaskDetailSheetState>();
   bool _searchVisible = false;
   String _activeGroupId = _allGroupId;
   String? _selectedTaskId;
@@ -290,7 +291,10 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                   groups: desktopGroups,
                   activeId: active?.id ?? _allGroupId,
                   isDark: isDark,
-                  onSelect: (id) {
+                  onSelect: (id) async {
+                    if (id == (active?.id ?? _allGroupId)) return;
+                    final canLeave = await _confirmLeaveDesktopDetail();
+                    if (!canLeave || !mounted) return;
                     setState(() {
                       _activeGroupId = id;
                       _selectedTaskId = null;
@@ -337,10 +341,10 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                               isDark: isDark,
                               group: active,
                               selectedTask: selected,
-                              onSelectTask: (task) {
-                                setState(() => _selectedTaskId = task.id);
-                              },
-                              onClearSelection: () {
+                              detailKey: _desktopDetailKey,
+                              onSelectTask: _selectDesktopTask,
+                              onClearSelection: _clearDesktopSelection,
+                              onForceClearSelection: () {
                                 setState(() => _selectedTaskId = null);
                               },
                               onComplete: _complete,
@@ -430,10 +434,31 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     }
   }
 
+  Future<bool> _confirmLeaveDesktopDetail() async {
+    final state = _desktopDetailKey.currentState;
+    if (state == null) return true;
+    return state.confirmLeave();
+  }
+
+  Future<void> _selectDesktopTask(Task task) async {
+    if (_selectedTaskId == task.id) return;
+    final canLeave = await _confirmLeaveDesktopDetail();
+    if (!canLeave || !mounted) return;
+    setState(() => _selectedTaskId = task.id);
+  }
+
+  Future<void> _clearDesktopSelection() async {
+    if (_selectedTaskId == null) return;
+    final canLeave = await _confirmLeaveDesktopDetail();
+    if (!canLeave || !mounted) return;
+    setState(() => _selectedTaskId = null);
+  }
+
   void _openDetail(Task task) {
     _closeSearch();
     if (Responsive.isWide(context)) {
-      setState(() => _selectedTaskId = task.id);
+      // ignore: discarded_futures
+      _selectDesktopTask(task);
       return;
     }
     showTaskDetailSheet(context, task);
@@ -561,7 +586,7 @@ class _DesktopGroupChips extends StatelessWidget {
   final List<_DesktopGroup> groups;
   final String activeId;
   final bool isDark;
-  final ValueChanged<String> onSelect;
+  final Future<void> Function(String id) onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -661,13 +686,15 @@ class _DesktopGroupChip extends StatelessWidget {
   }
 }
 
-class _DesktopSplitTasks extends StatelessWidget {
+class _DesktopSplitTasks extends StatefulWidget {
   const _DesktopSplitTasks({
     required this.isDark,
     required this.group,
     required this.selectedTask,
+    required this.detailKey,
     required this.onSelectTask,
     required this.onClearSelection,
+    required this.onForceClearSelection,
     required this.onComplete,
     required this.onDelete,
   });
@@ -675,16 +702,54 @@ class _DesktopSplitTasks extends StatelessWidget {
   final bool isDark;
   final _DesktopGroup? group;
   final Task? selectedTask;
-  final ValueChanged<Task> onSelectTask;
-  final VoidCallback onClearSelection;
+  final GlobalKey<TaskDetailSheetState> detailKey;
+  final Future<void> Function(Task) onSelectTask;
+  final Future<void> Function() onClearSelection;
+  /// Clears selection after the sheet already handled save/discard/delete.
+  final VoidCallback onForceClearSelection;
   final Future<void> Function(Task) onComplete;
   final Future<void> Function(Task) onDelete;
 
   @override
+  State<_DesktopSplitTasks> createState() => _DesktopSplitTasksState();
+}
+
+class _DesktopSplitTasksState extends State<_DesktopSplitTasks> {
+  /// Matches web: clamp left pane between 34% and 72%.
+  static const _minFraction = 0.34;
+  static const _maxFraction = 0.72;
+  static const _minLeftPx = 360.0;
+
+  /// Default: middle (50/50), as requested for desktop.
+  double _leftFraction = 0.5;
+
+  double _clampLeftWidth(double desired, double totalWidth) {
+    final minByPx = totalWidth <= 0
+        ? _minLeftPx
+        : (_minLeftPx / totalWidth).clamp(_minFraction, _maxFraction);
+    final minF = minByPx > _minFraction ? minByPx : _minFraction;
+    final fraction = (desired / totalWidth).clamp(minF, _maxFraction);
+    return fraction * totalWidth;
+  }
+
+  void _onResizeDrag(double deltaDx, double totalWidth) {
+    if (totalWidth <= 0) return;
+    setState(() {
+      final current = _leftFraction * totalWidth;
+      final nextWidth = _clampLeftWidth(current + deltaDx, totalWidth);
+      _leftFraction = nextWidth / totalWidth;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final group = widget.group;
+    final selectedTask = widget.selectedTask;
     final tasks = group?.tasks ?? const <Task>[];
     final surface = isDark ? OtterColors.darkSurface : Colors.white;
-    final border = isDark ? OtterColors.darkBorder : OtterColors.grayMid.withValues(alpha: 0.6);
+    final border =
+        isDark ? OtterColors.darkBorder : OtterColors.grayMid.withValues(alpha: 0.6);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -705,130 +770,197 @@ class _DesktopSplitTasks extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                width: 380,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 12, 8),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              color: group?.color ?? OtterColors.sberGray,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              group?.title ?? 'Задачи',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: OtterColors.text(isDark),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final totalWidth = constraints.maxWidth;
+              final leftWidth = _clampLeftWidth(
+                _leftFraction * totalWidth,
+                totalWidth,
+              );
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    width: leftWidth,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 14, 12, 8),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: group?.color ?? OtterColors.sberGray,
+                                  shape: BoxShape.circle,
+                                ),
                               ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: OtterColors.elevated(isDark),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              '${tasks.length}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: OtterColors.muted(isDark),
-                              ),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: onClearSelection,
-                            child: const Text(
-                              'Снять выбор',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: OtterColors.sberGreen,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: tasks.isEmpty
-                          ? Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(24),
+                              const SizedBox(width: 8),
+                              Expanded(
                                 child: Text(
-                                  'В этом разделе пока нет задач',
-                                  textAlign: TextAlign.center,
+                                  group?.title ?? 'Задачи',
                                   style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: OtterColors.text(isDark),
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: OtterColors.elevated(isDark),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  '${tasks.length}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
                                     color: OtterColors.muted(isDark),
                                   ),
                                 ),
                               ),
-                            )
-                          : ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                              itemCount: tasks.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(height: 8),
-                              itemBuilder: (context, index) {
-                                final task = tasks[index];
-                                final selected = selectedTask?.id == task.id;
-                                return _DesktopTaskRow(
-                                  task: task,
-                                  selected: selected,
-                                  isDark: isDark,
-                                  onTap: () => onSelectTask(task),
-                                  onComplete: () => onComplete(task),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-              VerticalDivider(
-                width: 1,
-                thickness: 1,
-                color: isDark
-                    ? OtterColors.darkBorder
-                    : OtterColors.grayLight,
-              ),
-              Expanded(
-                child: selectedTask == null
-                    ? Center(
-                        child: Text(
-                          'Выберите задачу слева',
-                          style: TextStyle(
-                            color: OtterColors.muted(isDark),
-                            fontSize: 14,
+                              TextButton(
+                                onPressed: () {
+                                  // ignore: discarded_futures
+                                  widget.onClearSelection();
+                                },
+                                child: const Text(
+                                  'Снять выбор',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: OtterColors.sberGreen,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      )
-                    : TaskDetailSheet(
-                        key: ValueKey('desktop-detail-${selectedTask!.id}'),
-                        task: selectedTask!,
-                        embedded: true,
-                        onClosed: onClearSelection,
-                      ),
-              ),
-            ],
+                        Expanded(
+                          child: tasks.isEmpty
+                              ? Center(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(24),
+                                    child: Text(
+                                      'В этом разделе пока нет задач',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: OtterColors.muted(isDark),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                                  itemCount: tasks.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(height: 8),
+                                  itemBuilder: (context, index) {
+                                    final task = tasks[index];
+                                    final selected =
+                                        selectedTask?.id == task.id;
+                                    return _DesktopTaskRow(
+                                      task: task,
+                                      selected: selected,
+                                      isDark: isDark,
+                                      onTap: () {
+                                        // ignore: discarded_futures
+                                        widget.onSelectTask(task);
+                                      },
+                                      onComplete: () =>
+                                          widget.onComplete(task),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _DesktopSplitResizeHandle(
+                    isDark: isDark,
+                    onDrag: (dx) => _onResizeDrag(dx, totalWidth),
+                  ),
+                  Expanded(
+                    child: selectedTask == null
+                        ? Center(
+                            child: Text(
+                              'Выберите задачу слева',
+                              style: TextStyle(
+                                color: OtterColors.muted(isDark),
+                                fontSize: 14,
+                              ),
+                            ),
+                          )
+                        : TaskDetailSheet(
+                            key: widget.detailKey,
+                            task: selectedTask,
+                            embedded: true,
+                            onClosed: widget.onForceClearSelection,
+                          ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Draggable vertical divider between list and detail (web parity).
+class _DesktopSplitResizeHandle extends StatefulWidget {
+  const _DesktopSplitResizeHandle({
+    required this.isDark,
+    required this.onDrag,
+  });
+
+  final bool isDark;
+  final ValueChanged<double> onDrag;
+
+  @override
+  State<_DesktopSplitResizeHandle> createState() =>
+      _DesktopSplitResizeHandleState();
+}
+
+class _DesktopSplitResizeHandleState extends State<_DesktopSplitResizeHandle> {
+  bool _hovering = false;
+  bool _dragging = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = _hovering || _dragging;
+    final line = widget.isDark ? OtterColors.darkBorder : OtterColors.grayLight;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragStart: (_) => setState(() => _dragging = true),
+        onHorizontalDragUpdate: (details) => widget.onDrag(details.delta.dx),
+        onHorizontalDragEnd: (_) => setState(() => _dragging = false),
+        onHorizontalDragCancel: () => setState(() => _dragging = false),
+        child: SizedBox(
+          width: 6,
+          child: Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              width: active ? 3 : 1,
+              color: active
+                  ? OtterColors.sberGreen.withValues(alpha: 0.35)
+                  : line,
+            ),
           ),
         ),
       ),
@@ -851,9 +983,42 @@ class _DesktopTaskRow extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onComplete;
 
+  bool get _hasMeta {
+    final notify = task.notification?.trim() ?? '';
+    return (task.dueDate != null && task.dueDate!.isNotEmpty) ||
+        (task.dueTime != null && task.dueTime!.isNotEmpty) ||
+        (task.duration != null &&
+            task.duration!.start.isNotEmpty &&
+            task.duration!.end.isNotEmpty) ||
+        notify.isNotEmpty ||
+        task.repeat != RepeatType.none;
+  }
+
+  /// Web `formatDesktopTaskDate` → `DD.MM.YY`.
+  String? _formatDate(String? dueDate) {
+    if (dueDate == null || dueDate.isEmpty) return null;
+    final d = DateTime.tryParse(dueDate);
+    if (d == null) return dueDate;
+    final dd = d.day.toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, '0');
+    final yy = (d.year % 100).toString().padLeft(2, '0');
+    return '$dd.$mm.$yy';
+  }
+
   @override
   Widget build(BuildContext context) {
     final accent = priorityColor(task.priority);
+    final muted = OtterColors.muted(isDark);
+    final mid = isDark ? OtterColors.darkMuted : OtterColors.grayMid;
+    final dateLabel = _formatDate(task.dueDate);
+    final dueTime = task.dueTime?.trim();
+    final duration = task.duration;
+    final hasDuration = duration != null &&
+        duration.start.isNotEmpty &&
+        duration.end.isNotEmpty;
+    final hasNotify = (task.notification?.trim() ?? '').isNotEmpty;
+    final hasRepeat = task.repeat != RepeatType.none;
+
     return Material(
       color: selected
           ? OtterColors.sberGreen.withValues(alpha: isDark ? 0.18 : 0.12)
@@ -920,8 +1085,9 @@ class _DesktopTaskRow extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
+                    height: 1.25,
                     color: task.completed
-                        ? OtterColors.muted(isDark)
+                        ? muted
                         : selected
                             ? OtterColors.sberGreen
                             : OtterColors.text(isDark),
@@ -930,6 +1096,51 @@ class _DesktopTaskRow extends StatelessWidget {
                   ),
                 ),
               ),
+              if (_hasMeta) ...[
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Wrap(
+                      alignment: WrapAlignment.end,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 6,
+                      runSpacing: 2,
+                      children: [
+                        if (dateLabel != null)
+                          Text(
+                            dateLabel,
+                            style: TextStyle(fontSize: 11, color: muted),
+                          ),
+                        if (dateLabel != null &&
+                            dueTime != null &&
+                            dueTime.isNotEmpty)
+                          Text('–', style: TextStyle(fontSize: 11, color: mid)),
+                        if (dueTime != null && dueTime.isNotEmpty)
+                          Text(
+                            dueTime,
+                            style: TextStyle(fontSize: 11, color: muted),
+                          ),
+                        if (hasDuration) ...[
+                          Text('–', style: TextStyle(fontSize: 11, color: mid)),
+                          Text(
+                            '${duration.start}–${duration.end}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: OtterColors.sberBlue,
+                            ),
+                          ),
+                        ],
+                        if (hasNotify)
+                          Icon(LucideIcons.bell, size: 12, color: muted),
+                        if (hasRepeat)
+                          Icon(LucideIcons.refreshCw, size: 12, color: muted),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

@@ -49,10 +49,10 @@ class TaskDetailSheet extends ConsumerStatefulWidget {
   final VoidCallback? onClosed;
 
   @override
-  ConsumerState<TaskDetailSheet> createState() => _TaskDetailSheetState();
+  ConsumerState<TaskDetailSheet> createState() => TaskDetailSheetState();
 }
 
-class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
+class TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
   late final TextEditingController _title;
   late final TextEditingController _description;
   DateTime? _dueDate;
@@ -293,14 +293,14 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
     });
   }
 
-  Future<void> _save() async {
+  Future<bool> _save({bool closeOnSuccess = true}) async {
     final durationError = validateDurationFields(
       _formatTime(_durationStart),
       _formatTime(_durationEnd),
     );
     if (durationError != null) {
       setState(() => _error = durationError);
-      return;
+      return false;
     }
 
     if (_repeat == RepeatType.custom) {
@@ -311,14 +311,14 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
           _repeatIntervalError = intervalError;
           _error = intervalError;
         });
-        return;
+        return false;
       }
       if (_customRepeatUnit == 'week' && _customWeekdays.isEmpty) {
         setState(() {
           _repeatWeekdaysError = 'Выберите хотя бы один день недели';
           _error = _repeatWeekdaysError;
         });
-        return;
+        return false;
       }
       if (_customRepeatUnit == 'month') {
         _customMonthDay = int.tryParse(_customMonthDayCtrl.text);
@@ -329,7 +329,7 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
             _repeatMonthDayError = 'Укажите день месяца от 1 до 31';
             _error = _repeatMonthDayError;
           });
-          return;
+          return false;
         }
       }
     }
@@ -395,12 +395,15 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
           );
       if (mounted) {
         await ref.read(matrixStateProvider.notifier).load();
-        _finishClose();
+        _formSnapshot = _serializeForm();
+        if (closeOnSuccess) _finishClose();
       }
+      return true;
     } catch (e) {
       if (mounted) {
         setState(() => _error = getApiErrorMessage(e));
       }
+      return false;
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -561,12 +564,34 @@ class _TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
 
     switch (action) {
       case _UnsavedAction.save:
-        await _save();
+        await _save(closeOnSuccess: true);
       case _UnsavedAction.discard:
         _finishClose();
       case _UnsavedAction.cancel:
       case null:
         break;
+    }
+  }
+
+  /// Web parity: guard leaving the editor (other task / clear / group switch).
+  /// Returns `true` when the caller may proceed.
+  Future<bool> confirmLeave() async {
+    if (_saving || _closePromptOpen) return false;
+    if (!_isDirty) return true;
+
+    _closePromptOpen = true;
+    final action = await _showUnsavedChangesDialog();
+    _closePromptOpen = false;
+    if (!mounted) return false;
+
+    switch (action) {
+      case _UnsavedAction.save:
+        return _save(closeOnSuccess: false);
+      case _UnsavedAction.discard:
+        return true;
+      case _UnsavedAction.cancel:
+      case null:
+        return false;
     }
   }
 

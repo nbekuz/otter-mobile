@@ -1,12 +1,6 @@
 import '../../data/models/api/api_models.dart';
 import '../billing/rustore_config.dart';
 
-/// Display overrides while backend tariffs catch up to product pricing.
-const Map<String, ({double price, int promoDays})> premiumTariffDisplay = {
-  'monthly': (price: 150, promoDays: 30),
-  'yearly': (price: 1500, promoDays: 30),
-};
-
 final _promoSideNote = RegExp(
   r'промо-период\s+настраивается\s+на\s+стороне\s+otter\.?',
   caseSensitive: false,
@@ -28,16 +22,16 @@ String sanitizeTariffDescription(String description) {
       .trim();
 }
 
+/// Keep API price/promo as-is; only clean description for UI.
 ApiTariff normalizeTariffForDisplay(ApiTariff tariff) {
-  final override = premiumTariffDisplay[tariff.code];
   return ApiTariff(
     code: tariff.code,
     title: tariff.title,
     description: sanitizeTariffDescription(tariff.description),
-    price: override != null ? override.price.toStringAsFixed(0) : tariff.price,
+    price: tariff.price,
     currency: tariff.currency,
     durationDays: tariff.durationDays,
-    promoDays: override?.promoDays ?? tariff.promoDays,
+    promoDays: tariff.promoDays,
     isRecurring: tariff.isRecurring,
     sortOrder: tariff.sortOrder,
     rustoreProductId: tariff.rustoreProductId,
