@@ -170,6 +170,8 @@ class ApiClient {
   }
 
   String _messageForApiCode(String code) => switch (code) {
+        'PREMIUM_REQUIRED' =>
+          'Таймер Помодоро доступен с подключенным Premium',
         'ACTIVE_SUBSCRIPTION_EXISTS' =>
           'У вас уже есть активная подписка Premium.',
         'INVALID_PRODUCT' => 'Неизвестный продукт RuStore.',
