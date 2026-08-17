@@ -48,8 +48,14 @@ class TasksService {
     return map;
   }
 
-  Future<Object> _payloadFor(PartialTask partial) async {
-    final json = TaskMapper.uiToApiPayload(partial);
+  Future<Object> _payloadFor(
+    PartialTask partial, {
+    bool includeMatrixBlock = true,
+  }) async {
+    final json = TaskMapper.uiToApiPayload(
+      partial,
+      includeMatrixBlock: includeMatrixBlock,
+    );
     final paths = partial.resolvedImagePaths;
     if (paths.isEmpty && !partial.clearImage) return json;
 
@@ -64,10 +70,16 @@ class TasksService {
     return form;
   }
 
-  Future<Task> createTask(PartialTask partial) async {
+  Future<Task> createTask(
+    PartialTask partial, {
+    bool includeMatrixBlock = true,
+  }) async {
     final data = await _client.post<Map<String, dynamic>>(
       'tasks/',
-      data: await _payloadFor(partial),
+      data: await _payloadFor(
+        partial,
+        includeMatrixBlock: includeMatrixBlock,
+      ),
     );
     var task = TaskMapper.apiToUi(ApiTask.fromJson(data));
     for (final path in partial.resolvedImagePaths) {
@@ -83,10 +95,17 @@ class TasksService {
     return task;
   }
 
-  Future<Task> updateTask(String id, PartialTask partial) async {
+  Future<Task> updateTask(
+    String id,
+    PartialTask partial, {
+    bool includeMatrixBlock = true,
+  }) async {
     final data = await _client.patch<Map<String, dynamic>>(
       'tasks/$id/',
-      data: await _payloadFor(partial),
+      data: await _payloadFor(
+        partial,
+        includeMatrixBlock: includeMatrixBlock,
+      ),
     );
     var task = TaskMapper.apiToUi(ApiTask.fromJson(data));
 

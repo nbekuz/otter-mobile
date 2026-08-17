@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -33,6 +35,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _loading = false;
   String? _emailError;
   String? _passwordError;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_loadRememberedLogin());
+    });
+  }
+
+  Future<void> _loadRememberedLogin() async {
+    final saved = await ref.read(rememberLoginStorageProvider).read();
+    if (!mounted || saved == null) return;
+    setState(() {
+      _email.text = saved.email;
+      _password.text = saved.password;
+      _remember = true;
+    });
+  }
+
+  Future<void> _persistRememberedLogin() async {
+    final storage = ref.read(rememberLoginStorageProvider);
+    if (_remember) {
+      await storage.write(_email.text.trim(), _password.text);
+    } else {
+      await storage.clear();
+    }
+  }
+
+  Future<void> _onRememberChanged(bool? value) async {
+    setState(() => _remember = value ?? false);
+    await _persistRememberedLogin();
+  }
 
   @override
   void dispose() {
@@ -98,6 +132,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
+      await _persistRememberedLogin();
       await ref
           .read(authStateProvider.notifier)
           .login(_email.text.trim(), _password.text);
@@ -240,7 +275,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 Expanded(
                   child: OtterCheckbox(
                     value: _remember,
-                    onChanged: (v) => setState(() => _remember = v ?? false),
+                    onChanged: _loading ? (_) {} : _onRememberChanged,
                     child: const Text('Запомнить'),
                   ),
                 ),

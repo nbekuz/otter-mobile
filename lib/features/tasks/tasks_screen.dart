@@ -255,16 +255,13 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                 padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
                 child: TapRegion(
                   groupId: _searchTapGroup,
-                  onTapOutside: (_) => _closeSearch(),
                   child: TextField(
                     controller: _search,
                     focusNode: _searchFocus,
                     autofocus: true,
                     onChanged: (q) =>
                         ref.read(tasksStateProvider.notifier).search(q),
-                    onEditingComplete: () {
-                      KeyboardDismisser.dismiss();
-                    },
+                    onEditingComplete: KeyboardDismisser.dismiss,
                     decoration: InputDecoration(
                       hintText: 'Поиск задач...',
                       prefixIcon: const Icon(LucideIcons.search, size: 20),
@@ -354,21 +351,26 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                           onRefresh: () => ref
                               .read(tasksStateProvider.notifier)
                               .loadGrouped(),
-                          child: ListView(
-                            padding: EdgeInsets.fromLTRB(
-                              12,
-                              0,
-                              12,
-                              wide ? 16 : 100,
-                            ),
-                            children: _buildTaskListChildren(
-                              groups: groups,
-                              settings: settings,
-                              state: state,
-                              showingSearch: showingSearch,
-                              onComplete: _complete,
-                              onDelete: _delete,
-                              onOpen: _openDetail,
+                          child: TapRegion(
+                            groupId: showingSearch ? _searchTapGroup : null,
+                            child: ListView(
+                              keyboardDismissBehavior:
+                                  ScrollViewKeyboardDismissBehavior.onDrag,
+                              padding: EdgeInsets.fromLTRB(
+                                12,
+                                0,
+                                12,
+                                wide ? 16 : 100,
+                              ),
+                              children: _buildTaskListChildren(
+                                groups: groups,
+                                settings: settings,
+                                state: state,
+                                showingSearch: showingSearch,
+                                onComplete: _complete,
+                                onDelete: _delete,
+                                onOpen: _openDetail,
+                              ),
                             ),
                           ),
                         ),

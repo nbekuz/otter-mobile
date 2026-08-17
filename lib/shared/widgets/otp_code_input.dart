@@ -33,28 +33,55 @@ class OtpCodeInputState extends State<OtpCodeInput> {
   @override
   void initState() {
     super.initState();
-    _focusNode.addListener(() => setState(() {}));
+    _focusNode.addListener(_onFocusChanged);
     if (widget.autofocus) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _focusNode.requestFocus();
-      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => requestFocus());
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant OtpCodeInput oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.enabled && !oldWidget.enabled) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => requestFocus());
     }
   }
 
   @override
   void dispose() {
+    _focusNode.removeListener(_onFocusChanged);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
+  void _onFocusChanged() {
+    if (mounted) setState(() {});
+  }
+
   String get value => _controller.text;
+
+  /// Re-opens the soft keyboard after parent rebuilds (Android IME bug).
+  void requestFocus() {
+    if (!mounted || !widget.enabled) return;
+    _focusNode.requestFocus();
+    SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+  }
 
   void clear() {
     _controller.clear();
     widget.onChanged('');
-    _focusNode.requestFocus();
+    requestFocus();
     setState(() {});
+  }
+
+  void _keepFocusWhileTyping() {
+    if (!mounted || !widget.enabled) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.enabled) return;
+      if (_controller.text.length >= widget.length) return;
+      if (!_focusNode.hasFocus) requestFocus();
+    });
   }
 
   void _onChanged(String raw) {
@@ -71,11 +98,15 @@ class OtpCodeInputState extends State<OtpCodeInput> {
     }
 
     widget.onChanged(trimmed);
+    setState(() {});
+
     if (trimmed.length == widget.length) {
       _focusNode.unfocus();
       widget.onCompleted?.call(trimmed);
+      return;
     }
-    setState(() {});
+
+    _keepFocusWhileTyping();
   }
 
   int get _activeIndex {
@@ -95,82 +126,90 @@ class OtpCodeInputState extends State<OtpCodeInput> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        MouseRegion(
-          cursor: widget.enabled
-              ? SystemMouseCursors.text
-              : SystemMouseCursors.forbidden,
-          child: GestureDetector(
-            onTap: widget.enabled ? () => _focusNode.requestFocus() : null,
-            behavior: HitTestBehavior.opaque,
-            child: Row(
-              children: List.generate(widget.length, (index) {
-                final filled = index < code.length;
-                final active = _focusNode.hasFocus && index == _activeIndex;
-                final char = filled ? code[index] : '';
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            IgnorePointer(
+              child: Row(
+                children: List.generate(widget.length, (index) {
+                  final filled = index < code.length;
+                  final active = _focusNode.hasFocus && index == _activeIndex;
+                  final char = filled ? code[index] : '';
 
-                return Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      left: index == 0 ? 0 : 4,
-                      right: index == widget.length - 1 ? 0 : 4,
-                    ),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      height: 52,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: OtterColors.surfaceAlt(isDark),
-                        borderRadius: BorderRadius.circular(
-                          OtterColors.radiusMd,
-                        ),
-                        border: Border.all(
-                          color: hasError
-                              ? Colors.red.shade300
-                              : active
-                              ? OtterColors.sberGreen
-                              : OtterColors.border(isDark),
-                          width: active ? 2 : 1,
-                        ),
+                  return Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        left: index == 0 ? 0 : 4,
+                        right: index == widget.length - 1 ? 0 : 4,
                       ),
-                      child: active && !filled
-                          ? _BlinkingCursor(color: OtterColors.sberGreen)
-                          : Text(
-                              char,
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w600,
-                                color: OtterColors.text(isDark),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        height: 52,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: OtterColors.surfaceAlt(isDark),
+                          borderRadius: BorderRadius.circular(
+                            OtterColors.radiusMd,
+                          ),
+                          border: Border.all(
+                            color: hasError
+                                ? Colors.red.shade300
+                                : active
+                                ? OtterColors.sberGreen
+                                : OtterColors.border(isDark),
+                            width: active ? 2 : 1,
+                          ),
+                        ),
+                        child: active && !filled
+                            ? _BlinkingCursor(color: OtterColors.sberGreen)
+                            : Text(
+                                char,
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w600,
+                                  color: OtterColors.text(isDark),
+                                ),
                               ),
-                            ),
+                      ),
                     ),
-                  ),
-                );
-              }),
+                  );
+                }),
+              ),
             ),
-          ),
-        ),
-        SizedBox(
-          height: 0,
-          child: Opacity(
-            opacity: 0,
-            child: TextField(
+            // Full-size transparent field — avoids height:0 IME focus loss on Android.
+            TextField(
               controller: _controller,
               focusNode: _focusNode,
               enabled: widget.enabled,
               keyboardType: TextInputType.number,
               textInputAction: TextInputAction.done,
               onTapOutside: dismissKeyboardOnTapOutside,
-              onEditingComplete: KeyboardDismisser.dismiss,
               autofillHints: const [AutofillHints.oneTimeCode],
               enableSuggestions: false,
               autocorrect: false,
+              showCursor: false,
+              enableInteractiveSelection: false,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                counterText: '',
+                contentPadding: EdgeInsets.zero,
+                isDense: true,
+              ),
+              style: const TextStyle(
+                color: Colors.transparent,
+                fontSize: 1,
+                height: 1,
+              ),
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
                 LengthLimitingTextInputFormatter(widget.length),
               ],
               onChanged: _onChanged,
+              onTap: () {
+                if (widget.enabled) requestFocus();
+              },
             ),
-          ),
+          ],
         ),
         if (hasError) ...[
           const SizedBox(height: 8),

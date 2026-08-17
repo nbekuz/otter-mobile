@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/layout/responsive.dart';
 import '../../core/network/api_exception.dart';
+import '../../core/premium/premium_required.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
 import '../../core/theme/otter_theme.dart';
@@ -541,6 +542,14 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       return due == tomorrow;
     }
     return false;
+  }
+
+  void _selectMatrixBlock(MatrixBlock block) {
+    if (!isPremiumActive(ref)) {
+      openPremiumSubscription(context);
+      return;
+    }
+    setState(() => _matrix = block);
   }
 
   Future<void> _save() async {
@@ -1748,7 +1757,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                       child: InkWell(
                         onTap: () {
                           KeyboardDismisser.dismiss();
-                          setState(() => _matrix = theme.block);
+                          _selectMatrixBlock(theme.block);
                         },
                         borderRadius: BorderRadius.circular(wide ? 16 : 12),
                         child: Container(

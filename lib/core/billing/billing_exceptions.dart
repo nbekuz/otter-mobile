@@ -73,5 +73,28 @@ String billingErrorMessage(Object error) {
   if (raw.contains('verif') || raw.contains('403') || raw.contains('400')) {
     return const VerificationFailedException().message;
   }
+  if (raw.contains('unavailable') || raw.contains('недоступ')) {
+    return const BillingUnavailableException().message;
+  }
   return const BillingUnknownException().message;
+}
+
+/// User-facing message for RuStore [InvalidPurchase] / SDK payment failure.
+String rustorePaymentFailureMessage({
+  int? errorCode,
+  String? productId,
+  bool? sandbox,
+}) {
+  final details = <String>[];
+  if (errorCode != null) details.add('код $errorCode');
+  if (productId != null && productId.isNotEmpty) {
+    details.add('продукт $productId');
+  }
+  if (sandbox == true) details.add('тестовая покупка');
+
+  if (details.isEmpty) {
+    return 'Покупка не прошла. Проверьте вход в RuStore и повторите.';
+  }
+  return 'Покупка не прошла (${details.join(', ')}). '
+      'Убедитесь, что вы вошли в RuStore и приложение опубликовано с тем же ключом подписи.';
 }

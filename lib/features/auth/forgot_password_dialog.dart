@@ -55,7 +55,7 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
   bool _showNewPassword = false;
   bool _showConfirmPassword = false;
   Timer? _resendTimer;
-  int _resendSecondsLeft = 0;
+  final _resendSecondsLeft = ValueNotifier<int>(0);
 
   @override
   void initState() {
@@ -66,6 +66,7 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
   @override
   void dispose() {
     _resendTimer?.cancel();
+    _resendSecondsLeft.dispose();
     _email.dispose();
     _newPassword.dispose();
     _confirmPassword.dispose();
@@ -83,25 +84,19 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
 
   bool get _showSubmitButton => _step != _ForgotStep.code;
 
-  String get _resendTimerLabel {
-    final minutes = (_resendSecondsLeft ~/ 60).toString().padLeft(2, '0');
-    final seconds = (_resendSecondsLeft % 60).toString().padLeft(2, '0');
-    return 'Отправить повторно через $minutes:$seconds';
-  }
-
   void _startResendTimer() {
     _resendTimer?.cancel();
-    setState(() => _resendSecondsLeft = _resendCooldownSeconds);
+    _resendSecondsLeft.value = _resendCooldownSeconds;
     _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
       }
-      if (_resendSecondsLeft <= 1) {
+      if (_resendSecondsLeft.value <= 1) {
         timer.cancel();
-        setState(() => _resendSecondsLeft = 0);
+        _resendSecondsLeft.value = 0;
       } else {
-        setState(() => _resendSecondsLeft--);
+        _resendSecondsLeft.value = _resendSecondsLeft.value - 1;
       }
     });
   }
@@ -109,7 +104,7 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
   void _stopResendTimer() {
     _resendTimer?.cancel();
     _resendTimer = null;
-    _resendSecondsLeft = 0;
+    _resendSecondsLeft.value = 0;
   }
 
   void _goBackToEmail() {
@@ -145,6 +140,9 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
       });
       _otpKey.currentState?.clear();
       _startResendTimer();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _otpKey.currentState?.requestFocus();
+      });
       if (isResend) {
         showAppToast(
           context,
@@ -190,6 +188,9 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
         );
         _otpKey.currentState?.clear();
         setState(() => _code = '');
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _otpKey.currentState?.requestFocus();
+        });
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -336,10 +337,10 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
             enabled: !_loading,
             errorText: _error,
             onChanged: (code) {
-              setState(() {
-                _code = code;
-                if (_error != null) _error = null;
-              });
+              _code = code;
+              if (_error != null) {
+                setState(() => _error = null);
+              }
             },
             onCompleted: _verifyCode,
           ),
@@ -358,7 +359,6 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
           _CodeStepActions(
             loading: _loading,
             resendSecondsLeft: _resendSecondsLeft,
-            resendTimerLabel: _resendTimerLabel,
             onChangeEmail: _goBackToEmail,
             onResend: () => _sendCode(isResend: true),
           ),
@@ -429,11 +429,14 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
     final isDark = OtterColors.isDarkOf(context);
+    final viewInsets = mq.viewInsets;
     final maxHeight =
-        mq.size.height - mq.viewInsets.bottom - mq.padding.vertical - 32;
+        mq.size.height - viewInsets.bottom - mq.padding.vertical - 32;
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(24, 0, 24, mq.viewInsets.bottom),
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 100),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.fromLTRB(24, 0, 24, viewInsets.bottom),
       child: Center(
         child: Material(
           color: OtterColors.surface(isDark),
@@ -447,7 +450,8 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
               maxHeight: maxHeight.clamp(200, mq.size.height),
             ),
             child: SingleChildScrollView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.manual,
               padding: const EdgeInsets.all(24),
               child: _buildContent(isDark),
             ),
@@ -462,16 +466,20 @@ class _CodeStepActions extends StatelessWidget {
   const _CodeStepActions({
     required this.loading,
     required this.resendSecondsLeft,
-    required this.resendTimerLabel,
     required this.onChangeEmail,
     required this.onResend,
   });
 
   final bool loading;
-  final int resendSecondsLeft;
-  final String resendTimerLabel;
+  final ValueNotifier<int> resendSecondsLeft;
   final VoidCallback onChangeEmail;
   final VoidCallback onResend;
+
+  static String _formatResendLabel(int secondsLeft) {
+    final minutes = (secondsLeft ~/ 60).toString().padLeft(2, '0');
+    final seconds = (secondsLeft % 60).toString().padLeft(2, '0');
+    return 'Отправить повторно через $minutes:$seconds';
+  }
 
   static ButtonStyle get _linkStyle => TextButton.styleFrom(
     foregroundColor: OtterColors.sberGreen,
@@ -495,24 +503,29 @@ class _CodeStepActions extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        Center(
-          child: resendSecondsLeft > 0
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Text(
-                    resendTimerLabel,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: muted,
-                      fontSize: 14,
+        ValueListenableBuilder<int>(
+          valueListenable: resendSecondsLeft,
+          builder: (context, secondsLeft, _) {
+            return Center(
+              child: secondsLeft > 0
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Text(
+                        _formatResendLabel(secondsLeft),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: muted,
+                          fontSize: 14,
+                        ),
+                      ),
+                    )
+                  : TextButton(
+                      onPressed: loading ? null : onResend,
+                      style: _linkStyle,
+                      child: const Text('Отправить код повторно'),
                     ),
-                  ),
-                )
-              : TextButton(
-                  onPressed: loading ? null : onResend,
-                  style: _linkStyle,
-                  child: const Text('Отправить код повторно'),
-                ),
+            );
+          },
         ),
       ],
     );

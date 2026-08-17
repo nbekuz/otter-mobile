@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../push/otter_notification_style.dart';
+
 /// Local notifications for Pomodoro (ongoing timer + phase-end alerts).
 class PomodoroNotifications {
   PomodoroNotifications();
@@ -21,7 +23,7 @@ class PomodoroNotifications {
 
   Future<void> ensureReady() async {
     if (!_supported || _ready) return;
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = otterAndroidInitSettings;
     const iosInit = DarwinInitializationSettings();
     await _plugin.initialize(
       const InitializationSettings(android: androidInit, iOS: iosInit),
@@ -46,16 +48,15 @@ class PomodoroNotifications {
   }) async {
     if (!_supported) return;
     await ensureReady();
-    final android = AndroidNotificationDetails(
-      _channelId,
-      'Помодоро',
+    final android = otterAndroidNotificationDetails(
+      channelId: _channelId,
+      channelName: 'Помодоро',
       channelDescription: 'Таймер фокуса и перерывов',
       importance: Importance.low,
       priority: Priority.low,
       ongoing: true,
       autoCancel: false,
       category: AndroidNotificationCategory.progress,
-      visibility: NotificationVisibility.public,
       showWhen: true,
       when: endsAt.millisecondsSinceEpoch,
       usesChronometer: true,
@@ -81,20 +82,17 @@ class PomodoroNotifications {
   }) async {
     if (!_supported) return;
     await ensureReady();
-    const android = AndroidNotificationDetails(
-      _channelId,
-      'Помодоро',
+    final android = otterAndroidNotificationDetails(
+      channelId: _channelId,
+      channelName: 'Помодоро',
       channelDescription: 'Таймер фокуса и перерывов',
-      importance: Importance.high,
-      priority: Priority.high,
-      visibility: NotificationVisibility.public,
       category: AndroidNotificationCategory.alarm,
     );
     await _plugin.show(
       _eventId,
       title,
       body,
-      const NotificationDetails(android: android),
+      NotificationDetails(android: android),
     );
   }
 }

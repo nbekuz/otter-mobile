@@ -147,7 +147,10 @@ abstract final class TaskMapper {
     );
   }
 
-  static Map<String, dynamic> uiToApiPayload(PartialTask task) {
+  static Map<String, dynamic> uiToApiPayload(
+    PartialTask task, {
+    bool includeMatrixBlock = true,
+  }) {
     final dueAt = _buildDueAt(task.dueDate, task.dueTime);
     final startEnd = _buildStartEnd(task.dueDate, task.duration);
     final hasSchedule = dueAt != null || startEnd.$1 != null;
@@ -172,8 +175,9 @@ abstract final class TaskMapper {
       'repeat_unit': repeatResolved.$1,
       'repeat_interval': repeatResolved.$2,
       'priority': _uiPriorityToApi(task.priority ?? Priority.medium),
-      'matrix_block':
-          (task.matrixBlock ?? MatrixBlock.notUrgentNotImportant).apiValue,
+      if (includeMatrixBlock)
+        'matrix_block':
+            (task.matrixBlock ?? MatrixBlock.notUrgentNotImportant).apiValue,
       if (task.completed != null) 'is_completed': task.completed,
     };
   }

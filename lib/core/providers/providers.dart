@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kDebugMode, listEquals;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../firebase/firebase_bootstrap.dart';
 import '../network/api_client.dart';
 import '../network/api_exception.dart';
+import '../storage/remember_login_storage.dart';
 import '../storage/token_storage.dart';
 import '../../data/services/auth_service.dart';
 import '../../data/services/calendar_service.dart';
@@ -28,6 +30,7 @@ import '../../data/models/billing/subscription_product.dart';
 import '../../data/models/billing/subscription_verify_request.dart';
 import '../audio/pomodoro_audio.dart';
 import '../audio/pomodoro_notifications.dart';
+import '../premium/premium_required.dart';
 import '../audio/feedback_audio.dart';
 import '../billing/android_premium_coming_soon.dart';
 import '../billing/billing_exceptions.dart';
@@ -43,6 +46,10 @@ import '../locale/app_languages.dart';
 import '../platform/windows_title_bar.dart';
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
+
+final rememberLoginStorageProvider = Provider<RememberLoginStorage>(
+  (ref) => RememberLoginStorage(),
+);
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   final storage = ref.watch(tokenStorageProvider);
@@ -487,7 +494,11 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
       );
     } catch (e) {
       BillingLogger.error('loadStoreSubscriptions', e);
-      state = state.copyWith(purchaseError: billingErrorMessage(e));
+      var msg = billingErrorMessage(e);
+      if (kDebugMode && RuStoreBillingService.lastInitError != null) {
+        msg = '$msg\n[init: ${RuStoreBillingService.lastInitError}]';
+      }
+      state = state.copyWith(purchaseError: msg);
     }
   }
 
@@ -514,11 +525,6 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   Future<ApiSubscription> startTrial({bool recurringConsent = false}) async {
     if (isAndroidPremiumPurchaseBlocked) {
       throw StateError(kAndroidPremiumUnavailableMessage);
-    }
-    if (isRustoreBillingActive) {
-      throw StateError(
-        'Пробный период оформляется через подписку в RuStore.',
-      );
     }
     state = state.copyWith(actionLoading: true, clearError: true);
     try {
@@ -1067,6 +1073,9 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
 
 final themeModeProvider = StateProvider<String>((ref) => 'light');
 
+/// True while the mobile task editor sheet/dialog is open (hide shell FAB).
+final taskEditorOverlayProvider = StateProvider<bool>((ref) => false);
+
 final appSettingsProvider =
     StateNotifierProvider<AppSettingsNotifier, AppSettings>((ref) {
       return AppSettingsNotifier(ref);
@@ -1078,6 +1087,7 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
   }
 
   final Ref _ref;
+  bool _hasLocalBottomNavPref = false;
 
   static const _themeKey = 'otter.settings.theme';
   static const _notificationsKey = 'otter.settings.notifications';
@@ -1085,6 +1095,7 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
   static const _calendarViewKey = 'otter.settings.calendarDefaultView';
   static const _collapseEarlyKey = 'otter.settings.calendarCollapseEarlyHours';
   static const _collapseLateKey = 'otter.settings.calendarCollapseLateHours';
+  static const _bottomNavKey = 'otter.settings.bottomNavItems';
 
   Future<void> _hydrateLocalPrefs() async {
     try {
@@ -1095,12 +1106,14 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
       final calendarView = prefs.getString(_calendarViewKey);
       final collapseEarly = prefs.getBool(_collapseEarlyKey);
       final collapseLate = prefs.getBool(_collapseLateKey);
+      final bottomNav = prefs.getStringList(_bottomNavKey);
       if (theme == null &&
           notifications == null &&
           language == null &&
           calendarView == null &&
           collapseEarly == null &&
-          collapseLate == null) {
+          collapseLate == null &&
+          bottomNav == null) {
         return;
       }
       state = state.copyWith(
@@ -1114,7 +1127,13 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
             collapseEarly ?? state.calendarCollapseEarlyHours,
         calendarCollapseLateHours:
             collapseLate ?? state.calendarCollapseLateHours,
+        bottomNavItems: bottomNav != null && bottomNav.isNotEmpty
+            ? normalizeBottomNavItems(bottomNav)
+            : state.bottomNavItems,
       );
+      if (bottomNav != null && bottomNav.isNotEmpty) {
+        _hasLocalBottomNavPref = true;
+      }
       if (theme != null) {
         _ref.read(themeModeProvider.notifier).state = theme;
         unawaited(syncWindowsTitleBarTheme(theme == 'dark'));
@@ -1146,6 +1165,10 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
         _collapseLateKey,
         settings.calendarCollapseLateHours,
       );
+      await prefs.setStringList(
+        _bottomNavKey,
+        normalizeBottomNavItems(settings.bottomNavItems),
+      );
     } catch (_) {}
   }
 
@@ -1157,10 +1180,18 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
       calendarDefaultView: state.calendarDefaultView,
       calendarCollapseEarlyHours: state.calendarCollapseEarlyHours,
       calendarCollapseLateHours: state.calendarCollapseLateHours,
+      bottomNavItems: _hasLocalBottomNavPref
+          ? normalizeBottomNavItems(state.bottomNavItems)
+          : normalizeBottomNavItems(
+              remote.bottomNavItems.isNotEmpty
+                  ? remote.bottomNavItems
+                  : state.bottomNavItems,
+            ),
     );
   }
 
   Future<void> load() async {
+    await _hydrateLocalPrefs();
     try {
       final settings = await _ref.read(settingsServiceProvider).fetchSettings();
       state = _mergeLocal(settings);
@@ -1193,6 +1224,7 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
     final prevNotifications = state.notifications;
     final normalized = next.copyWith(
       language: normalizeAppLanguage(next.language),
+      bottomNavItems: normalizeBottomNavItems(next.bottomNavItems),
     );
     final viewChanged =
         normalized.calendarDefaultView != state.calendarDefaultView ||
@@ -1200,7 +1232,11 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
                 state.calendarCollapseEarlyHours ||
             normalized.calendarCollapseLateHours !=
                 state.calendarCollapseLateHours;
+    final prevNav = normalizeBottomNavItems(state.bottomNavItems);
+    final nextNav = normalizeBottomNavItems(normalized.bottomNavItems);
+    final navChanged = !listEquals(prevNav, nextNav);
     state = normalized;
+    if (navChanged) _hasLocalBottomNavPref = true;
     unawaited(_persistLocalPrefs(normalized));
     try {
       final patched = await _ref
@@ -1218,6 +1254,7 @@ class AppSettingsNotifier extends StateNotifier<AppSettings> {
         calendarDefaultView: normalized.calendarDefaultView,
         calendarCollapseEarlyHours: normalized.calendarCollapseEarlyHours,
         calendarCollapseLateHours: normalized.calendarCollapseLateHours,
+        bottomNavItems: normalized.bottomNavItems,
       );
       unawaited(_persistLocalPrefs(state));
       if (viewChanged) {
@@ -1804,7 +1841,11 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   Future<Task> addTask(PartialTask partial) async {
-    final created = await _ref.read(tasksServiceProvider).createTask(partial);
+    final includeMatrixBlock = isPremiumActive(_ref);
+    final created = await _ref.read(tasksServiceProvider).createTask(
+          partial,
+          includeMatrixBlock: includeMatrixBlock,
+        );
     // Prefer the wall-clock we sent — API often echoes UTC (`…Z`).
     final task = TaskMapper.preferClientSchedule(created, partial);
     // Web: upsert into main tasks list immediately so calendar pool sees it.
@@ -1854,8 +1895,12 @@ class TasksNotifier extends StateNotifier<TasksState> {
       'end_at=${payload['end_at']}',
     );
 
-    final fromApi =
-        await _ref.read(tasksServiceProvider).updateTask(id, merged);
+    final includeMatrixBlock = isPremiumActive(_ref);
+    final fromApi = await _ref.read(tasksServiceProvider).updateTask(
+          id,
+          merged,
+          includeMatrixBlock: includeMatrixBlock,
+        );
     final task = TaskMapper.preferClientSchedule(fromApi, partial);
     upsertLocalTask(task);
     _ref.read(calendarStateProvider.notifier).upsertTask(task);
@@ -2019,7 +2064,7 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
 
-  Future<void> load({
+  Future<bool> load({
     CalendarView? view,
     DateTime? date,
     bool silent = false,
@@ -2052,7 +2097,8 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
         collapsedEarlyHours: collapsedEarly,
         collapsedLateHours: collapsedLate,
       );
-    } catch (_) {
+      return false;
+    } catch (e) {
       if (!silent) {
         state = CalendarUiState(
           view: v,
@@ -2062,6 +2108,7 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
           collapsedLateHours: collapsedLate,
         );
       }
+      return isPremiumRequiredError(e);
     }
   }
 
@@ -2136,11 +2183,11 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
     );
   }
 
-  void setView(CalendarView view) => load(view: view);
+  Future<bool> setView(CalendarView view) => load(view: view);
 
-  void goToday() => load(date: DateTime.now());
+  Future<bool> goToday() => load(date: DateTime.now());
 
-  void navigate(int step) {
+  Future<bool> navigate(int step) {
     final d = state.date ?? DateTime.now();
     final next = switch (state.view) {
       CalendarView.day => d.add(Duration(days: step)),
@@ -2148,7 +2195,7 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
       CalendarView.month => DateTime(d.year, d.month + step, d.day),
       CalendarView.year => DateTime(d.year + step, d.month, d.day),
     };
-    load(date: next);
+    return load(date: next);
   }
 
   Future<void> rescheduleTask(
@@ -2403,7 +2450,7 @@ class MatrixNotifier extends StateNotifier<Map<String, List<Task>>> {
 
   final Ref _ref;
 
-  Future<void> load() async {
+  Future<bool> load() async {
     // Web matrix page: fetchGrouped + fetchMatrix, then client-side OR filters.
     var tasksState = _ref.read(tasksStateProvider);
     if (tasksState.groups.isEmpty) {
@@ -2412,10 +2459,12 @@ class MatrixNotifier extends StateNotifier<Map<String, List<Task>>> {
     }
 
     Map<String, List<Task>> fromApi = {};
+    var premiumRequired = false;
     try {
       fromApi = await _ref.read(matrixServiceProvider).fetchMatrix();
-    } catch (_) {
+    } catch (e) {
       fromApi = {};
+      premiumRequired = isPremiumRequiredError(e);
     }
 
     final settings = _ref.read(matrixSettingsProvider).blocks;
@@ -2444,6 +2493,7 @@ class MatrixNotifier extends StateNotifier<Map<String, List<Task>>> {
       );
     }
     state = result;
+    return premiumRequired;
   }
 
   /// Mirrors web `getTasksForMatrix`.
@@ -3112,6 +3162,7 @@ class PomodoroNotifier extends StateNotifier<PomodoroUiState>
       secondsLeft: state.settings.duration * 60,
       timerState: 'idle',
       isBreak: false,
+      sessionCount: 0,
       clearSession: true,
     );
   }

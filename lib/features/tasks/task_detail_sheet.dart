@@ -8,6 +8,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/network/api_exception.dart';
+import '../../core/premium/premium_required.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
 import '../../core/theme/otter_theme.dart';
@@ -25,11 +26,15 @@ import 'task_attachment_picker.dart';
 import 'task_time_sync.dart';
 
 Future<void> showTaskDetailSheet(BuildContext context, Task task) {
+  final container = ProviderScope.containerOf(context, listen: false);
+  container.read(taskEditorOverlayProvider.notifier).state = true;
   return showAppBottomSheet<void>(
     context: context,
     dialogMaxWidth: 560,
     builder: (ctx) => TaskDetailSheet(task: task),
-  );
+  ).whenComplete(() {
+    container.read(taskEditorOverlayProvider.notifier).state = false;
+  });
 }
 
 class TaskDetailSheet extends ConsumerStatefulWidget {
@@ -292,6 +297,14 @@ class TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
       _timeSync.markEndEdited();
       _error = null;
     });
+  }
+
+  void _selectMatrixBlock(MatrixBlock block) {
+    if (!isPremiumActive(ref)) {
+      openPremiumSubscription(context);
+      return;
+    }
+    setState(() => _matrix = block);
   }
 
   Future<bool> _save({bool closeOnSuccess = true}) async {
@@ -1255,8 +1268,7 @@ class TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                                   : surfaceAltColor,
                               borderRadius: BorderRadius.circular(12),
                               child: InkWell(
-                                onTap: () =>
-                                    setState(() => _matrix = theme.block),
+                                onTap: () => _selectMatrixBlock(theme.block),
                                 borderRadius: BorderRadius.circular(12),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(

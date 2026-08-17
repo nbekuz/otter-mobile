@@ -294,6 +294,43 @@ class AppSettings {
   );
 }
 
+const kBottomNavCatalog = [
+  'tasks',
+  'calendar',
+  'matrix',
+  'pomodoro',
+  'settings',
+];
+
+/// Keeps user order; ensures `settings` is present; drops unknown ids.
+List<String> normalizeBottomNavItems(List<String> items) {
+  final allowed = kBottomNavCatalog.toSet();
+  final seen = <String>{};
+  final result = <String>[];
+  for (final id in items) {
+    if (!allowed.contains(id) || seen.contains(id)) continue;
+    seen.add(id);
+    result.add(id);
+  }
+  if (!seen.contains('settings')) result.add('settings');
+  return result;
+}
+
+bool _isLegacyBottomNavWithoutPremium(List<String> items) {
+  if (items.length != 2) return false;
+  return items.contains('tasks') && items.contains('settings');
+}
+
+/// Expands legacy server defaults (`tasks` + `settings` only) to full menu.
+List<String> resolveBottomNavItems(List<String> items) {
+  if (items.isEmpty) return AppSettings.defaults().bottomNavItems;
+  final normalized = normalizeBottomNavItems(items);
+  if (_isLegacyBottomNavWithoutPremium(normalized)) {
+    return normalizeBottomNavItems(AppSettings.defaults().bottomNavItems);
+  }
+  return normalized;
+}
+
 class PomodoroSettings {
   PomodoroSettings({
     required this.duration,

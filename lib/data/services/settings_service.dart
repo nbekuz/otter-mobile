@@ -25,9 +25,7 @@ class SettingsService {
       vibration: data.vibrationEnabled,
       notificationSound: data.notificationSound,
       completionSound: data.completionSound,
-      bottomNavItems: data.bottomTabs.isNotEmpty
-          ? data.bottomTabs
-          : AppSettings.defaults().bottomNavItems,
+      bottomNavItems: resolveBottomNavItems(data.bottomTabs),
       timezone: data.timezone,
       isPremium: data.isPremium,
     );

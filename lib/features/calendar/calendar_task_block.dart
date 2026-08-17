@@ -36,8 +36,19 @@ class CalendarTaskBlock extends StatelessWidget {
   final double gap;
   /// When set, overrides the compact/regular radius (web week uses ~4).
   final double? cornerRadius;
-  /// Week view: two-line black text (time + title), slightly smaller than day.
+  /// Week view: month-like chips — 10px text, no checkbox, multi-line wrap.
   final bool weekTypography;
+
+  static const double _weekFontSize = 10;
+  static const double _weekLineHeight = 1.2;
+
+  int _weekTitleMaxLines(double blockHeight, {required bool hasTimeLine}) {
+    const verticalPad = 4.0;
+    final linePx = _weekFontSize * _weekLineHeight;
+    var available = blockHeight - verticalPad;
+    if (hasTimeLine) available -= linePx;
+    return (available / linePx).floor().clamp(1, 50);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -135,26 +146,24 @@ class CalendarTaskBlock extends StatelessWidget {
         return const SizedBox.expand();
       }
 
-      // Web week: two lines, text-sber-black, slightly smaller than day text-sm.
+      // Week: month-like typography — 10px, no checkbox, wrap by block height.
       if (weekTypography) {
         final timeStyle = TextStyle(
-          fontSize: 11,
+          fontSize: _weekFontSize,
           fontWeight: FontWeight.w600,
-          height: 1.2,
+          height: _weekLineHeight,
           color: OtterColors.text(isDark),
         );
         final titleStyle = TextStyle(
-          fontSize: 11,
+          fontSize: _weekFontSize,
           fontWeight: FontWeight.w500,
-          height: 1.2,
+          height: _weekLineHeight,
           color: OtterColors.text(isDark),
-          decoration:
-              item.task.completed ? TextDecoration.lineThrough : null,
         );
 
-        if (compact && blockHeight < 36) {
+        if (compact && blockHeight < 40) {
           return Padding(
-            padding: const EdgeInsets.fromLTRB(18, 2, 4, 2),
+            padding: const EdgeInsets.fromLTRB(4, 2, 4, 2),
             child: Text(
               item.continuesAfter
                   ? '${item.task.title} ↓'
@@ -166,13 +175,17 @@ class CalendarTaskBlock extends StatelessWidget {
           );
         }
 
+        final showTime = !item.continuesAfter;
+        final titleMaxLines =
+            _weekTitleMaxLines(blockHeight, hasTimeLine: showTime);
+
         return Padding(
-          padding: EdgeInsets.fromLTRB(18, compact ? 2 : 4, 4, 2),
+          padding: const EdgeInsets.fromLTRB(4, 2, 4, 2),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (!item.continuesAfter)
+              if (showTime)
                 Text(
                   item.labelTime,
                   maxLines: 1,
@@ -183,7 +196,7 @@ class CalendarTaskBlock extends StatelessWidget {
                 item.continuesAfter
                     ? '${item.task.title} ↓'
                     : item.task.title,
-                maxLines: blockHeight >= 52 ? 2 : 1,
+                maxLines: titleMaxLines,
                 overflow: TextOverflow.ellipsis,
                 style: titleStyle,
               ),
@@ -193,7 +206,8 @@ class CalendarTaskBlock extends StatelessWidget {
       }
 
       if (compact) {
-        return Center(
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(22, 4, 8, 0),
           child: Text(
             item.labelTime,
             maxLines: 1,
@@ -209,78 +223,65 @@ class CalendarTaskBlock extends StatelessWidget {
 
       if (medium) {
         return Padding(
-          padding: const EdgeInsets.fromLTRB(22, 0, 8, 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  item.continuesAfter
-                      ? '${item.task.title} ↓'
-                      : '${item.labelTime} · ${item.task.title}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                    decoration: item.task.completed
-                        ? TextDecoration.lineThrough
-                        : null,
-                  ),
-                ),
-              ),
-            ],
+          padding: const EdgeInsets.fromLTRB(22, 4, 8, 0),
+          child: Text(
+            item.continuesAfter
+                ? '${item.task.title} ↓'
+                : '${item.labelTime} · ${item.task.title}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: color,
+              decoration: item.task.completed
+                  ? TextDecoration.lineThrough
+                  : null,
+            ),
           ),
         );
       }
 
       return Padding(
-        padding: const EdgeInsets.fromLTRB(22, 6, 8, 6),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(22, 4, 8, 4),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!item.continuesAfter)
-                    Text(
-                      item.labelTime,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: color,
-                      ),
-                    ),
-                  Text(
-                    item.task.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: OtterColors.text(isDark),
-                      decoration: item.task.completed
-                          ? TextDecoration.lineThrough
-                          : null,
-                    ),
-                  ),
-                  if (item.continuesAfter)
-                    Text(
-                      'продолжается ↓',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: OtterColors.muted(isDark),
-                      ),
-                    ),
-                ],
+            if (!item.continuesAfter)
+              Text(
+                item.labelTime,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            Text(
+              item.task.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: OtterColors.text(isDark),
+                decoration: item.task.completed
+                    ? TextDecoration.lineThrough
+                    : null,
               ),
             ),
+            if (item.continuesAfter)
+              Text(
+                'продолжается ↓',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: OtterColors.muted(isDark),
+                ),
+              ),
           ],
         ),
       );
@@ -298,7 +299,9 @@ class CalendarTaskBlock extends StatelessWidget {
             : SystemMouseCursors.grab,
         child: AnimatedOpacity(
           duration: const Duration(milliseconds: 120),
-          opacity: isDragging ? 0.92 : 1,
+          opacity: isDragging
+              ? 0.92
+              : (weekTypography && item.task.completed ? 0.45 : 1),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),
             width: colWidth,
@@ -345,16 +348,20 @@ class CalendarTaskBlock extends StatelessWidget {
                       onDragUpdate(d, CalendarTaskDragMode.move),
                   onPanEnd: (_) => onDragEnd(),
                   onPanCancel: onDragEnd,
-                  child: bodyContent(),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    widthFactor: 1,
+                    heightFactor: 1,
+                    child: bodyContent(),
+                  ),
                 ),
                 if (!item.isContinuation)
                   dragHandle(CalendarTaskDragMode.resizeStart, isTop: true),
                 dragHandle(CalendarTaskDragMode.resizeEnd, isTop: false),
-                // Above resize handles so complete taps are not swallowed.
-                if (!item.isContinuation && (!compact || weekTypography))
+                if (!item.isContinuation && !weekTypography && !compact)
                   Positioned(
-                    top: weekTypography ? 3 : (medium ? 6 : 4),
-                    left: weekTypography ? 2 : 2,
+                    top: 4,
+                    left: 2,
                     child: checkbox(expandTap: true),
                   ),
               ],

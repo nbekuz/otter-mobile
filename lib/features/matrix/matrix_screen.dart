@@ -5,9 +5,11 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../core/premium/premium_required.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
 import '../../data/models/ui/ui_models.dart';
+import '../../shared/widgets/app_toast.dart';
 import '../tasks/task_detail_sheet.dart';
 import 'matrix_block_setting.dart';
 import 'matrix_constants.dart';
@@ -26,8 +28,15 @@ class _MatrixScreenState extends ConsumerState<MatrixScreen> {
     super.initState();
     Future.microtask(() async {
       await ref.read(matrixSettingsProvider.notifier).load();
-      await ref.read(matrixStateProvider.notifier).load();
+      final premiumRequired =
+          await ref.read(matrixStateProvider.notifier).load();
+      _showPremiumRequiredIfNeeded(premiumRequired);
     });
+  }
+
+  void _showPremiumRequiredIfNeeded(bool premiumRequired) {
+    if (!premiumRequired || !mounted) return;
+    showPremiumRequiredModal(context, 'matrix');
   }
 
   @override
@@ -50,7 +59,9 @@ class _MatrixScreenState extends ConsumerState<MatrixScreen> {
               child: RefreshIndicator(
                 onRefresh: () async {
                   await ref.read(matrixSettingsProvider.notifier).load();
-                  await ref.read(matrixStateProvider.notifier).load();
+                  final premiumRequired =
+                      await ref.read(matrixStateProvider.notifier).load();
+                  _showPremiumRequiredIfNeeded(premiumRequired);
                 },
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -171,12 +182,16 @@ class _MatrixScreenState extends ConsumerState<MatrixScreen> {
           '/app/new-task?returnTo=${Uri.encodeComponent('/app/matrix')}&matrixBlock=${block.id}&priority=$priority',
         );
         if (mounted) {
-          await ref.read(matrixStateProvider.notifier).load();
+          final premiumRequired =
+              await ref.read(matrixStateProvider.notifier).load();
+          _showPremiumRequiredIfNeeded(premiumRequired);
         }
       },
       onComplete: (task) async {
         await ref.read(tasksStateProvider.notifier).completeTask(task);
-        await ref.read(matrixStateProvider.notifier).load();
+        final premiumRequired =
+            await ref.read(matrixStateProvider.notifier).load();
+        _showPremiumRequiredIfNeeded(premiumRequired);
       },
     );
   }

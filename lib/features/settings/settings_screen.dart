@@ -33,9 +33,10 @@ import '../../shared/widgets/app_bottom_sheet.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../../shared/widgets/bottom_nav.dart';
 import '../../shared/widgets/brand_logo.dart';
+import '../../shared/widgets/input_field.dart';
 import '../../shared/widgets/keyboard_dismisser.dart';
-import '../../shared/widgets/otter_checkbox.dart';
 import '../../shared/widgets/primary_button.dart';
+import '../premium/premium_offer_panel.dart';
 import 'windows_premium_payment_dialog.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -169,7 +170,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ? AndroidPremiumUnavailablePanel(
                   onClose: () => setState(() => _premiumVisible = false),
                 )
-              : _PremiumPanel(
+              : PremiumOfferPanel(
                   state: premium,
                   useRustore: isRustoreBillingActive,
                   recurringConsent: _recurringConsent,
@@ -199,9 +200,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 if (settings.bottomNavItems.contains(id)) id,
             ];
             if (!enabled.contains('settings')) enabled.add('settings');
-            ref
-                .read(appSettingsProvider.notifier)
-                .update(settings.copyWith(bottomNavItems: enabled));
+            ref.read(appSettingsProvider.notifier).update(
+                  settings.copyWith(
+                    bottomNavItems: normalizeBottomNavItems(enabled),
+                  ),
+                );
           },
         ),
         _Section(
@@ -469,9 +472,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       items.remove(id);
     }
     if (!items.contains('settings')) items.add('settings');
-    ref
-        .read(appSettingsProvider.notifier)
-        .update(settings.copyWith(bottomNavItems: items));
+    ref.read(appSettingsProvider.notifier).update(
+          settings.copyWith(bottomNavItems: normalizeBottomNavItems(items)),
+        );
   }
 
   Future<void> _openNameModal() async {
@@ -571,6 +574,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final nextCtrl = TextEditingController();
     final confirmCtrl = TextEditingController();
     String? error;
+    var showNext = false;
+    var showConfirm = false;
 
     await showAppBottomSheet<void>(
       context: context,
@@ -598,22 +603,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     style: TextStyle(fontSize: 12, color: OtterColors.sberGray),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
+                  InputField(
                     controller: nextCtrl,
-                    obscureText: true,
-                    onTapOutside: dismissKeyboardOnTapOutside,
-                    decoration: const InputDecoration(
-                      hintText: 'Новый пароль',
-                    ),
+                    hint: 'Новый пароль',
+                    obscure: true,
+                    obscureVisible: showNext,
+                    onToggleObscure: () => setModal(() => showNext = !showNext),
                   ),
                   const SizedBox(height: 8),
-                  TextField(
+                  InputField(
                     controller: confirmCtrl,
-                    obscureText: true,
-                    onTapOutside: dismissKeyboardOnTapOutside,
-                    decoration: const InputDecoration(
-                      hintText: 'Повторите новый пароль',
-                    ),
+                    hint: 'Повторите новый пароль',
+                    obscure: true,
+                    obscureVisible: showConfirm,
+                    onToggleObscure: () => setModal(() => showConfirm = !showConfirm),
                   ),
                   if (error != null) ...[
                     const SizedBox(height: 8),
@@ -1757,366 +1760,6 @@ class _ProfileCard extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PremiumPanel extends StatelessWidget {
-  const _PremiumPanel({
-    required this.state,
-    required this.recurringConsent,
-    required this.onConsentChanged,
-    required this.onClose,
-    required this.onSelectTariff,
-    required this.onTrial,
-    required this.onCheckout,
-    required this.onRefresh,
-    required this.onCancel,
-    this.useRustore = false,
-    this.onSelectSubscription,
-    this.onPurchase,
-    this.onRestore,
-  });
-
-  final PremiumState state;
-  final bool useRustore;
-  final bool recurringConsent;
-  final ValueChanged<bool?> onConsentChanged;
-  final VoidCallback onClose;
-  final ValueChanged<String> onSelectTariff;
-  final ValueChanged<String>? onSelectSubscription;
-  final VoidCallback onTrial;
-  final VoidCallback onCheckout;
-  final VoidCallback? onPurchase;
-  final VoidCallback? onRestore;
-  final VoidCallback onRefresh;
-  final VoidCallback onCancel;
-
-  String? _formatExpires(String? value) {
-    if (value == null || value.isEmpty) return null;
-    final date = DateTime.tryParse(value);
-    if (date == null) return null;
-    return '${date.day.toString().padLeft(2, '0')}.'
-        '${date.month.toString().padLeft(2, '0')}.'
-        '${date.year}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final selected = state.selectedTariff;
-    final selectedStore = state.selectedSubscription;
-    final isPremium = state.isPremium;
-    final expires = _formatExpires(state.subscription?.expiresAt);
-    final needsConsent = !useRustore && selected?.isRecurring == true;
-    final isDark = OtterColors.isDarkOf(context);
-    final busy = state.actionLoading || state.purchaseInProgress;
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Оттер Premium',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            if (state.loading)
-              const Center(child: CircularProgressIndicator())
-            else ...[
-              ...state.features.map(
-                (f) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.check, color: Colors.amber, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(f.title)),
-                    ],
-                  ),
-                ),
-              ),
-              if (isPremium) ...[
-                const SizedBox(height: 8),
-                Text(
-                  state.subscription?.status == 'trial'
-                      ? 'Пробный период активен'
-                      : 'Premium активен',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: OtterColors.sberGreen,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (expires != null)
-                  Text(
-                    'Срок до $expires',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: OtterColors.sberGray,
-                    ),
-                  ),
-                if (state.subscription?.recurringEnabled == true &&
-                    state.subscription?.cancelledAt == null) ...[
-                  const SizedBox(height: 12),
-                  OutlinedButton(
-                    onPressed: busy ? null : onCancel,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                    ),
-                    child: Text(
-                      busy ? 'Отмена…' : 'Отменить автопродление',
-                    ),
-                  ),
-                ],
-                TextButton(
-                  onPressed: busy ? null : onRefresh,
-                  child: Text(busy ? 'Обновление…' : 'Обновить статус'),
-                ),
-                if (useRustore && onRestore != null)
-                  TextButton(
-                    onPressed: busy ? null : onRestore,
-                    child: Text(
-                      busy ? 'Восстановление…' : 'Восстановить покупки',
-                    ),
-                  ),
-              ] else ...[
-                if (useRustore) ...[
-                  const SizedBox(height: 4),
-                  if (state.subscriptions.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Text(
-                        'Не удалось загрузить тарифы из RuStore. '
-                        'Проверьте интернет и попробуйте снова.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: OtterColors.sberGray,
-                        ),
-                      ),
-                    )
-                  else
-                    for (final product in state.subscriptions)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Material(
-                          color: selectedStore?.productId == product.productId
-                              ? (isDark
-                                  ? const Color(0x33FBBF24)
-                                  : Colors.amber.shade50)
-                              : OtterColors.elevated(isDark),
-                          borderRadius: BorderRadius.circular(16),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: () =>
-                                onSelectSubscription?.call(product.productId),
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          product.title,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        if (product.description.isNotEmpty)
-                                          Text(
-                                            product.description,
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              color: OtterColors.sberGray,
-                                            ),
-                                          ),
-                                        Text(
-                                          'Период: ${product.periodLabel}',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: OtterColors.sberGray,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Text(
-                                    product.priceLabel,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  const SizedBox(height: 8),
-                  FilledButton(
-                    onPressed: busy || state.subscriptions.isEmpty
-                        ? null
-                        : onPurchase,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.amber.shade600,
-                    ),
-                    child: Text(
-                      busy
-                          ? 'Покупка…'
-                          : 'Купить ${selectedStore?.priceLabel ?? 'Premium'}',
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: busy ? null : onRestore,
-                    child: Text(
-                      busy ? 'Восстановление…' : 'Восстановить покупки',
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: busy ? null : onRefresh,
-                    child: Text(busy ? 'Проверяем…' : 'Обновить статус'),
-                  ),
-                  const Text(
-                    'Premium активируется после подтверждения покупки на сервере.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: OtterColors.sberGray,
-                    ),
-                  ),
-                ] else ...[
-                  if (state.tariffs.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    for (final tariff in state.tariffs)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Material(
-                          color: selected?.code == tariff.code
-                              ? (isDark
-                                  ? const Color(0x33FBBF24)
-                                  : Colors.amber.shade50)
-                              : OtterColors.elevated(isDark),
-                          borderRadius: BorderRadius.circular(16),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: () => onSelectTariff(tariff.code),
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          tariff.title,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        if (tariff.promoDays > 0)
-                                          Text(
-                                            '${tariff.promoDays} дней бесплатно',
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              color: OtterColors.sberGreen,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                  Text(
-                                    tariff.priceLabel,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                  if (needsConsent) ...[
-                    OtterCheckbox(
-                      value: recurringConsent,
-                      onChanged: onConsentChanged,
-                      child: const Text(
-                        'Я согласен на автоматические списания согласно условиям оферты',
-                        style: TextStyle(fontSize: 13),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  if ((selected?.promoDays ?? 0) > 0)
-                    OutlinedButton(
-                      onPressed: busy ? null : onTrial,
-                      child: Text(
-                        busy
-                            ? 'Активация…'
-                            : 'Попробовать бесплатно (${selected!.promoDays} дн.)',
-                      ),
-                    ),
-                  const SizedBox(height: 8),
-                  FilledButton(
-                    onPressed: busy ? null : onCheckout,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.amber.shade600,
-                    ),
-                    child: Text(
-                      busy
-                          ? 'Открываем оплату…'
-                          : 'Оплатить ${selected?.priceLabel ?? 'Premium'}',
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: busy ? null : onRefresh,
-                    child: Text(
-                      busy ? 'Проверяем…' : 'Я оплатил — обновить статус',
-                    ),
-                  ),
-                  const Text(
-                    'После оплаты Premium включается автоматически. '
-                    'Если статус не обновился — нажмите «обновить статус».',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: OtterColors.sberGray,
-                    ),
-                  ),
-                ],
-              ],
-            ],
-            if (state.purchaseError != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                state.purchaseError!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.red, fontSize: 12),
-              ),
-            ],
-            if (state.error != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                state.error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.red, fontSize: 12),
-              ),
-            ],
-            TextButton(onPressed: onClose, child: const Text('Закрыть')),
-          ],
         ),
       ),
     );

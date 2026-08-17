@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../config/env.dart';
+import '../premium/premium_required.dart';
 import '../storage/token_storage.dart';
 import 'api_exception.dart';
 
@@ -170,8 +171,7 @@ class ApiClient {
   }
 
   String _messageForApiCode(String code) => switch (code) {
-        'PREMIUM_REQUIRED' =>
-          'Таймер Помодоро доступен с подключенным Premium',
+        'PREMIUM_REQUIRED' => PremiumRequiredMessages.generic,
         'ACTIVE_SUBSCRIPTION_EXISTS' =>
           'У вас уже есть активная подписка Premium.',
         'INVALID_PRODUCT' => 'Неизвестный продукт RuStore.',

@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../firebase/firebase_options.dart';
 import '../../data/services/devices_service.dart';
 import '../../data/services/reminders_service.dart';
+import 'otter_notification_style.dart';
 
 const _deviceIdKey = 'otter.device_id';
 const _deviceDbIdKey = 'otter.fcm.device_db_id';
@@ -47,7 +48,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final payload = _pushPayloadFromData(message.data);
 
   final local = FlutterLocalNotificationsPlugin();
-  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const androidInit = otterAndroidInitSettings;
   await local.initialize(
     const InitializationSettings(android: androidInit),
   );
@@ -71,12 +72,10 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     title,
     body,
     NotificationDetails(
-      android: AndroidNotificationDetails(
-        _taskRemindersChannelId,
-        'Напоминания о задачах',
+      android: otterAndroidNotificationDetails(
+        channelId: _taskRemindersChannelId,
+        channelName: 'Напоминания о задачах',
         channelDescription: 'Уведомления о сроках задач Оттер',
-        importance: Importance.high,
-        priority: Priority.high,
         actions: taskId.isEmpty
             ? null
             : const [
@@ -192,7 +191,7 @@ class PushNotifications {
     if (!_supported || _initialized) return;
     _initialized = true;
 
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = otterAndroidInitSettings;
     const iosInit = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -346,12 +345,10 @@ class PushNotifications {
       title,
       body,
       NotificationDetails(
-        android: AndroidNotificationDetails(
-          _taskRemindersChannelId,
-          'Напоминания о задачах',
+        android: otterAndroidNotificationDetails(
+          channelId: _taskRemindersChannelId,
+          channelName: 'Напоминания о задачах',
           channelDescription: 'Уведомления о сроках задач Оттер',
-          importance: Importance.high,
-          priority: Priority.high,
           playSound: false,
           actions: taskId.isEmpty
               ? null
@@ -445,12 +442,10 @@ class PushNotifications {
           'Оттер — напоминание',
           body,
           NotificationDetails(
-            android: AndroidNotificationDetails(
-              _taskRemindersChannelId,
-              'Напоминания о задачах',
+            android: otterAndroidNotificationDetails(
+              channelId: _taskRemindersChannelId,
+              channelName: 'Напоминания о задачах',
               channelDescription: 'Уведомления о сроках задач Оттер',
-              importance: Importance.high,
-              priority: Priority.high,
               actions: const [
                 AndroidNotificationAction(
                   _completeActionId,

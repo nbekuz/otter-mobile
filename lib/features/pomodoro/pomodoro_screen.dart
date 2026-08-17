@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/layout/responsive.dart';
 import '../../core/network/api_exception.dart';
+import '../../core/premium/premium_required.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
 import '../../core/theme/otter_theme.dart';
@@ -72,12 +73,13 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
       await notifier.start();
     } catch (e) {
       if (!mounted) return;
-      final message = e is ApiException && e.code == 'PREMIUM_REQUIRED'
-          ? 'Таймер Помодоро доступен с подключенным Premium'
-          : getApiErrorMessage(e, 'Не удалось запустить таймер');
+      if (e is ApiException && e.code == 'PREMIUM_REQUIRED') {
+        openPremiumSubscription(context);
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message),
+          content: Text(getApiErrorMessage(e, 'Не удалось запустить таймер')),
           behavior: SnackBarBehavior.floating,
         ),
       );

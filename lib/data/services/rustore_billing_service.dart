@@ -15,6 +15,9 @@ import '../models/billing/subscription_product.dart';
 class RuStoreBillingService {
   static bool _initialized = false;
 
+  /// Set when startup or lazy init fails — surfaced in Premium UI.
+  static String? lastInitError;
+
   bool get isInitialized => _initialized;
 
   Future<void> initialize() async {
@@ -29,13 +32,17 @@ class RuStoreBillingService {
 
     final consoleId = Env.rustoreConsoleAppId.trim();
     if (consoleId.isEmpty) {
-      BillingLogger.error('RUSTORE_CONSOLE_APP_ID is empty');
+      lastInitError = 'RUSTORE_CONSOLE_APP_ID is empty';
+      BillingLogger.error(lastInitError!);
       throw const BillingUnavailableException(
         'RuStore Billing не настроен (нет RUSTORE_CONSOLE_APP_ID).',
       );
     }
 
-    BillingLogger.info('Billing initialization started (consoleId=$consoleId)');
+    BillingLogger.info(
+      'Billing initialization started '
+      'consoleId=$consoleId package=${RuStoreConfig.packageName}',
+    );
     try {
       await RustoreBillingClient.initialize(
         consoleId,
@@ -43,11 +50,15 @@ class RuStoreBillingService {
         kDebugMode,
       );
       _initialized = true;
+      lastInitError = null;
       BillingLogger.info('Billing initialization success');
     } catch (e, st) {
+      lastInitError = e.toString();
       BillingLogger.error('Billing initialization failed', e, st);
       throw BillingUnavailableException(
-        'Не удалось инициализировать платежи RuStore.',
+        kDebugMode
+            ? 'Не удалось инициализировать RuStore Billing: $e'
+            : 'Не удалось инициализировать платежи RuStore.',
       );
     }
   }
@@ -60,6 +71,50 @@ class RuStoreBillingService {
     }
     if (!_initialized) {
       await initialize();
+    }
+  }
+
+  /// Pre-flight before purchase — RuStore app, auth, billing availability.
+  Future<void> _ensurePurchasesAvailable() async {
+    try {
+      final installed = await RustoreBillingClient.isRustoreInstalled();
+      BillingLogger.info('RuStore installed=$installed');
+      if (!installed) {
+        throw const BillingUnavailableException(
+          'Установите RuStore и войдите в аккаунт для оплаты.',
+        );
+      }
+
+      final authorized = await RustoreBillingClient.getAuthorizationStatus();
+      BillingLogger.info('RuStore authorized=$authorized');
+      if (!authorized) {
+        throw const BillingUnavailableException(
+          'Войдите в аккаунт RuStore, чтобы оформить подписку.',
+        );
+      }
+
+      final availability = await RustoreBillingClient.available();
+      availability.when(
+        available: () =>
+            BillingLogger.info('RuStore billing availability: available'),
+        unknown: () => BillingLogger.info(
+          'RuStore billing availability: unknown (continuing)',
+        ),
+        unavailable: (cause) {
+          BillingLogger.error('RuStore billing unavailable: $cause');
+          final trimmed = cause.trim();
+          throw BillingUnavailableException(
+            trimmed.isNotEmpty
+                ? 'Платежи недоступны: $trimmed'
+                : const BillingUnavailableException().message,
+          );
+        },
+      );
+    } on BillingException {
+      rethrow;
+    } catch (e, st) {
+      BillingLogger.error('availability pre-check failed', e, st);
+      // Do not block purchase if the check itself throws unexpectedly.
     }
   }
 
@@ -85,6 +140,13 @@ class RuStoreBillingService {
           .whereType<rustore.Product>()
           .map(_mapProduct)
           .toList();
+
+      for (final p in response.products.whereType<rustore.Product>()) {
+        BillingLogger.info(
+          'Product id=${p.productId} type=${p.productType} '
+          'status=${p.productStatus} price=${p.priceLabel}',
+        );
+      }
 
       // Stable order matching requested product ids.
       products.sort((a, b) {
@@ -116,6 +178,7 @@ class RuStoreBillingService {
     String? orderId,
   }) async {
     await _ensureReady();
+    await _ensurePurchasesAvailable();
     BillingLogger.info(
       'Purchase started productId=$productId appUserId=$appUserId',
     );
@@ -153,7 +216,7 @@ class RuStoreBillingService {
 
         BillingLogger.info(
           'Purchase success purchaseId=$purchaseId '
-          'orderId=${success.orderId}',
+          'orderId=${success.orderId} sandbox=${success.sandbox}',
         );
         return PurchaseResult.success(
           productId: success.productId,
@@ -198,13 +261,26 @@ class RuStoreBillingService {
       final invalidPurchase = result.invalidPurchase;
       if (invalidPurchase != null) {
         BillingLogger.error(
-          'InvalidPurchase errorCode=${invalidPurchase.errorCode}',
+          'InvalidPurchase errorCode=${invalidPurchase.errorCode} '
+          'productId=${invalidPurchase.productId} '
+          'sandbox=${invalidPurchase.sandbox}',
         );
-        return PurchaseResult.failed(const BillingUnknownException().message);
+        return PurchaseResult.failed(
+          rustorePaymentFailureMessage(
+            errorCode: invalidPurchase.errorCode,
+            productId: invalidPurchase.productId,
+            sandbox: invalidPurchase.sandbox,
+          ),
+        );
       }
 
       if (result.invalidInvoice != null) {
-        return PurchaseResult.failed(const BillingUnknownException().message);
+        BillingLogger.error(
+          'InvalidInvoice invoiceId=${result.invalidInvoice!.invoiceId}',
+        );
+        return PurchaseResult.failed(
+          'Оплата не прошла. Повторите или выберите другой способ оплаты.',
+        );
       }
 
       return PurchaseResult.failed(const BillingUnknownException().message);

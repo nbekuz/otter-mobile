@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/layout/responsive.dart';
+import '../../core/premium/premium_required.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
 import '../../core/theme/otter_theme.dart';
@@ -24,6 +25,7 @@ class AppShell extends ConsumerWidget {
     final isDark = settings.theme == 'dark';
     final path = GoRouterState.of(context).uri.path;
     final wide = Responsive.isWide(context);
+    final taskEditorOpen = ref.watch(taskEditorOverlayProvider);
 
     final bg = OtterColors.pageBg(isDark);
     // Keep Theme brightness in sync with settings.theme so labels/icons that
@@ -82,7 +84,7 @@ class AppShell extends ConsumerWidget {
                 fit: StackFit.expand,
                 children: [
                   child,
-                  if (!_hideFab(path))
+                  if (!_hideFab(path) && !taskEditorOpen)
                     Positioned(
                       right: 16,
                       bottom: 30,
@@ -200,7 +202,7 @@ class _Sidebar extends ConsumerWidget {
                           ? path == '/app'
                           : path.startsWith(item.path),
                       isDark: isDark,
-                      onTap: () => context.go(item.path),
+                      onTap: () => navigateAppTab(context, ref, item.path),
                     ),
                   ),
               ],

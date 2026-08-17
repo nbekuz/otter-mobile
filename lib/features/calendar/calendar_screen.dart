@@ -8,6 +8,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/network/api_exception.dart';
 import '../../core/layout/responsive.dart';
+import '../../core/premium/premium_required.dart';
 import '../../core/providers/providers.dart';
 import '../../shared/widgets/app_toast.dart';
 import '../../core/theme/otter_colors.dart';
@@ -22,6 +23,10 @@ import 'calendar_task_block.dart';
 import 'calendar_timeline.dart';
 import 'calendar_grid.dart';
 
+/// Day/week timeline scroll inset — matches web `pb-2`, not a large FAB dead zone.
+double _calendarDayWeekScrollBottomPad(BuildContext context) =>
+    Responsive.isWide(context) ? 8 : 16;
+
 class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
 
@@ -35,12 +40,20 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    Future.microtask(() {
+    Future.microtask(() async {
       final hasTasks = ref.read(calendarStateProvider).tasks.isNotEmpty ||
           ref.read(tasksStateProvider).groups.values.any((g) => g.isNotEmpty);
       // Avoid full-screen spinner when returning from new-task with optimistic data.
-      ref.read(calendarStateProvider.notifier).load(silent: hasTasks);
+      final premiumRequired = await ref
+          .read(calendarStateProvider.notifier)
+          .load(silent: hasTasks);
+      _showPremiumRequiredIfNeeded(premiumRequired);
     });
+  }
+
+  void _showPremiumRequiredIfNeeded(bool premiumRequired) {
+    if (!premiumRequired || !mounted) return;
+    showPremiumRequiredModal(context, 'calendar');
   }
 
   @override
@@ -82,15 +95,35 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
             _Header(
               state: state,
               date: date,
-              onToday: () => ref.read(calendarStateProvider.notifier).goToday(),
-              onPrev: () =>
-                  ref.read(calendarStateProvider.notifier).navigate(-1),
-              onNext: () =>
-                  ref.read(calendarStateProvider.notifier).navigate(1),
-              onSetView: (v) =>
-                  ref.read(calendarStateProvider.notifier).setView(v),
-              onPickDate: (d) =>
-                  ref.read(calendarStateProvider.notifier).load(date: d),
+              onToday: () async {
+                final premium = await ref
+                    .read(calendarStateProvider.notifier)
+                    .goToday();
+                _showPremiumRequiredIfNeeded(premium);
+              },
+              onPrev: () async {
+                final premium = await ref
+                    .read(calendarStateProvider.notifier)
+                    .navigate(-1);
+                _showPremiumRequiredIfNeeded(premium);
+              },
+              onNext: () async {
+                final premium = await ref
+                    .read(calendarStateProvider.notifier)
+                    .navigate(1);
+                _showPremiumRequiredIfNeeded(premium);
+              },
+              onSetView: (v) async {
+                final premium =
+                    await ref.read(calendarStateProvider.notifier).setView(v);
+                _showPremiumRequiredIfNeeded(premium);
+              },
+              onPickDate: (d) async {
+                final premium = await ref
+                    .read(calendarStateProvider.notifier)
+                    .load(date: d);
+                _showPremiumRequiredIfNeeded(premium);
+              },
             ),
             Expanded(
               child: state.loading
@@ -275,16 +308,22 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                       CalendarView.year => _YearView(
                         date: date,
                         tasks: tasks,
-                        onMonthTap: (monthIndex) {
+                        onMonthTap: (monthIndex) async {
                           final d = DateTime(date.year, monthIndex + 1, 1);
-                          ref.read(calendarStateProvider.notifier).load(
+                          final premium = await ref
+                              .read(calendarStateProvider.notifier)
+                              .load(
                                 view: CalendarView.month,
                                 date: d,
                               );
+                          _showPremiumRequiredIfNeeded(premium);
                         },
-                        onDayTap: (d) => ref
-                            .read(calendarStateProvider.notifier)
-                            .load(view: CalendarView.day, date: d),
+                        onDayTap: (d) async {
+                          final premium = await ref
+                              .read(calendarStateProvider.notifier)
+                              .load(view: CalendarView.day, date: d);
+                          _showPremiumRequiredIfNeeded(premium);
+                        },
                       ),
                     },
             ),
@@ -1061,9 +1100,9 @@ class _DayViewState extends State<_DayView> {
             physics: _dragTask != null
                 ? const NeverScrollableScrollPhysics()
                 : null,
-            // Mobile: clear FAB. Desktop: no large dead zone under 23:00 (web pb-2).
+            // Mobile FAB floats over the grid; avoid a large empty strip after 23:00.
             padding: EdgeInsets.only(
-              bottom: Responsive.isWide(context) ? 8 : 100,
+              bottom: _calendarDayWeekScrollBottomPad(context),
             ),
             child: ColoredBox(
               // Web day/week grid sits on page bg (no white card).
@@ -2269,51 +2308,23 @@ class _WeekViewState extends State<_WeekView> {
     final chip = Opacity(
       opacity: task.completed ? 0.45 : 1,
       child: Material(
-        color: color.withValues(alpha: 0.13),
-        borderRadius: BorderRadius.circular(4),
+        color: color.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(3),
         child: InkWell(
           onTap: () => _handleTaskTap(task),
-          borderRadius: BorderRadius.circular(4),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(4),
-              border: Border(
-                left: BorderSide(color: color, width: 3),
-                top: BorderSide(color: color.withValues(alpha: 0.25)),
-                right: BorderSide(color: color.withValues(alpha: 0.25)),
-                bottom: BorderSide(color: color.withValues(alpha: 0.25)),
+          borderRadius: BorderRadius.circular(3),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+            child: Text(
+              task.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                height: 1.2,
+                color: OtterColors.text(isDark),
               ),
-            ),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () => widget.onToggleComplete(task.id),
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: color, width: 1.2),
-                      color: task.completed ? color : Colors.transparent,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    task.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: OtterColors.text(isDark),
-                    ),
-                  ),
-                ),
-              ],
             ),
           ),
         ),
@@ -2326,14 +2337,14 @@ class _WeekViewState extends State<_WeekView> {
         data: task,
         maxSimultaneousDrags: 1,
         feedback: Material(
-          elevation: 4,
-          borderRadius: BorderRadius.circular(4),
+          elevation: 3,
+          borderRadius: BorderRadius.circular(3),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 140),
-            child: Opacity(opacity: 0.92, child: chip),
+            constraints: const BoxConstraints(minWidth: 72, maxWidth: 140),
+            child: Opacity(opacity: 0.95, child: chip),
           ),
         ),
-        childWhenDragging: Opacity(opacity: 0.3, child: chip),
+        childWhenDragging: Opacity(opacity: 0.25, child: chip),
         child: chip,
       ),
     );
@@ -2528,7 +2539,7 @@ class _WeekViewState extends State<_WeekView> {
               8,
               0,
               8,
-              Responsive.isWide(context) ? 8 : 100,
+              _calendarDayWeekScrollBottomPad(context),
             ),
             child: ColoredBox(
               // Web: transparent over page bg — no bordered surface card.

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../core/premium/premium_required.dart';
 import '../../core/theme/otter_colors.dart';
 
 class BottomNavItem {
@@ -52,7 +54,7 @@ const kAllNavItems = [
   ),
 ];
 
-class OtterBottomNav extends StatelessWidget {
+class OtterBottomNav extends ConsumerWidget {
   const OtterBottomNav({
     super.key,
     required this.order,
@@ -63,7 +65,7 @@ class OtterBottomNav extends StatelessWidget {
   final String currentPath;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final today = DateFormat('d').format(DateTime.now());
     final byId = {for (final i in kAllNavItems) i.id: i};
     final items = order
@@ -90,7 +92,7 @@ class OtterBottomNav extends StatelessWidget {
               final active = _isActive(item.path);
               final inactiveColor = OtterColors.muted(isDark);
               return InkWell(
-                onTap: () => context.go(item.path),
+                onTap: () => navigateAppTab(context, ref, item.path),
                 borderRadius: BorderRadius.circular(12),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
