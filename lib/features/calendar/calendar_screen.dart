@@ -75,10 +75,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
     final tasksState = ref.watch(tasksStateProvider);
     // Web getTasksForDate: union grouped tasks + calendar tasks so a just-created
     // task stays visible even if the calendar endpoint is briefly stale.
-    final tasks = poolCalendarTasks(
-      calendarTasks: state.tasks,
-      groups: tasksState.groups,
-    );
+    final tasks = state.premiumBlocked
+        ? const <Task>[]
+        : poolCalendarTasks(
+            calendarTasks: state.tasks,
+            groups: tasksState.groups,
+          );
     final date = state.date ?? DateTime.now();
     // Prefer settings.theme — MaterialApp themeMode can lag behind AppShell.
     final isDark =
@@ -634,6 +636,119 @@ class _WeekStrip extends StatelessWidget {
   }
 }
 
+/// Calendar «Без времени» row — same checkbox + strikethrough as timed blocks.
+class _UntimedTaskCard extends StatelessWidget {
+  const _UntimedTaskCard({
+    required this.task,
+    required this.isDark,
+    required this.onTap,
+    required this.onToggleComplete,
+    this.dense = false,
+  });
+
+  final Task task;
+  final bool isDark;
+  final VoidCallback onTap;
+  final VoidCallback onToggleComplete;
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = priorityColor(task.priority);
+    final boxSize = dense ? 10.0 : 14.0;
+    final radius = dense ? 3.0 : 12.0;
+    final titleColor = task.completed
+        ? OtterColors.muted(isDark)
+        : OtterColors.text(isDark);
+
+    return Opacity(
+      opacity: task.completed ? 0.45 : 1,
+      child: Material(
+        color: color.withValues(alpha: dense ? 0.22 : 0.12),
+        borderRadius: BorderRadius.circular(radius),
+        child: Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(radius),
+            border: Border(
+              left: BorderSide(color: color, width: dense ? 2 : 3),
+              top: BorderSide(color: color.withValues(alpha: 0.25)),
+              right: BorderSide(color: color.withValues(alpha: 0.25)),
+              bottom: BorderSide(color: color.withValues(alpha: 0.25)),
+            ),
+          ),
+          child: Row(
+            children: [
+              InkWell(
+                onTap: onToggleComplete,
+                borderRadius: BorderRadius.circular(dense ? 4 : 8),
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    dense ? 4 : 8,
+                    dense ? 2 : 6,
+                    dense ? 4 : 6,
+                    dense ? 2 : 6,
+                  ),
+                  child: Container(
+                    width: boxSize,
+                    height: boxSize,
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: color,
+                        width: dense ? 1.5 : 2,
+                      ),
+                      color: task.completed ? color : Colors.transparent,
+                      borderRadius: BorderRadius.circular(dense ? 2 : 4),
+                    ),
+                    child: task.completed
+                        ? Icon(
+                            Icons.check,
+                            size: dense ? 7 : 10,
+                            color: Colors.white,
+                          )
+                        : null,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.horizontal(
+                    right: Radius.circular(radius),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      0,
+                      dense ? 1 : 6,
+                      dense ? 4 : 8,
+                      dense ? 1 : 6,
+                    ),
+                    child: Text(
+                      task.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: dense ? 10 : 14,
+                        fontWeight: FontWeight.w500,
+                        height: dense ? 1.2 : null,
+                        color: titleColor,
+                        decoration: task.completed
+                            ? TextDecoration.lineThrough
+                            : null,
+                        decorationColor: titleColor,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DayView extends StatefulWidget {
   const _DayView({
     required this.date,
@@ -1014,51 +1129,14 @@ class _DayViewState extends State<_DayView> {
                     primary: false,
                     padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
                     children: untimed.map((task) {
-                      final color = priorityColor(task.priority);
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 6),
-                        child: InkWell(
+                        child: _UntimedTaskCard(
+                          task: task,
+                          isDark: isDark,
                           onTap: () => _handleTaskTap(task),
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border(
-                                left: BorderSide(color: color, width: 3),
-                                top: BorderSide(
-                                  color: color.withValues(alpha: 0.25),
-                                ),
-                                right: BorderSide(
-                                  color: color.withValues(alpha: 0.25),
-                                ),
-                                bottom: BorderSide(
-                                  color: color.withValues(alpha: 0.25),
-                                ),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    task.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: OtterColors.text(isDark),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          onToggleComplete: () =>
+                              widget.onToggleComplete(task.id),
                         ),
                       );
                     }).toList(),
@@ -2304,31 +2382,12 @@ class _WeekViewState extends State<_WeekView> {
   }
 
   Widget _untimedChip(Task task, {required bool isDark}) {
-    final color = priorityColor(task.priority);
-    final chip = Opacity(
-      opacity: task.completed ? 0.45 : 1,
-      child: Material(
-        color: color.withValues(alpha: 0.22),
-        borderRadius: BorderRadius.circular(3),
-        child: InkWell(
-          onTap: () => _handleTaskTap(task),
-          borderRadius: BorderRadius.circular(3),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-            child: Text(
-              task.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w500,
-                height: 1.2,
-                color: OtterColors.text(isDark),
-              ),
-            ),
-          ),
-        ),
-      ),
+    final chip = _UntimedTaskCard(
+      task: task,
+      isDark: isDark,
+      dense: true,
+      onTap: () => _handleTaskTap(task),
+      onToggleComplete: () => widget.onToggleComplete(task.id),
     );
 
     return Padding(

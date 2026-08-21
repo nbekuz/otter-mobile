@@ -19,6 +19,7 @@ import '../../data/mappers/task_mapper.dart';
 import '../../data/models/ui/ui_models.dart';
 import '../../features/matrix/matrix_constants.dart';
 import '../../shared/widgets/app_bottom_sheet.dart';
+import '../../shared/widgets/app_toast.dart';
 import '../../shared/widgets/keyboard_dismisser.dart';
 import '../../shared/widgets/ru_date_time_fields.dart';
 import '../../shared/widgets/select_field.dart';
@@ -258,6 +259,19 @@ class TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
     super.dispose();
   }
 
+  bool get _hasClock => _dueTime != null || _durationStart != null;
+
+  void _selectNotification(String value) {
+    if (!_hasClock && value.isNotEmpty) {
+      showAppToast(
+        context,
+        'Без времени срока напоминание не отправляется. Сначала укажите время срока.',
+      );
+      return;
+    }
+    setState(() => _notification = value);
+  }
+
   void _applyDueTimeSync(TimeOfDay time) {
     final formatted = _formatTime(time)!;
     _timeSync.onDueTimeChanged(
@@ -265,9 +279,13 @@ class TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
       _formatTime(_durationEnd),
       (start, end) {
         setState(() {
+          final hadClock = _dueTime != null || _durationStart != null;
           _dueTime = time;
           _durationStart = _parseTime(start);
           _durationEnd = _parseTime(end);
+          if (!hadClock && (_notification == null || _notification!.isEmpty)) {
+            _notification = '0';
+          }
           _error = null;
         });
       },
@@ -936,6 +954,7 @@ class TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                           _durationStart = null;
                           _durationEnd = null;
                           _timeSync.resetEndEdited();
+                          _notification = '';
                         }
                         _error = null;
                       });
@@ -951,6 +970,7 @@ class TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
                       if (time == null) {
                         setState(() {
                           _dueTime = null;
+                          if (_durationStart == null) _notification = '';
                           _error = null;
                         });
                         return;
@@ -1008,7 +1028,7 @@ class TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
               items: _notifyOptions.map((e) => e.value).toList(),
               itemLabel: (v) =>
                   _notifyOptions.firstWhere((e) => e.value == v).label,
-              onChanged: (v) => setState(() => _notification = v),
+              onChanged: _selectNotification,
             ),
             const SizedBox(height: 12),
 

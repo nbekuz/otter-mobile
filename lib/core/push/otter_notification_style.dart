@@ -29,7 +29,7 @@ AndroidNotificationDetails otterAndroidNotificationDetails({
     largeIcon: const DrawableResourceAndroidBitmap(otterNotificationLargeIcon),
     importance: importance,
     priority: priority,
-    playSound: playSound,
+    playSound: playSound ?? true,
     ongoing: ongoing,
     autoCancel: autoCancel,
     category: category,

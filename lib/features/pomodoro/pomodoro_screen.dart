@@ -74,7 +74,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
     } catch (e) {
       if (!mounted) return;
       if (e is ApiException && e.code == 'PREMIUM_REQUIRED') {
-        openPremiumSubscription(context);
+        showPremiumRequiredModal(context, 'pomodoro');
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(

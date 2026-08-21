@@ -1,7 +1,7 @@
 name: otter_mobile
 description: Оттер — планировщик задач (Android + Windows)
 publish_to: 'none'
-version: 1.0.4+5
+version: 1.0.5+6
 
 environment:
   sdk: ^3.12.0

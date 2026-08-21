@@ -72,4 +72,14 @@ void main() {
     final untimed = untimedTasksForDate(dayTasks, dateKey: dateKey);
     expect(untimed.map((t) => t.id), ['a', 'b', 'd']);
   });
+
+  test('completed untimed tasks stay in Без времени so they can be struck through', () {
+    final dayTasks = [
+      _task(id: 'open', dueDate: dateKey),
+      _task(id: 'done', dueDate: dateKey).copyWith(completed: true),
+    ];
+    final untimed = untimedTasksForDate(dayTasks, dateKey: dateKey);
+    expect(untimed.map((t) => t.id), ['open', 'done']);
+    expect(untimed.last.completed, isTrue);
+  });
 }

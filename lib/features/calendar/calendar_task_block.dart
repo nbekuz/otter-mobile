@@ -170,7 +170,11 @@ class CalendarTaskBlock extends StatelessWidget {
                   : item.labelTime,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: timeStyle,
+              style: timeStyle.copyWith(
+                decoration: item.task.completed
+                    ? TextDecoration.lineThrough
+                    : null,
+              ),
             ),
           );
         }
@@ -190,7 +194,11 @@ class CalendarTaskBlock extends StatelessWidget {
                   item.labelTime,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: timeStyle,
+                  style: timeStyle.copyWith(
+                    decoration: item.task.completed
+                        ? TextDecoration.lineThrough
+                        : null,
+                  ),
                 ),
               Text(
                 item.continuesAfter
@@ -198,7 +206,11 @@ class CalendarTaskBlock extends StatelessWidget {
                     : item.task.title,
                 maxLines: titleMaxLines,
                 overflow: TextOverflow.ellipsis,
-                style: titleStyle,
+                style: titleStyle.copyWith(
+                  decoration: item.task.completed
+                      ? TextDecoration.lineThrough
+                      : null,
+                ),
               ),
             ],
           ),
@@ -216,6 +228,9 @@ class CalendarTaskBlock extends StatelessWidget {
               fontSize: 14,
               fontWeight: FontWeight.w600,
               color: color,
+              decoration: item.task.completed
+                  ? TextDecoration.lineThrough
+                  : null,
             ),
           ),
         );

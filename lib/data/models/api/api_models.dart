@@ -580,6 +580,8 @@ class ApiSubscription {
     required this.isPremium,
     required this.updatedAt,
     this.provider,
+    this.promoUsed,
+    this.trialAvailable,
   });
 
   final String status;
@@ -593,6 +595,8 @@ class ApiSubscription {
 
   /// Billing provider: `rustore`, `robokassa`, or null when none.
   final String? provider;
+  final bool? promoUsed;
+  final bool? trialAvailable;
 
   factory ApiSubscription.fromJson(Map<String, dynamic> json) =>
       ApiSubscription(
@@ -607,6 +611,8 @@ class ApiSubscription {
         isPremium: json['is_premium'] as bool? ?? false,
         updatedAt: json['updated_at'] as String? ?? '',
         provider: json['provider'] as String?,
+        promoUsed: json['promo_used'] as bool?,
+        trialAvailable: json['trial_available'] as bool?,
       );
 
   String? get expiresAt => premiumUntil ?? promoUntil;

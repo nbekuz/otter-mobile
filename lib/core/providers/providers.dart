@@ -827,6 +827,16 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
     }
   }
 
+  /// Fetch subscription if missing, without toggling the paywall spinner.
+  Future<void> ensureSubscription() async {
+    if (state.subscription != null) return;
+    try {
+      final sub = await _ref.read(premiumServiceProvider).fetchSubscription();
+      state = state.copyWith(subscription: sub);
+      _syncPremiumToSettings(sub);
+    } catch (_) {}
+  }
+
   Future<PremiumPaymentPollingResult> pollForPayment({
     Duration interval = const Duration(seconds: 2),
     Duration timeout = const Duration(minutes: 10),
@@ -1778,6 +1788,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
           .read(tasksServiceProvider)
           .toggleComplete(realId, wasCompleted: task.completed);
 
+      // Trust the action we just performed — API/grouped refresh can echo stale flags.
       final pinned = TaskMapper.preferClientSchedule(
         result.task,
         PartialTask(
@@ -1785,6 +1796,12 @@ class TasksNotifier extends StateNotifier<TasksState> {
           dueTime: task.dueTime,
           duration: task.duration,
         ),
+      ).copyWith(
+        completed: willComplete,
+        completedAt: willComplete
+            ? (result.task.completedAt ??
+                DateTime.now().toIso8601String().split('T').first)
+            : result.task.completedAt,
       );
       upsertLocalTask(pinned);
       calendar.upsertTask(pinned);
@@ -1841,7 +1858,8 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   Future<Task> addTask(PartialTask partial) async {
-    final includeMatrixBlock = isPremiumActive(_ref);
+    final includeMatrixBlock = _ref.read(premiumStateProvider).isPremium ||
+        _ref.read(appSettingsProvider).isPremium;
     final created = await _ref.read(tasksServiceProvider).createTask(
           partial,
           includeMatrixBlock: includeMatrixBlock,
@@ -1895,7 +1913,8 @@ class TasksNotifier extends StateNotifier<TasksState> {
       'end_at=${payload['end_at']}',
     );
 
-    final includeMatrixBlock = isPremiumActive(_ref);
+    final includeMatrixBlock = _ref.read(premiumStateProvider).isPremium ||
+        _ref.read(appSettingsProvider).isPremium;
     final fromApi = await _ref.read(tasksServiceProvider).updateTask(
           id,
           merged,
@@ -1939,6 +1958,7 @@ class CalendarUiState {
     this.loading = false,
     this.collapsedEarlyHours = true,
     this.collapsedLateHours = true,
+    this.premiumBlocked = false,
   });
 
   final CalendarView view;
@@ -1952,6 +1972,9 @@ class CalendarUiState {
   /// Matches web: 22:00–00:00 collapsed by default.
   final bool collapsedLateHours;
 
+  /// True after calendar API returned PREMIUM_REQUIRED — do not pool /tasks/.
+  final bool premiumBlocked;
+
   CalendarUiState copyWith({
     CalendarView? view,
     DateTime? date,
@@ -1959,6 +1982,7 @@ class CalendarUiState {
     bool? loading,
     bool? collapsedEarlyHours,
     bool? collapsedLateHours,
+    bool? premiumBlocked,
   }) => CalendarUiState(
     view: view ?? this.view,
     date: date ?? this.date,
@@ -1966,6 +1990,7 @@ class CalendarUiState {
     loading: loading ?? this.loading,
     collapsedEarlyHours: collapsedEarlyHours ?? this.collapsedEarlyHours,
     collapsedLateHours: collapsedLateHours ?? this.collapsedLateHours,
+    premiumBlocked: premiumBlocked ?? this.premiumBlocked,
   );
 
   String get displayLabel {
@@ -2096,10 +2121,21 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
         tasks: merged,
         collapsedEarlyHours: collapsedEarly,
         collapsedLateHours: collapsedLate,
+        premiumBlocked: false,
       );
       return false;
     } catch (e) {
-      if (!silent) {
+      final blocked = isPremiumRequiredError(e);
+      if (blocked) {
+        state = CalendarUiState(
+          view: v,
+          date: d,
+          tasks: const [],
+          collapsedEarlyHours: collapsedEarly,
+          collapsedLateHours: collapsedLate,
+          premiumBlocked: true,
+        );
+      } else if (!silent) {
         state = CalendarUiState(
           view: v,
           date: d,
@@ -2108,7 +2144,7 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
           collapsedLateHours: collapsedLate,
         );
       }
-      return isPremiumRequiredError(e);
+      return blocked;
     }
   }
 
@@ -2465,6 +2501,15 @@ class MatrixNotifier extends StateNotifier<Map<String, List<Task>>> {
     } catch (e) {
       fromApi = {};
       premiumRequired = isPremiumRequiredError(e);
+    }
+
+    if (premiumRequired) {
+      final empty = <String, List<Task>>{};
+      for (final block in MatrixBlock.values) {
+        empty[block.id] = const [];
+      }
+      state = empty;
+      return true;
     }
 
     final settings = _ref.read(matrixSettingsProvider).blocks;

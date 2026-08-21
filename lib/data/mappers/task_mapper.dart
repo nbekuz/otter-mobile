@@ -154,7 +154,10 @@ abstract final class TaskMapper {
     final dueAt = _buildDueAt(task.dueDate, task.dueTime);
     final startEnd = _buildStartEnd(task.dueDate, task.duration);
     final hasSchedule = dueAt != null || startEnd.$1 != null;
+    final hasClock = (task.dueTime != null && task.dueTime!.trim().isNotEmpty) ||
+        (task.duration?.start != null && task.duration!.start.trim().isNotEmpty);
     final offset = !hasSchedule ||
+            !hasClock ||
             task.notification == null ||
             task.notification!.isEmpty
         ? null

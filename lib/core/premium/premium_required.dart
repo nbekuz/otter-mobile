@@ -50,18 +50,31 @@ bool requirePremiumSubscription(BuildContext context, WidgetRef ref) {
   return false;
 }
 
-void navigateAppTab(BuildContext context, WidgetRef ref, String path) {
-  context.go(path);
+Future<void> navigateAppTab(
+  BuildContext context,
+  WidgetRef ref,
+  String path,
+) async {
+  if (!isPremiumNavPath(path)) {
+    context.go(path);
+    return;
+  }
+
+  if (!isPremiumActive(ref)) {
+    await ref.read(premiumStateProvider.notifier).ensureSubscription();
+  }
+
+  if (!context.mounted) return;
+
+  if (isPremiumActive(ref)) {
+    context.go(path);
+    return;
+  }
+
+  openPremiumSubscription(context);
 }
 
-/// Once-per-feature debounce so date/view refreshes do not spam the modal.
-final Set<String> _shownPremiumFeatures = <String>{};
-
-bool shouldShowPremiumRequiredModal(String feature) =>
-    _shownPremiumFeatures.add(feature);
-
 void showPremiumRequiredModal(BuildContext context, String feature) {
-  if (!shouldShowPremiumRequiredModal(feature)) return;
   openPremiumSubscription(context);
 }
 

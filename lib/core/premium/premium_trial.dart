@@ -3,10 +3,14 @@ import '../../data/models/api/api_models.dart';
 /// Matches web [PREMIUM_SUBSCRIPTION.trialDays].
 const premiumTrialDays = 30;
 
-/// Free trial is available only once — while subscription status is still `none`.
+/// Free trial is available only once. Prefer backend `trial_available`.
 bool canStartPremiumTrial(ApiSubscription? subscription) {
   if (subscription == null) return true;
   if (subscription.isPremium) return false;
+  if (subscription.trialAvailable != null) {
+    return subscription.trialAvailable!;
+  }
+  if (subscription.promoUsed == true) return false;
   return subscription.status == 'none';
 }
 

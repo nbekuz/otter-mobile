@@ -75,8 +75,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   TimeOfDay? _durationEnd;
   Priority _priority = Priority.medium;
   MatrixBlock _matrix = MatrixBlock.notUrgentNotImportant;
-  /// Matches otter-app create default: «В момент срока».
-  String _notification = _defaultNotification;
+  String _notification = '';
   RepeatType _repeat = RepeatType.none;
   int _customNotifyMinutes = 10;
   int _customRepeatInterval = 1;
@@ -100,8 +99,8 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   final List<int> _serverAttachmentIds = [];
   bool _clearImage = false;
 
-  /// otter-app `form.notification: '0'` — «В момент срока».
-  static const _defaultNotification = '0';
+  /// otter-app create default: «Без уведомления» until a clock time is set.
+  static const _defaultNotification = '';
 
   static const _notifyPresets = {
     '',
@@ -115,6 +114,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   };
 
   static const _notifyOptions = [
+    (value: '', label: 'Без уведомления'),
     (value: '0', label: 'В момент срока'),
     (value: '5', label: 'За 5 минут'),
     (value: '15', label: 'За 15 минут'),
@@ -122,7 +122,6 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
     (value: '60', label: 'За 1 час'),
     (value: '1440', label: 'За 1 день'),
     (value: 'custom', label: 'Своё время…'),
-    (value: '', label: 'Без уведомления'),
   ];
 
   static const _repeatOptions = [
@@ -187,7 +186,9 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       _descOpen = true;
       Future.microtask(_loadTask);
     } else {
-      _notification = _defaultNotification;
+      _notification = (_dueTime != null || _durationStart != null)
+          ? '0'
+          : _defaultNotification;
       _scheduleTitleFocus();
     }
 
@@ -467,6 +468,27 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
     }
   }
 
+  bool get _hasClock => _dueTime != null || _durationStart != null;
+
+  void _syncNotificationToClock({required bool hadClock}) {
+    if (!_hasClock) {
+      _notification = _defaultNotification;
+    } else if (!hadClock && _notification.isEmpty) {
+      _notification = '0';
+    }
+  }
+
+  void _selectNotification(String value) {
+    if (!_hasClock && value.isNotEmpty) {
+      showAppToast(
+        context,
+        'Без времени срока напоминание не отправляется. Сначала укажите время срока.',
+      );
+      return;
+    }
+    setState(() => _notification = value);
+  }
+
   void _applyDueTimeSync(TimeOfDay time) {
     final formatted = _formatTime(time)!;
     _timeSync.onDueTimeChanged(
@@ -474,9 +496,11 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       _formatTime(_durationEnd),
       (start, end) {
         setState(() {
+          final hadClock = _hasClock;
           _dueTime = time;
           _durationStart = _parseTime(start);
           _durationEnd = _parseTime(end);
+          _syncNotificationToClock(hadClock: hadClock);
           _error = null;
         });
       },
@@ -491,9 +515,11 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       _formatTime(_durationEnd),
       (due, end) {
         setState(() {
+          final hadClock = _hasClock;
           _durationStart = time;
           _dueTime = _parseTime(due);
           _durationEnd = _parseTime(end);
+          _syncNotificationToClock(hadClock: hadClock);
           _error = null;
         });
       },
@@ -526,6 +552,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
         _durationEnd = null;
         _explicitNoDeadline = true;
         _timeSync.resetEndEdited();
+        _notification = _defaultNotification;
       }
     });
   }
@@ -736,38 +763,18 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          _buildTitleSection(),
+                          _buildTabBar(),
                           Expanded(
-                            child: LayoutBuilder(
-                              builder: (context, constraints) {
-                                return SingleChildScrollView(
-                                  keyboardDismissBehavior:
-                                      ScrollViewKeyboardDismissBehavior.onDrag,
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      minHeight: constraints.maxHeight,
-                                    ),
-                                    child: Stack(
-                                      children: [
-                                        Positioned.fill(
-                                          child: GestureDetector(
-                                            onTap: KeyboardDismisser.dismiss,
-                                            behavior: HitTestBehavior.opaque,
-                                          ),
-                                        ),
-                                        Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            _buildTitleSection(),
-                                            _buildTabBar(),
-                                            _buildTabContent(),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              },
+                            child: GestureDetector(
+                              onTap: KeyboardDismisser.dismiss,
+                              behavior: HitTestBehavior.opaque,
+                              child: SingleChildScrollView(
+                                keyboardDismissBehavior:
+                                    ScrollViewKeyboardDismissBehavior.onDrag,
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: _buildTabContent(),
+                              ),
                             ),
                           ),
                           _buildFooter(),
@@ -1310,6 +1317,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                         _durationStart = null;
                         _durationEnd = null;
                         _timeSync.resetEndEdited();
+                        _notification = _defaultNotification;
                       }
                       _error = null;
                     });
@@ -1324,7 +1332,9 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                   onChanged: (time) {
                     if (time == null) {
                       setState(() {
+                        final hadClock = _hasClock;
                         _dueTime = null;
+                        _syncNotificationToClock(hadClock: hadClock);
                         _error = null;
                       });
                       return;
@@ -1345,7 +1355,9 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
                   onChanged: (time) {
                     if (time == null) {
                       setState(() {
+                        final hadClock = _hasClock;
                         _durationStart = null;
+                        _syncNotificationToClock(hadClock: hadClock);
                         _error = null;
                       });
                       return;
@@ -1460,7 +1472,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
             child: _SelectCard(
               selected: selected,
               selectedColor: OtterColors.sberGreen,
-              onTap: () => setState(() => _notification = n.value),
+              onTap: () => _selectNotification(n.value),
               child: Row(
                 children: [
                   Icon(
@@ -1818,12 +1830,12 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
   Widget _buildFooter() {
     final isDark = OtterColors.isDarkOf(context);
     final wide = Responsive.isWide(context);
-    final btnPad = EdgeInsets.symmetric(vertical: wide ? 16 : 14);
+    final btnPad = EdgeInsets.symmetric(vertical: wide ? 12 : 14);
     final btnRadius = BorderRadius.circular(wide ? 16 : 14);
 
     if (!widget.isEditMode) {
       return Container(
-        padding: EdgeInsets.fromLTRB(wide ? 16 : 12, wide ? 12 : 8, wide ? 16 : 12, wide ? 16 : 12),
+        padding: EdgeInsets.fromLTRB(wide ? 16 : 12, wide ? 8 : 8, wide ? 16 : 12, wide ? 12 : 12),
         decoration: BoxDecoration(
           border: Border(top: BorderSide(color: OtterColors.border(isDark))),
         ),
