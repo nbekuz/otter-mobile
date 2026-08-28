@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/layout/responsive.dart';
+import '../../core/layout/shell_insets.dart';
 import '../../core/premium/premium_required.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
@@ -26,6 +27,10 @@ class AppShell extends ConsumerWidget {
     final path = GoRouterState.of(context).uri.path;
     final wide = Responsive.isWide(context);
     final taskEditorOpen = ref.watch(taskEditorOverlayProvider);
+    final hideBottomNav = _hideBottomNav(path);
+    final shellBottomInset = !wide && hideBottomNav
+        ? shellBodyBottomInset(context)
+        : 0.0;
 
     final bg = OtterColors.pageBg(isDark);
     // Keep Theme brightness in sync with settings.theme so labels/icons that
@@ -37,7 +42,7 @@ class AppShell extends ConsumerWidget {
       child: Scaffold(
         backgroundColor: bg,
         // Form routes need raw IME viewInsets so footers can pad above the keyboard.
-        resizeToAvoidBottomInset: !_hideBottomNav(path),
+        resizeToAvoidBottomInset: !hideBottomNav,
         body: wide
             ? Padding(
                 // Match web layout: lg:px-3 lg:py-2 + gap-4 between sidebar and content.
@@ -83,7 +88,10 @@ class AppShell extends ConsumerWidget {
             : Stack(
                 fit: StackFit.expand,
                 children: [
-                  child,
+                  Padding(
+                    padding: EdgeInsets.only(bottom: shellBottomInset),
+                    child: child,
+                  ),
                   if (!_hideFab(path) && !taskEditorOpen)
                     Positioned(
                       right: 16,
@@ -101,7 +109,7 @@ class AppShell extends ConsumerWidget {
                     ),
                 ],
               ),
-        bottomNavigationBar: wide || _hideBottomNav(path)
+        bottomNavigationBar: wide || hideBottomNav
             ? null
             : OtterBottomNav(order: settings.bottomNavItems, currentPath: path),
       ),

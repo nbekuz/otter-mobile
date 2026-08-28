@@ -494,12 +494,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         return StatefulBuilder(
           builder: (context, setModal) {
             return Padding(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                12,
-                20,
-                20 + MediaQuery.viewInsetsOf(ctx).bottom,
-              ),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -583,12 +578,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         return StatefulBuilder(
           builder: (context, setModal) {
             return Padding(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                12,
-                20,
-                20 + MediaQuery.viewInsetsOf(ctx).bottom,
-              ),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -674,10 +664,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final source = await showAppBottomSheet<ImageSource>(
       context: context,
       builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: Column(
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
@@ -697,8 +686,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ],
             ),
-          ),
-        );
+          );
       },
     );
     if (source == null || !mounted) return;
@@ -745,10 +733,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         return FutureBuilder<List<Map<String, dynamic>>>(
           future: ref.read(devicesServiceProvider).listDevices(),
           builder: (context, snap) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                child: Column(
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+              child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -795,7 +782,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ],
                 ),
-              ),
             );
           },
         );
@@ -2360,10 +2346,9 @@ class _DateTimeSettingsSheetState
     final matchesDevice =
         _deviceTz != null && s.timezone != null && s.timezone == _deviceTz;
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
-        child: Column(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+      child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -2538,7 +2523,6 @@ class _DateTimeSettingsSheetState
             ),
           ],
         ),
-      ),
     );
   }
 }

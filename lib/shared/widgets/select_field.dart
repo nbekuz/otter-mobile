@@ -23,8 +23,7 @@ Future<T?> showSelectSheet<T>({
     builder: (ctx) {
       // Read after showAppBottomSheet Theme wrap so dark mode is correct.
       final isDark = OtterColors.isDarkOf(ctx);
-      return SafeArea(
-        child: SingleChildScrollView(
+      return SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -94,8 +93,7 @@ Future<T?> showSelectSheet<T>({
               const SizedBox(height: 8),
             ],
           ),
-        ),
-      );
+        );
     },
   );
 }

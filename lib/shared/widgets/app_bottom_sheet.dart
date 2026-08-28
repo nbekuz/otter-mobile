@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/layout/responsive.dart';
+import '../../core/layout/shell_insets.dart';
 import '../../core/theme/otter_colors.dart';
 import '../../core/theme/otter_theme.dart';
 
@@ -21,7 +22,7 @@ Widget appBottomSheetConstraints(BuildContext context, Widget child) {
 /// Wraps sheet content so it stays anchored to the bottom (not stretched upward).
 Widget appBottomSheetWrap(BuildContext context, Widget child) {
   return Padding(
-    padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+    padding: EdgeInsets.only(bottom: bottomSheetBottomInset(context)),
     child: Align(
       alignment: Alignment.bottomCenter,
       child: appBottomSheetConstraints(context, child),
@@ -38,7 +39,6 @@ ThemeData _sheetTheme(BuildContext context) {
 Future<T?> showAppBottomSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
-  bool useSafeArea = true,
   Color? backgroundColor,
   ShapeBorder? shape,
   double dialogMaxWidth = 520,
@@ -82,7 +82,7 @@ Future<T?> showAppBottomSheet<T>({
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
-    useSafeArea: useSafeArea,
+    useSafeArea: false,
     backgroundColor: backgroundColor ?? Colors.transparent,
     shape:
         shape ??

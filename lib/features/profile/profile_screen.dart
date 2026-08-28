@@ -76,10 +76,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return showAppBottomSheet<ImageSource>(
       context: context,
       builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: Column(
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -106,8 +105,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
               ],
             ),
-          ),
-        );
+          );
       },
     );
   }

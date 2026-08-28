@@ -720,7 +720,6 @@ class TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.paddingOf(context).bottom;
     final settingsDark =
         ref.watch(appSettingsProvider.select((s) => s.theme == 'dark'));
     final isDark = settingsDark || OtterColors.isDarkOf(context);
@@ -1457,7 +1456,7 @@ class TaskDetailSheetState extends ConsumerState<TaskDetailSheet> {
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: widget.embedded
           ? const EdgeInsets.fromLTRB(20, 12, 20, 16)
-          : EdgeInsets.fromLTRB(16, 16, 16, bottom + 16),
+          : const EdgeInsets.fromLTRB(16, 16, 16, 16),
       child: form,
     );
 

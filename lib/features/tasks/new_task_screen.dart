@@ -723,7 +723,7 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
       resizeToAvoidBottomInset: false,
       backgroundColor: OtterColors.pageBg(isDark),
       body: SafeArea(
-        bottom: keyboardInset == 0,
+        bottom: false,
         child: Padding(
           // Lift entire screen (sticky footer included) above the IME.
           padding: EdgeInsets.only(bottom: keyboardInset),
