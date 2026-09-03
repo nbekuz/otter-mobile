@@ -8,6 +8,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../core/network/api_exception.dart';
 import '../../core/layout/responsive.dart';
+import '../../core/premium/premium_gate_banner.dart';
 import '../../core/premium/premium_required.dart';
 import '../../core/providers/providers.dart';
 import '../../shared/widgets/app_toast.dart';
@@ -127,6 +128,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen>
                 _showPremiumRequiredIfNeeded(premium);
               },
             ),
+            if (state.premiumBlocked)
+              PremiumGateBanner(
+                message: PremiumRequiredMessages.calendar,
+                onConnect: () => openPremiumSubscription(context),
+              ),
             Expanded(
               child: state.loading
                   ? const Center(child: CircularProgressIndicator())

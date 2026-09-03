@@ -11,6 +11,7 @@ class ApiTask {
     this.reminderOffsetMinutes,
     required this.repeatUnit,
     required this.repeatInterval,
+    this.repeatWeekdays = const [],
     this.repeatUntil,
     this.seriesId,
     this.parentTask,
@@ -38,6 +39,8 @@ class ApiTask {
   final int? reminderOffsetMinutes;
   final String repeatUnit;
   final int repeatInterval;
+  /// ISO weekdays 1=Mon … 7=Sun. Empty = plain weekly / N/A.
+  final List<int> repeatWeekdays;
   final String? repeatUntil;
   final String? seriesId;
   final int? parentTask;
@@ -65,6 +68,7 @@ class ApiTask {
     reminderOffsetMinutes: _asInt(json['reminder_offset_minutes']),
     repeatUnit: json['repeat_unit'] as String? ?? 'none',
     repeatInterval: _asInt(json['repeat_interval']) ?? 1,
+    repeatWeekdays: _asIntList(json['repeat_weekdays']) ?? const [],
     repeatUntil: json['repeat_until'] as String?,
     seriesId: json['series_id']?.toString(),
     parentTask: _asInt(json['parent_task']),
@@ -91,6 +95,18 @@ class ApiTask {
     if (value is int) return value;
     if (value is num) return value.toInt();
     return int.tryParse(value.toString());
+  }
+
+  static List<int>? _asIntList(Object? value) {
+    if (value is! List) return null;
+    final days = <int>[];
+    for (final item in value) {
+      final n = _asInt(item);
+      if (n != null && n >= 1 && n <= 7) days.add(n);
+    }
+    if (days.isEmpty) return null;
+    days.sort();
+    return days;
   }
 }
 

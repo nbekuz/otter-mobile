@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/premium/premium_offer_sheet.dart';
 import '../network/api_exception.dart';
 import '../providers/providers.dart';
+import '../routing/app_router.dart';
 
 /// User-facing copy when API returns `PREMIUM_REQUIRED`.
 abstract final class PremiumRequiredMessages {
@@ -39,8 +40,17 @@ bool isPremiumActive(WidgetRef ref) {
   return premium.isPremium || settings.isPremium;
 }
 
+BuildContext? _premiumModalContext(BuildContext context) {
+  final rootContext = appRootNavigatorKey.currentContext;
+  if (rootContext != null && rootContext.mounted) return rootContext;
+  if (context.mounted) return context;
+  return null;
+}
+
 void openPremiumSubscription(BuildContext context) {
-  showPremiumOfferSheet(context);
+  final modalContext = _premiumModalContext(context);
+  if (modalContext == null) return;
+  showPremiumOfferSheet(modalContext);
 }
 
 /// Returns `true` when the user may mutate premium-gated content.
@@ -55,27 +65,20 @@ Future<void> navigateAppTab(
   WidgetRef ref,
   String path,
 ) async {
-  if (!isPremiumNavPath(path)) {
-    context.go(path);
-    return;
-  }
-
-  if (!isPremiumActive(ref)) {
-    await ref.read(premiumStateProvider.notifier).ensureSubscription();
+  if (isPremiumNavPath(path)) {
+    await ref.read(premiumStateProvider.notifier).refreshPremiumStatus();
   }
 
   if (!context.mounted) return;
-
-  if (isPremiumActive(ref)) {
-    context.go(path);
-    return;
-  }
-
-  openPremiumSubscription(context);
+  context.go(path);
 }
 
 void showPremiumRequiredModal(BuildContext context, String feature) {
-  openPremiumSubscription(context);
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final modalContext = _premiumModalContext(context);
+    if (modalContext == null) return;
+    showPremiumOfferSheet(modalContext);
+  });
 }
 
 String premiumRequiredMessageFor(Object error, String featureMessage) {

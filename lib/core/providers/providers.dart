@@ -40,6 +40,7 @@ import '../billing/rustore_config.dart';
 import '../push/push_notifications.dart';
 import '../utils/premium_tariffs.dart';
 import '../utils/recurrence.dart';
+import '../utils/repeat_weekdays.dart';
 import '../utils/time_utils.dart';
 import '../utils/timezone_utils.dart';
 import '../locale/app_languages.dart';
@@ -830,6 +831,11 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   /// Fetch subscription if missing, without toggling the paywall spinner.
   Future<void> ensureSubscription() async {
     if (state.subscription != null) return;
+    await refreshPremiumStatus();
+  }
+
+  /// Always reload subscription from API and sync local premium flag.
+  Future<void> refreshPremiumStatus() async {
     try {
       final sub = await _ref.read(premiumServiceProvider).fetchSubscription();
       state = state.copyWith(subscription: sub);
@@ -1765,9 +1771,10 @@ class TasksNotifier extends StateNotifier<TasksState> {
     if (_completeInFlight.contains(realId)) return;
     _completeInFlight.add(realId);
     final calendar = _ref.read(calendarStateProvider.notifier);
-    final willComplete = !task.completed;
-    final optimistic = task.copyWith(
-      id: realId,
+    final calState = _ref.read(calendarStateProvider);
+    final existing = task.copyWith(id: realId);
+    final willComplete = !existing.completed;
+    final optimistic = existing.copyWith(
       completed: willComplete,
       completedAt: willComplete
           ? DateTime.now().toIso8601String().split('T').first
@@ -1786,15 +1793,18 @@ class TasksNotifier extends StateNotifier<TasksState> {
     try {
       final result = await _ref
           .read(tasksServiceProvider)
-          .toggleComplete(realId, wasCompleted: task.completed);
+          .toggleComplete(realId, wasCompleted: existing.completed);
 
       // Trust the action we just performed — API/grouped refresh can echo stale flags.
       final pinned = TaskMapper.preferClientSchedule(
         result.task,
         PartialTask(
-          dueDate: task.dueDate,
-          dueTime: task.dueTime,
-          duration: task.duration,
+          dueDate: existing.dueDate,
+          dueTime: existing.dueTime,
+          duration: existing.duration,
+          repeat: existing.repeat,
+          repeatDays: existing.repeatDays,
+          repeatCustom: existing.repeatCustom,
         ),
       ).copyWith(
         completed: willComplete,
@@ -1817,15 +1827,22 @@ class TasksNotifier extends StateNotifier<TasksState> {
                 settings.completionSound,
               ),
         );
-        // Backend spawn-on-complete: upsert nested next_task only — never POST.
-        if (result.nextTask != null) {
-          upsertLocalTask(result.nextTask!);
-          calendar.upsertTask(result.nextTask!);
+        if (isRecurringTask(existing)) {
+          await _upsertNextRecurringOccurrence(
+            existing,
+            result.nextTask,
+          );
         }
       }
 
       // Refresh lists silently in the background — skip blocking calendar reload.
       unawaited(loadGrouped());
+      if (willComplete &&
+          isRecurringTask(existing) &&
+          calState.date != null &&
+          !calState.premiumBlocked) {
+        unawaited(calendar.load(silent: true));
+      }
     } catch (e) {
       upsertLocalTask(task.copyWith(id: realId));
       calendar.upsertTask(task.copyWith(id: realId));
@@ -1836,6 +1853,131 @@ class TasksNotifier extends StateNotifier<TasksState> {
     } finally {
       _completeInFlight.remove(realId);
     }
+  }
+
+  /// Web `upsertNextRecurringOccurrence`: finalize backend `next_task` or spawn.
+  Future<void> _upsertNextRecurringOccurrence(
+    Task existing,
+    Task? nextFromApi,
+  ) async {
+    if (nextFromApi != null) {
+      final nextUi = await _finalizeNextRecurringTask(
+        nextFromApi,
+        existing,
+      );
+      upsertLocalTask(nextUi);
+      _ref.read(calendarStateProvider.notifier).upsertTask(nextUi);
+      return;
+    }
+
+    final spawned = await _spawnNextRecurringTask(existing);
+    if (spawned != null) {
+      upsertLocalTask(spawned);
+      _ref.read(calendarStateProvider.notifier).upsertTask(spawned);
+    }
+  }
+
+  Future<Task> _finalizeNextRecurringTask(
+    Task nextFromApi,
+    Task existing,
+  ) async {
+    var nextUi = nextFromApi;
+    final nextDate = computeNextOccurrenceDate(existing);
+    final targetDueDate = nextDate ?? nextUi.dueDate;
+    final targetDueTime = existing.dueTime ?? nextUi.dueTime;
+    final targetDuration = existing.duration ?? nextUi.duration;
+    final repeatFields = recurringRepeatFields(existing);
+
+    final scheduleChanged = targetDueDate != null &&
+        (targetDueDate != nextUi.dueDate ||
+            targetDueTime != nextUi.dueTime ||
+            !_sameDuration(targetDuration, nextUi.duration));
+
+    final includeMatrixBlock = _ref.read(premiumStateProvider).isPremium ||
+        _ref.read(appSettingsProvider).isPremium;
+
+    if (scheduleChanged) {
+      final partial = PartialTask(
+        title: nextUi.title,
+        description: nextUi.description,
+        dueDate: targetDueDate,
+        dueTime: targetDueTime,
+        duration: targetDuration,
+        priority: existing.priority,
+        notification: existing.notification,
+        matrixBlock: existing.matrixBlock,
+        repeat: repeatFields.repeat,
+        repeatDays: repeatFields.repeatDays,
+        repeatCustom: repeatFields.repeatCustom,
+      );
+      try {
+        final patched = await _ref.read(tasksServiceProvider).updateTask(
+              nextUi.id,
+              partial,
+              includeMatrixBlock: includeMatrixBlock,
+            );
+        nextUi = TaskMapper.preferClientSchedule(patched, partial);
+      } catch (_) {
+        nextUi = nextUi.copyWith(
+          dueDate: targetDueDate,
+          dueTime: targetDueTime,
+          duration: targetDuration,
+          repeat: repeatFields.repeat,
+          repeatDays: repeatFields.repeatDays,
+          repeatCustom: repeatFields.repeatCustom,
+        );
+      }
+    } else {
+      nextUi = nextUi.copyWith(
+        dueTime: targetDueTime,
+        duration: targetDuration,
+        repeat: repeatFields.repeat,
+        repeatDays: repeatFields.repeatDays,
+        repeatCustom: repeatFields.repeatCustom,
+      );
+    }
+
+    return nextUi;
+  }
+
+  Future<Task?> _spawnNextRecurringTask(Task existing) async {
+    final nextDate = computeNextOccurrenceDate(existing);
+    if (nextDate == null) return null;
+
+    final repeatFields = recurringRepeatFields(existing);
+    final includeMatrixBlock = _ref.read(premiumStateProvider).isPremium ||
+        _ref.read(appSettingsProvider).isPremium;
+    final partial = PartialTask(
+      title: existing.title,
+      description: existing.description,
+      dueDate: nextDate,
+      dueTime: existing.dueTime,
+      duration: existing.duration,
+      priority: existing.priority,
+      notification: existing.notification,
+      matrixBlock: existing.matrixBlock,
+      repeat: repeatFields.repeat,
+      repeatDays: repeatFields.repeatDays,
+      repeatCustom: repeatFields.repeatCustom,
+      parentTaskId: existing.id,
+      seriesId: existing.seriesId,
+    );
+
+    try {
+      final created = await _ref.read(tasksServiceProvider).createTask(
+            partial,
+            includeMatrixBlock: includeMatrixBlock,
+          );
+      return TaskMapper.preferClientSchedule(created, partial);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static bool _sameDuration(TaskDuration? a, TaskDuration? b) {
+    if (identical(a, b)) return true;
+    if (a == null || b == null) return a == b;
+    return a.start == b.start && a.end == b.end;
   }
 
   Future<void> deleteTask(String id, {String? scope}) async {
@@ -1883,16 +2025,43 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   Task? findTaskById(String id) {
+    final realId = resolveRealTaskId(id);
+    Task? fromGrouped;
     for (final tasks in state.groups.values) {
       for (final task in tasks) {
-        if (task.id == id) return task;
+        if (task.id == realId) {
+          fromGrouped = task;
+          break;
+        }
+      }
+      if (fromGrouped != null) break;
+    }
+    Task? fromCalendar;
+    for (final task in _ref.read(calendarStateProvider).tasks) {
+      if (task.id == realId) {
+        fromCalendar = task;
+        break;
       }
     }
-    for (final task in _ref.read(calendarStateProvider).tasks) {
-      if (task.id == id) return task;
+    if (fromGrouped == null) return fromCalendar;
+    if (fromCalendar == null) return fromGrouped;
+    // Calendar drag updates calendar list first — prefer fresher schedule.
+    if (_taskScheduleKey(fromGrouped) != _taskScheduleKey(fromCalendar)) {
+      return fromCalendar;
     }
-    return null;
+    return fromGrouped;
   }
+
+  static String _taskScheduleKey(Task task) => [
+        task.dueDate ?? '',
+        task.dueTime ?? '',
+        task.duration?.start ?? '',
+        task.duration?.end ?? '',
+        task.completed ? '1' : '0',
+        task.title,
+        task.priority.name,
+        task.matrixBlock?.name ?? '',
+      ].join('|');
 
   Future<Task> updateTask(
     String id,
@@ -1920,6 +2089,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
           merged,
           includeMatrixBlock: includeMatrixBlock,
         );
+    // Prefer client schedule + repeat fields we just wrote (API may lag).
     final task = TaskMapper.preferClientSchedule(fromApi, partial);
     upsertLocalTask(task);
     _ref.read(calendarStateProvider.notifier).upsertTask(task);
@@ -2204,12 +2374,19 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
 
   void upsertTask(Task task) {
     final index = state.tasks.indexWhere((t) => t.id == task.id);
-    if (index == -1) {
-      state = state.copyWith(tasks: [...state.tasks, task]);
-    } else {
+    if (index != -1) {
       final next = [...state.tasks];
       next[index] = task;
       state = state.copyWith(tasks: next);
+      return;
+    }
+    // Web: only append into an active calendar cache when the task is open + dated.
+    if (state.date != null &&
+        !state.premiumBlocked &&
+        !task.completed &&
+        task.dueDate != null &&
+        task.dueDate!.isNotEmpty) {
+      state = state.copyWith(tasks: [...state.tasks, task]);
     }
   }
 

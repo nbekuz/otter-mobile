@@ -5,11 +5,11 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../core/premium/premium_gate_banner.dart';
 import '../../core/premium/premium_required.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
 import '../../data/models/ui/ui_models.dart';
-import '../../shared/widgets/app_toast.dart';
 import '../tasks/task_detail_sheet.dart';
 import 'matrix_block_setting.dart';
 import 'matrix_constants.dart';
@@ -23,6 +23,8 @@ class MatrixScreen extends ConsumerStatefulWidget {
 }
 
 class _MatrixScreenState extends ConsumerState<MatrixScreen> {
+  bool _premiumBlocked = false;
+
   @override
   void initState() {
     super.initState();
@@ -35,6 +37,9 @@ class _MatrixScreenState extends ConsumerState<MatrixScreen> {
   }
 
   void _showPremiumRequiredIfNeeded(bool premiumRequired) {
+    if (mounted) {
+      setState(() => _premiumBlocked = premiumRequired);
+    }
     if (!premiumRequired || !mounted) return;
     showPremiumRequiredModal(context, 'matrix');
   }
@@ -55,6 +60,11 @@ class _MatrixScreenState extends ConsumerState<MatrixScreen> {
               isDark: isDark,
               onSettingsTap: () => showMatrixSettingsSheet(context, ref),
             ),
+            if (_premiumBlocked)
+              PremiumGateBanner(
+                message: PremiumRequiredMessages.matrix,
+                onConnect: () => openPremiumSubscription(context),
+              ),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: () async {
@@ -173,8 +183,15 @@ class _MatrixScreenState extends ConsumerState<MatrixScreen> {
       accent: theme.accent,
       tasks: tasks,
       isDark: isDark,
-      onAccept: (task) =>
-          ref.read(matrixStateProvider.notifier).moveTask(task.id, block),
+      onAccept: (task) async {
+        try {
+          await ref.read(matrixStateProvider.notifier).moveTask(task.id, block);
+        } catch (e) {
+          if (isPremiumRequiredError(e)) {
+            _showPremiumRequiredIfNeeded(true);
+          }
+        }
+      },
       onTaskTap: (task) => showTaskDetailSheet(context, task),
       onAddTap: () async {
         final priority = _priorityQuery(defaultPriority);
@@ -279,7 +296,7 @@ class _MatrixQuadrant extends StatefulWidget {
   final Color accent;
   final List<Task> tasks;
   final bool isDark;
-  final void Function(Task task) onAccept;
+  final Future<void> Function(Task task) onAccept;
   final void Function(Task task) onTaskTap;
   final VoidCallback onAddTap;
   final Future<void> Function(Task task) onComplete;
@@ -302,9 +319,9 @@ class _MatrixQuadrantState extends State<_MatrixQuadrant> {
 
     return DragTarget<_MatrixDragPayload>(
       onWillAcceptWithDetails: (d) => d.data.fromBlock != widget.block,
-      onAcceptWithDetails: (d) {
+      onAcceptWithDetails: (d) async {
         setState(() => _dragOver = false);
-        widget.onAccept(d.data.task);
+        await widget.onAccept(d.data.task);
       },
       onMove: (_) {
         if (!_dragOver) setState(() => _dragOver = true);

@@ -38,8 +38,12 @@ abstract final class TaskMapper {
       }
     }
     final baseRepeat = _repeatToUi(task.repeatUnit);
+    final apiWeekdays = List<int>.from(task.repeatWeekdays);
     final hasCustomInterval =
         task.repeatUnit != 'none' && task.repeatInterval > 1;
+    // Backend contract: week + non-empty weekdays → «Настроить повторение».
+    final hasCustomWeekdays =
+        task.repeatUnit == 'week' && apiWeekdays.isNotEmpty;
     final customUnit = task.repeatUnit == 'month' ? 'month' : 'week';
 
     String? dueTime;
@@ -65,9 +69,16 @@ abstract final class TaskMapper {
       notification: task.reminderOffsetMinutes != null
           ? task.reminderOffsetMinutes.toString()
           : _reminderMinutes(task.dueAt, task.reminderAt),
-      repeat: hasCustomInterval ? RepeatType.custom : baseRepeat,
-      repeatCustom: hasCustomInterval
-          ? RepeatCustom(interval: task.repeatInterval, unit: customUnit)
+      repeat: hasCustomInterval || hasCustomWeekdays
+          ? RepeatType.custom
+          : baseRepeat,
+      repeatDays: apiWeekdays.isNotEmpty ? apiWeekdays : null,
+      repeatCustom: hasCustomInterval || hasCustomWeekdays
+          ? RepeatCustom(
+              interval: task.repeatInterval < 1 ? 1 : task.repeatInterval,
+              unit: customUnit,
+              weekdays: apiWeekdays.isNotEmpty ? apiWeekdays : null,
+            )
           : null,
       imageUrl: task.imageUrl ??
           task.image ??
@@ -98,6 +109,9 @@ abstract final class TaskMapper {
       dueDate: client.dueDate,
       dueTime: client.dueTime,
       duration: client.duration,
+      repeat: client.repeat,
+      repeatDays: client.repeatDays,
+      repeatCustom: client.repeatCustom,
     );
   }
 
@@ -139,6 +153,8 @@ abstract final class TaskMapper {
           ? updates.repeatCustom
           : (updates.repeatCustom ?? existing.repeatCustom),
       matrixBlock: updates.matrixBlock ?? existing.matrixBlock,
+      seriesId: updates.seriesId ?? existing.seriesId,
+      parentTaskId: updates.parentTaskId ?? existing.parentTaskId,
       imagePath: updates.imagePath,
       imagePaths: updates.imagePaths,
       clearImage: updates.clearImage,
@@ -177,29 +193,55 @@ abstract final class TaskMapper {
       if (offset == null) 'reminder_offset_minutes': null,
       'repeat_unit': repeatResolved.$1,
       'repeat_interval': repeatResolved.$2,
+      // Always send: non-empty for custom days; `[]` clears / means plain weekly.
+      'repeat_weekdays':
+          repeatResolved.$1 == 'week' && repeatResolved.$3.isNotEmpty
+              ? repeatResolved.$3
+              : <int>[],
       'priority': _uiPriorityToApi(task.priority ?? Priority.medium),
       if (includeMatrixBlock)
         'matrix_block':
             (task.matrixBlock ?? MatrixBlock.notUrgentNotImportant).apiValue,
       if (task.completed != null) 'is_completed': task.completed,
+      if (task.parentTaskId != null && task.parentTaskId!.isNotEmpty)
+        'parent_task': int.tryParse(task.parentTaskId!),
+      if (task.seriesId != null && task.seriesId!.isNotEmpty)
+        'series_id': task.seriesId,
     };
   }
 
-  static (String, int) _resolveRepeatApi(PartialTask task) {
+  static (String, int, List<int>) _resolveRepeatApi(PartialTask task) {
     final repeat = task.repeat ?? RepeatType.none;
+    final weekdays = (task.repeatCustom?.weekdays?.isNotEmpty == true)
+        ? List<int>.from(task.repeatCustom!.weekdays!)
+        : (task.repeatDays?.isNotEmpty == true
+            ? List<int>.from(task.repeatDays!)
+            : <int>[]);
+
     if (repeat == RepeatType.custom && task.repeatCustom != null) {
       final unit =
           task.repeatCustom!.unit == 'month' ? 'month' : 'week';
       final interval = task.repeatCustom!.interval.clamp(1, 31);
-      return (unit, interval);
+      return (
+        unit,
+        interval,
+        unit == 'week' ? weekdays : <int>[],
+      );
     }
     if (repeat != RepeatType.none && task.repeatCustom?.interval != null) {
       return (
         _repeatToApi(repeat),
         task.repeatCustom!.interval.clamp(1, 31),
+        repeat == RepeatType.weekly ? weekdays : <int>[],
       );
     }
-    return (_repeatToApi(repeat), 1);
+    return (
+      _repeatToApi(repeat),
+      1,
+      (repeat == RepeatType.custom || repeat == RepeatType.weekly)
+          ? weekdays
+          : <int>[],
+    );
   }
 
   static Priority _apiPriorityToUi(String priority) => switch (priority) {
@@ -281,6 +323,8 @@ class PartialTask {
     this.repeatDays,
     this.repeatCustom,
     this.matrixBlock,
+    this.seriesId,
+    this.parentTaskId,
     this.imagePath,
     this.imagePaths,
     this.clearImage = false,
@@ -305,6 +349,8 @@ class PartialTask {
   final List<int>? repeatDays;
   final RepeatCustom? repeatCustom;
   final MatrixBlock? matrixBlock;
+  final String? seriesId;
+  final String? parentTaskId;
   final String? imagePath;
   final List<String>? imagePaths;
   final bool clearImage;

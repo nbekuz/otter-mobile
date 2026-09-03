@@ -83,6 +83,7 @@ Future<T?> showAppBottomSheet<T>({
     context: context,
     isScrollControlled: true,
     useSafeArea: false,
+    useRootNavigator: true,
     backgroundColor: backgroundColor ?? Colors.transparent,
     shape:
         shape ??

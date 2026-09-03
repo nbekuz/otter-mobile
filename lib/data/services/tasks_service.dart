@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 import '../mappers/task_mapper.dart';
@@ -61,7 +63,12 @@ class TasksService {
 
     final form = FormData.fromMap({
       for (final e in json.entries)
-        if (e.value != null) e.key: e.value is bool ? e.value : '${e.value}',
+        if (e.value != null)
+          e.key: e.value is bool
+              ? e.value
+              : e.value is List || e.value is Map
+                  ? jsonEncode(e.value)
+                  : '${e.value}',
       // Keep legacy single `image` field for first file (older API paths).
       if (paths.isNotEmpty)
         'image': await MultipartFile.fromFile(paths.first),

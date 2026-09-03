@@ -20,13 +20,16 @@ AndroidNotificationDetails otterAndroidNotificationDetails({
   bool chronometerCountDown = false,
   bool onlyAlertOnce = false,
   List<AndroidNotificationAction>? actions,
+  bool includeLargeIcon = false,
 }) {
   return AndroidNotificationDetails(
     channelId,
     channelName,
     channelDescription: channelDescription,
     icon: otterNotificationSmallIcon,
-    largeIcon: const DrawableResourceAndroidBitmap(otterNotificationLargeIcon),
+    largeIcon: includeLargeIcon
+        ? const DrawableResourceAndroidBitmap(otterNotificationLargeIcon)
+        : null,
     importance: importance,
     priority: priority,
     playSound: playSound ?? true,

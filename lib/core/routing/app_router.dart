@@ -21,7 +21,8 @@ import '../../features/notifications/notification_detail_screen.dart';
 import '../../features/legal/legal_screen.dart';
 import '../../features/legal/static_legal_screen.dart';
 
-final _rootKey = GlobalKey<NavigatorState>();
+/// Root navigator for modals that must survive tab / route transitions.
+final appRootNavigatorKey = GlobalKey<NavigatorState>();
 
 class _RouterRefresh extends ChangeNotifier {
   void refresh() => notifyListeners();
@@ -29,7 +30,7 @@ class _RouterRefresh extends ChangeNotifier {
 
 GoRouter createAppRouter(Ref ref, Listenable refreshListenable) {
   return GoRouter(
-    navigatorKey: _rootKey,
+    navigatorKey: appRootNavigatorKey,
     initialLocation: '/',
     refreshListenable: refreshListenable,
     redirect: (context, state) {

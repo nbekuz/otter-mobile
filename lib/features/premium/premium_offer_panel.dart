@@ -172,7 +172,8 @@ class PremiumOfferPanel extends StatelessWidget {
                   ),
                 ),
             ] else ...[
-              if (canTrial && promoDays > 0) _trialPromoBanner(promoDays),
+              if (!useRustore && canTrial && promoDays > 0)
+                _trialPromoBanner(promoDays),
               if (useRustore) ...[
                 const SizedBox(height: 4),
                 if (state.subscriptions.isEmpty)
@@ -206,6 +207,7 @@ class PremiumOfferPanel extends StatelessWidget {
                           child: Padding(
                             padding: const EdgeInsets.all(12),
                             child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Expanded(
                                   child: Column(
@@ -218,7 +220,53 @@ class PremiumOfferPanel extends StatelessWidget {
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      if (product.description.isNotEmpty)
+                                      if (product.hasFreeTrial) ...[
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            if (product.trialStrikethroughPrice !=
+                                                null)
+                                              Text(
+                                                product.trialStrikethroughPrice!,
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: OtterColors.sberGray,
+                                                  decoration:
+                                                      TextDecoration.lineThrough,
+                                                  decorationColor:
+                                                      OtterColors.sberGray,
+                                                ),
+                                              ),
+                                            if (product.trialStrikethroughPrice !=
+                                                null)
+                                              const SizedBox(width: 8),
+                                            if (product.trialTodayPriceLabel !=
+                                                null)
+                                              Text(
+                                                product.trialTodayPriceLabel!,
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  color: OtterColors.sberGreen,
+                                                  fontWeight: FontWeight.w700,
+                                                  height: 1.3,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                        if (product.trialFutureLine != null) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            product.trialFutureLine!,
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: OtterColors.sberGray,
+                                              height: 1.3,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                      if (product.description.isNotEmpty) ...[
+                                        const SizedBox(height: 4),
                                         Text(
                                           product.description,
                                           style: const TextStyle(
@@ -226,32 +274,36 @@ class PremiumOfferPanel extends StatelessWidget {
                                             color: OtterColors.sberGray,
                                           ),
                                         ),
-                                      Text(
-                                        'Период: ${product.periodLabel}',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: OtterColors.sberGray,
+                                      ],
+                                      if (!product.hasFreeTrial) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Период: ${product.periodLabel}',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: OtterColors.sberGray,
+                                          ),
                                         ),
-                                      ),
+                                      ],
                                     ],
                                   ),
                                 ),
-                                Text(
-                                  product.priceLabel,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
+                                if (!product.hasFreeTrial) ...[
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    product.nowPriceLabel,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
                                   ),
-                                ),
+                                ],
                               ],
                             ),
                           ),
                         ),
                       ),
                     ),
-                if (canTrial && promoDays > 0) ...[
-                  _trialButton(promoDays: promoDays, busy: busy),
-                  const SizedBox(height: 8),
-                ],
                 const SizedBox(height: 8),
                 FilledButton(
                   onPressed: busy || state.subscriptions.isEmpty
@@ -263,7 +315,8 @@ class PremiumOfferPanel extends StatelessWidget {
                   child: Text(
                     busy
                         ? 'Покупка…'
-                        : 'Купить ${selectedStore?.priceLabel ?? 'Premium'}',
+                        : (selectedStore?.purchaseButtonLabel ??
+                            'Подключить бесплатно'),
                   ),
                 ),
                 TextButton(
@@ -278,12 +331,14 @@ class PremiumOfferPanel extends StatelessWidget {
                     busy ? 'Проверяем…' : 'Обновить статус',
                   ),
                 ),
-                const Text(
-                  'Premium активируется после подтверждения покупки на сервере.',
+                Text(
+                  selectedStore?.purchaseFootnote ??
+                      'Premium активируется после подтверждения покупки на сервере.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
+                  style: const TextStyle(
+                    fontSize: 11,
                     color: OtterColors.sberGray,
+                    height: 1.35,
                   ),
                 ),
               ] else ...[

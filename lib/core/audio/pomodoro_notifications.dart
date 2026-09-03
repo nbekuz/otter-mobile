@@ -63,12 +63,16 @@ class PomodoroNotifications {
       chronometerCountDown: true,
       onlyAlertOnce: true,
     );
-    await _plugin.show(
-      _ongoingId,
-      title,
-      body,
-      NotificationDetails(android: android),
-    );
+    try {
+      await _plugin.show(
+        _ongoingId,
+        title,
+        body,
+        NotificationDetails(android: android),
+      );
+    } catch (_) {
+      // Notification is optional — timer must keep running without lock-screen UI.
+    }
   }
 
   Future<void> cancelOngoing() async {
@@ -88,11 +92,15 @@ class PomodoroNotifications {
       channelDescription: 'Таймер фокуса и перерывов',
       category: AndroidNotificationCategory.alarm,
     );
-    await _plugin.show(
-      _eventId,
-      title,
-      body,
-      NotificationDetails(android: android),
-    );
+    try {
+      await _plugin.show(
+        _eventId,
+        title,
+        body,
+        NotificationDetails(android: android),
+      );
+    } catch (_) {
+      // Phase-end alert is best-effort when notification resources are missing.
+    }
   }
 }

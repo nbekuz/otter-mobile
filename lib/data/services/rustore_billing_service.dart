@@ -340,6 +340,7 @@ class RuStoreBillingService {
       periodLabel: _periodLabel(p.subscription?.subscriptionPeriod, p.productId),
       currency: p.currency,
       rawPrice: p.price,
+      freeTrialLabel: _trialPeriodLabel(p.subscription?.freeTrialPeriod),
     );
   }
 
@@ -369,17 +370,36 @@ class RuStoreBillingService {
   }
 
   String _periodLabel(rustore.SubscriptionPeriod? period, String productId) {
-    if (period != null) {
-      if (period.years > 0) {
-        return period.years == 1 ? 'год' : '${period.years} г.';
-      }
-      if (period.months > 0) {
-        return period.months == 1 ? 'месяц' : '${period.months} мес.';
-      }
-      if (period.days > 0) {
-        return '${period.days} дн.';
-      }
-    }
+    final label = _formatSubscriptionPeriod(period);
+    if (label != null) return label;
     return productId == RuStoreConfig.yearlyProductId ? 'год' : 'месяц';
+  }
+
+  /// Returns accusative-friendly trial length for UI copy («Первый … бесплатно»).
+  String? _trialPeriodLabel(rustore.SubscriptionPeriod? period) {
+    final label = _formatSubscriptionPeriod(period);
+    if (label == null) return null;
+    // «Первый 1 месяц» reads better as «Первый месяц» when duration is 1.
+    if (period != null && period.months == 1 && period.years == 0 && period.days == 0) {
+      return 'месяц';
+    }
+    if (period != null && period.years == 1 && period.months == 0 && period.days == 0) {
+      return 'год';
+    }
+    return label;
+  }
+
+  String? _formatSubscriptionPeriod(rustore.SubscriptionPeriod? period) {
+    if (period == null) return null;
+    if (period.years > 0) {
+      return period.years == 1 ? 'год' : '${period.years} г.';
+    }
+    if (period.months > 0) {
+      return period.months == 1 ? 'месяц' : '${period.months} мес.';
+    }
+    if (period.days > 0) {
+      return period.days == 1 ? 'день' : '${period.days} дн.';
+    }
+    return null;
   }
 }
