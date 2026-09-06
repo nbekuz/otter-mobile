@@ -1,5 +1,6 @@
 import '../models/api/api_models.dart';
 import '../models/ui/ui_models.dart';
+import '../../core/utils/repeat_weekdays.dart';
 import '../../core/utils/time_utils.dart';
 
 abstract final class TaskMapper {
@@ -38,7 +39,7 @@ abstract final class TaskMapper {
       }
     }
     final baseRepeat = _repeatToUi(task.repeatUnit);
-    final apiWeekdays = List<int>.from(task.repeatWeekdays);
+    final apiWeekdays = normalizeRepeatWeekdays(task.repeatWeekdays);
     final hasCustomInterval =
         task.repeatUnit != 'none' && task.repeatInterval > 1;
     // Backend contract: week + non-empty weekdays → «Настроить повторение».
@@ -196,7 +197,7 @@ abstract final class TaskMapper {
       // Always send: non-empty for custom days; `[]` clears / means plain weekly.
       'repeat_weekdays':
           repeatResolved.$1 == 'week' && repeatResolved.$3.isNotEmpty
-              ? repeatResolved.$3
+              ? normalizeRepeatWeekdays(repeatResolved.$3)
               : <int>[],
       'priority': _uiPriorityToApi(task.priority ?? Priority.medium),
       if (includeMatrixBlock)
@@ -212,11 +213,11 @@ abstract final class TaskMapper {
 
   static (String, int, List<int>) _resolveRepeatApi(PartialTask task) {
     final repeat = task.repeat ?? RepeatType.none;
-    final weekdays = (task.repeatCustom?.weekdays?.isNotEmpty == true)
-        ? List<int>.from(task.repeatCustom!.weekdays!)
-        : (task.repeatDays?.isNotEmpty == true
-            ? List<int>.from(task.repeatDays!)
-            : <int>[]);
+    final weekdays = normalizeRepeatWeekdays(
+      (task.repeatCustom?.weekdays?.isNotEmpty == true)
+          ? task.repeatCustom!.weekdays
+          : task.repeatDays,
+    );
 
     if (repeat == RepeatType.custom && task.repeatCustom != null) {
       final unit =

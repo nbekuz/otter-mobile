@@ -1882,21 +1882,33 @@ class TasksNotifier extends StateNotifier<TasksState> {
     Task existing,
   ) async {
     var nextUi = nextFromApi;
-    final nextDate = computeNextOccurrenceDate(existing);
-    final targetDueDate = nextDate ?? nextUi.dueDate;
+    final repeatFields = recurringRepeatFields(existing);
     final targetDueTime = existing.dueTime ?? nextUi.dueTime;
     final targetDuration = existing.duration ?? nextUi.duration;
-    final repeatFields = recurringRepeatFields(existing);
+    // Backend computes weekday-aware next due_at — trust it when present.
+    final targetDueDate =
+        nextUi.dueDate ?? computeNextOccurrenceDate(existing);
 
-    final scheduleChanged = targetDueDate != null &&
-        (targetDueDate != nextUi.dueDate ||
-            targetDueTime != nextUi.dueTime ||
-            !_sameDuration(targetDuration, nextUi.duration));
+    final scheduleIncomplete =
+        targetDueDate != null && (nextUi.dueDate == null || nextUi.dueDate!.isEmpty);
+    final timeChanged = targetDueTime != nextUi.dueTime ||
+        !_sameDuration(targetDuration, nextUi.duration);
+    final weekdaysChanged = !_sameIntList(
+      resolveTaskWeekdays(nextUi),
+      resolveTaskWeekdays(
+        nextUi.copyWith(
+          repeat: repeatFields.repeat,
+          repeatDays: repeatFields.repeatDays,
+          repeatCustom: repeatFields.repeatCustom,
+        ),
+      ),
+    );
 
     final includeMatrixBlock = _ref.read(premiumStateProvider).isPremium ||
         _ref.read(appSettingsProvider).isPremium;
 
-    if (scheduleChanged) {
+    if ((scheduleIncomplete || timeChanged || weekdaysChanged) &&
+        targetDueDate != null) {
       final partial = PartialTask(
         title: nextUi.title,
         description: nextUi.description,
@@ -1929,6 +1941,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
       }
     } else {
       nextUi = nextUi.copyWith(
+        dueDate: targetDueDate ?? nextUi.dueDate,
         dueTime: targetDueTime,
         duration: targetDuration,
         repeat: repeatFields.repeat,
@@ -1978,6 +1991,15 @@ class TasksNotifier extends StateNotifier<TasksState> {
     if (identical(a, b)) return true;
     if (a == null || b == null) return a == b;
     return a.start == b.start && a.end == b.end;
+  }
+
+  static bool _sameIntList(List<int> a, List<int> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   Future<void> deleteTask(String id, {String? scope}) async {

@@ -21,6 +21,11 @@ Task _task({
     );
 
 void main() {
+  test('normalizeRepeatWeekdays unique sorted 1..7', () {
+    expect(normalizeRepeatWeekdays([5, 1, 1, 8, 0, 3]), [1, 3, 5]);
+    expect(normalizeRepeatWeekdays(null), isEmpty);
+  });
+
   test('recurringRepeatFields forces custom when weekdays present', () {
     final source = _task(
       id: '1',
