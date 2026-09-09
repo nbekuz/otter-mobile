@@ -6,8 +6,8 @@ import '../config/env.dart';
 
 /// FlutterFire options per platform.
 ///
-/// Windows uses the same Firebase **Web app** credentials as the browser build
-/// (`FIREBASE_API_KEY`, `FIREBASE_APP_ID`, `FIREBASE_AUTH_DOMAIN`, …).
+/// Android, Windows, and web use Firebase project `otter-78857`.
+/// Windows reuses the Web app credentials (`FIREBASE_API_KEY`, `FIREBASE_APP_ID`, …).
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
@@ -39,9 +39,9 @@ class DefaultFirebaseOptions {
   static FirebaseOptions get android => FirebaseOptions(
     apiKey: Env.firebaseAndroidApiKey,
     appId: Env.firebaseAndroidAppId,
-    messagingSenderId: Env.firebaseMessagingSenderId,
-    projectId: Env.firebaseProjectId,
-    storageBucket: Env.firebaseStorageBucket,
+    messagingSenderId: Env.firebaseAndroidMessagingSenderId,
+    projectId: Env.firebaseAndroidProjectId,
+    storageBucket: Env.firebaseAndroidStorageBucket,
   );
 
   /// Windows desktop — Firebase Web app configuration.

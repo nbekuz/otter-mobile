@@ -24,11 +24,12 @@ flutter run -d android
 
 ## Firebase / Google
 
-**Android** (`com.nbekdev.otter`):
+**Android** (`com.nbekdev.otter`, Firebase project `otter-78857`):
 
-- Файл [`android/app/google-services.json`](android/app/google-services.json) уже подключён (Firebase app `com.nbekdev.otter`).
+- Файл [`android/app/google-services.json`](android/app/google-services.json) уже подключён.
 - Gradle: плагин `com.google.gms.google-services`.
-- Google Sign-In: в `.env` задан `FIREBASE_GOOGLE_SERVER_CLIENT_ID` (Web OAuth client из того же JSON).
+- Google Sign-In: в `.env` задан `FIREBASE_GOOGLE_SERVER_CLIENT_ID` (Web OAuth client).
+- Release: добавьте SHA-1 в Firebase Console → Project settings → Your apps.
 
 **Windows** (Firebase Web app + ручной OAuth 2.0 PKCE / loopback):
 
