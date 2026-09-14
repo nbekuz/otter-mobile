@@ -36,7 +36,7 @@ class CalendarTaskBlock extends StatelessWidget {
   final double gap;
   /// When set, overrides the compact/regular radius (web week uses ~4).
   final double? cornerRadius;
-  /// Week view: month-like chips — 10px text, no checkbox, multi-line wrap.
+  /// Week view: compact 10px typography + complete checkbox (matches web).
   final bool weekTypography;
 
   static const double _weekFontSize = 10;
@@ -146,7 +146,7 @@ class CalendarTaskBlock extends StatelessWidget {
         return const SizedBox.expand();
       }
 
-      // Week: month-like typography — 10px, no checkbox, wrap by block height.
+      // Week: compact typography + checkbox (same as web week cards).
       if (weekTypography) {
         final timeStyle = TextStyle(
           fontSize: _weekFontSize,
@@ -163,18 +163,27 @@ class CalendarTaskBlock extends StatelessWidget {
 
         if (compact && blockHeight < 40) {
           return Padding(
-            padding: const EdgeInsets.fromLTRB(4, 2, 4, 2),
-            child: Text(
-              item.continuesAfter
-                  ? '${item.task.title} ↓'
-                  : item.labelTime,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: timeStyle.copyWith(
-                decoration: item.task.completed
-                    ? TextDecoration.lineThrough
-                    : null,
-              ),
+            padding: const EdgeInsets.fromLTRB(2, 2, 4, 2),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                checkbox(),
+                const SizedBox(width: 2),
+                Expanded(
+                  child: Text(
+                    item.continuesAfter
+                        ? '${item.task.title} ↓'
+                        : item.labelTime,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: timeStyle.copyWith(
+                      decoration: item.task.completed
+                          ? TextDecoration.lineThrough
+                          : null,
+                    ),
+                  ),
+                ),
+              ],
             ),
           );
         }
@@ -184,32 +193,41 @@ class CalendarTaskBlock extends StatelessWidget {
             _weekTitleMaxLines(blockHeight, hasTimeLine: showTime);
 
         return Padding(
-          padding: const EdgeInsets.fromLTRB(4, 2, 4, 2),
-          child: Column(
+          padding: const EdgeInsets.fromLTRB(2, 2, 4, 2),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
             children: [
-              if (showTime)
-                Text(
-                  item.labelTime,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: timeStyle.copyWith(
-                    decoration: item.task.completed
-                        ? TextDecoration.lineThrough
-                        : null,
-                  ),
-                ),
-              Text(
-                item.continuesAfter
-                    ? '${item.task.title} ↓'
-                    : item.task.title,
-                maxLines: titleMaxLines,
-                overflow: TextOverflow.ellipsis,
-                style: titleStyle.copyWith(
-                  decoration: item.task.completed
-                      ? TextDecoration.lineThrough
-                      : null,
+              checkbox(),
+              const SizedBox(width: 2),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (showTime)
+                      Text(
+                        item.labelTime,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: timeStyle.copyWith(
+                          decoration: item.task.completed
+                              ? TextDecoration.lineThrough
+                              : null,
+                        ),
+                      ),
+                    Text(
+                      item.continuesAfter
+                          ? '${item.task.title} ↓'
+                          : item.task.title,
+                      maxLines: titleMaxLines,
+                      overflow: TextOverflow.ellipsis,
+                      style: titleStyle.copyWith(
+                        decoration: item.task.completed
+                            ? TextDecoration.lineThrough
+                            : null,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -373,6 +391,7 @@ class CalendarTaskBlock extends StatelessWidget {
                 if (!item.isContinuation)
                   dragHandle(CalendarTaskDragMode.resizeStart, isTop: true),
                 dragHandle(CalendarTaskDragMode.resizeEnd, isTop: false),
+                // Day/regular cards: overlay checkbox. Week embeds it in bodyContent.
                 if (!item.isContinuation && !weekTypography && !compact)
                   Positioned(
                     top: 4,
