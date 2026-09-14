@@ -2,16 +2,54 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/billing/billing_logger.dart';
 import 'core/locale/app_languages.dart';
 import 'core/platform/windows_title_bar.dart';
 import 'core/providers/providers.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/otter_theme.dart';
 
-class OtterApp extends ConsumerWidget {
+class OtterApp extends ConsumerStatefulWidget {
   const OtterApp({super.key});
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OtterApp> createState() => _OtterAppState();
+}
+
+class _OtterAppState extends ConsumerState<OtterApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (!isRustoreBillingActive) return;
+    final premium = ref.read(premiumStateProvider);
+    // Mid-purchase return from SberPay / SBP / browser — verify if SDK future stalled.
+    if (!premium.purchaseInProgress) return;
+    Future.microtask(() async {
+      try {
+        await ref
+            .read(premiumStateProvider.notifier)
+            .syncAfterBillingReturn();
+      } catch (e, st) {
+        BillingLogger.error('resume billing sync failed', e, st);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
     final language = ref.watch(

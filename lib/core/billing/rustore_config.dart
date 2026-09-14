@@ -22,4 +22,18 @@ abstract final class RuStoreConfig {
         'yearly' => yearlyProductId,
         _ => monthlyProductId,
       };
+
+  /// RuStore Pay returns e.g. `otter://iamback//ru.rustore.sdk.billingclient.back?...`.
+  /// go_router must not treat these as app routes (Page Not Found).
+  static bool isBillingReturnUri(Uri uri) {
+    if (uri.scheme == deeplinkScheme) return true;
+    return isBillingReturnLocation(uri.toString());
+  }
+
+  static bool isBillingReturnLocation(String location) {
+    final s = location.toLowerCase();
+    return s.contains('iamback') ||
+        s.contains('rustore.sdk.billingclient') ||
+        s.startsWith('$deeplinkScheme:');
+  }
 }

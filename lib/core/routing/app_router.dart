@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../billing/billing_logger.dart';
+import '../billing/rustore_config.dart';
 import '../providers/providers.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/auth/profile_fill_screen.dart';
@@ -28,12 +32,52 @@ class _RouterRefresh extends ChangeNotifier {
   void refresh() => notifyListeners();
 }
 
+void _scheduleBillingReturnSync(Ref ref) {
+  Future.microtask(() async {
+    try {
+      await ref
+          .read(premiumStateProvider.notifier)
+          .syncAfterBillingReturn();
+    } catch (e, st) {
+      BillingLogger.error('billing return sync failed', e, st);
+    }
+  });
+}
+
+String _safeLocationAfterBilling(Ref ref) {
+  final auth = ref.read(authStateProvider);
+  if (auth.isAuthenticated) return '/app';
+  return '/login';
+}
+
 GoRouter createAppRouter(Ref ref, Listenable refreshListenable) {
   return GoRouter(
     navigatorKey: appRootNavigatorKey,
     initialLocation: '/',
     refreshListenable: refreshListenable,
+    onException: (context, state, router) {
+      final raw = state.uri.toString();
+      if (RuStoreConfig.isBillingReturnUri(state.uri) ||
+          RuStoreConfig.isBillingReturnLocation(raw)) {
+        BillingLogger.info('RuStore billing deep link (onException): $raw');
+        _scheduleBillingReturnSync(ref);
+        router.go(_safeLocationAfterBilling(ref));
+        return;
+      }
+      BillingLogger.info('Unhandled route exception: $raw');
+      router.go(_safeLocationAfterBilling(ref));
+    },
     redirect: (context, state) {
+      // PayLib / SBP / SberPay return — never treat as an app route.
+      final raw = state.uri.toString();
+      if (RuStoreConfig.isBillingReturnUri(state.uri) ||
+          RuStoreConfig.isBillingReturnLocation(raw) ||
+          RuStoreConfig.isBillingReturnLocation(state.matchedLocation)) {
+        BillingLogger.info('RuStore billing deep link (redirect): $raw');
+        _scheduleBillingReturnSync(ref);
+        return _safeLocationAfterBilling(ref);
+      }
+
       final auth = ref.read(authStateProvider);
       final loc = state.matchedLocation;
       final isAuthRoute =
@@ -126,7 +170,8 @@ GoRouter createAppRouter(Ref ref, Listenable refreshListenable) {
                   GoRoute(
                     path: ':id',
                     builder: (context, state) {
-                      final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+                      final id =
+                          int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
                       return NotificationDetailScreen(notificationId: id);
                     },
                   ),

@@ -424,6 +424,8 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   Completer<void>? _paymentPollingCancellation;
   Completer<void>? _paymentPollingWake;
   int _paymentPollingGeneration = 0;
+  DateTime? _lastBillingReturnSyncAt;
+  Future<void>? _billingReturnSyncFuture;
 
   void _syncPremiumToSettings(ApiSubscription sub) {
     final settings = _ref.read(appSettingsProvider);
@@ -696,6 +698,67 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
         purchaseError: msg,
       );
       rethrow;
+    }
+  }
+
+  /// After RuStore Pay returns via `otter://` deep link (or mid-purchase resume).
+  /// Quiet restore/verify — does not surface "no purchases" on the paywall.
+  Future<void> syncAfterBillingReturn() {
+    final inflight = _billingReturnSyncFuture;
+    if (inflight != null) return inflight;
+
+    final now = DateTime.now();
+    final last = _lastBillingReturnSyncAt;
+    if (last != null && now.difference(last) < const Duration(seconds: 3)) {
+      return Future.value();
+    }
+    _lastBillingReturnSyncAt = now;
+
+    final future = _syncAfterBillingReturnBody();
+    _billingReturnSyncFuture = future;
+    return future.whenComplete(() {
+      if (identical(_billingReturnSyncFuture, future)) {
+        _billingReturnSyncFuture = null;
+      }
+    });
+  }
+
+  Future<void> _syncAfterBillingReturnBody() async {
+    if (!isRustoreBillingActive) return;
+    if (!_ref.read(authStateProvider).isAuthenticated) return;
+
+    BillingLogger.info('syncAfterBillingReturn start');
+    try {
+      final billing = _ref.read(rustoreBillingServiceProvider);
+      final active = await billing.restorePurchases();
+      if (active.isNotEmpty) {
+        for (final purchase in active) {
+          try {
+            await _restoreBillingPurchase(purchase);
+          } catch (e, st) {
+            BillingLogger.error('syncAfterBillingReturn one purchase', e, st);
+          }
+        }
+      } else {
+        try {
+          await _sendRestore();
+        } catch (e, st) {
+          BillingLogger.error('syncAfterBillingReturn backend restore', e, st);
+        }
+      }
+      await refreshPremiumStatus();
+      BillingLogger.info(
+        'syncAfterBillingReturn done isPremium=${state.isPremium}',
+      );
+    } catch (e, st) {
+      BillingLogger.error('syncAfterBillingReturn', e, st);
+    } finally {
+      if (state.purchaseInProgress || state.actionLoading) {
+        state = state.copyWith(
+          purchaseInProgress: false,
+          actionLoading: false,
+        );
+      }
     }
   }
 
