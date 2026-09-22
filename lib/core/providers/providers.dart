@@ -96,8 +96,9 @@ final rustoreBillingServiceProvider = Provider<RuStoreBillingService>(
   (ref) => RuStoreBillingService(),
 );
 
-bool get isRustoreBillingActive =>
-    resolvePremiumBillingProvider() == PremiumBillingProvider.rustore;
+/// RuStore SDK path — only allowlisted Android emails (see [premium_billing]).
+bool isRustoreBillingActiveForUser(Ref ref) =>
+    isRustoreBillingActiveFor(ref.read(authStateProvider).user?.email);
 final devicesServiceProvider = Provider<DevicesService>(
   (ref) => DevicesService(ref.watch(apiClientProvider)),
 );
@@ -427,6 +428,10 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   DateTime? _lastBillingReturnSyncAt;
   Future<void>? _billingReturnSyncFuture;
 
+  String? get _userEmail => _ref.read(authStateProvider).user?.email;
+
+  bool get _useRustore => isRustoreBillingActiveFor(_userEmail);
+
   void _syncPremiumToSettings(ApiSubscription sub) {
     final settings = _ref.read(appSettingsProvider);
     final isPremium = sub.isPremium || sub.status.toLowerCase() == 'active';
@@ -466,7 +471,7 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
       );
       _syncPremiumToSettings(subscription);
 
-      if (isRustoreBillingActive) {
+      if (_useRustore) {
         await loadStoreSubscriptions();
       }
     } catch (e) {
@@ -475,7 +480,7 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   }
 
   Future<void> loadStoreSubscriptions() async {
-    if (!isRustoreBillingActive) return;
+    if (!_useRustore) return;
     try {
       final productIds = rustoreProductIdsFromTariffs(state.tariffs);
       final products = await _ref
@@ -550,10 +555,10 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   }
 
   Future<String> checkout({bool recurringConsent = false}) async {
-    // Defensive: Android RuStore must never hit Robokassa checkout.
-    if (isAndroidPremiumPurchaseBlocked || isRustoreBillingActive) {
+    // Defensive: allowlisted RuStore users must never hit Robokassa checkout.
+    if (isAndroidPremiumPurchaseBlocked || _useRustore) {
       throw StateError(
-        isRustoreBillingActive
+        _useRustore
             ? 'Оплата на Android доступна только через RuStore.'
             : kAndroidPremiumUnavailableMessage,
       );
@@ -579,7 +584,7 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
 
   /// RuStore purchase → backend verify → refresh subscription. Never unlocks locally.
   Future<void> purchaseSelected() async {
-    if (!isRustoreBillingActive) {
+    if (!_useRustore) {
       throw StateError('RuStore Billing недоступен на этой платформе.');
     }
     final productId = state.selectedSubscription?.productId ??
@@ -607,6 +612,19 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
         throw PurchaseCancelledException(
           result.message ?? const PurchaseCancelledException().message,
         );
+      }
+      if (result.isAlreadyOwned) {
+        BillingLogger.info(
+          '40012 already owned — verify/restore instead of repurchase',
+        );
+        await _activateExistingRustorePurchase(result, productId);
+        await refreshSubscription();
+        state = state.copyWith(
+          purchaseInProgress: false,
+          actionLoading: false,
+          clearPurchaseError: true,
+        );
+        return;
       }
       if (!result.isSuccess) {
         final msg = result.message ?? const BillingUnknownException().message;
@@ -644,7 +662,7 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   }
 
   Future<void> restorePurchases() async {
-    if (!isRustoreBillingActive) {
+    if (!_useRustore) {
       throw StateError('RuStore Billing недоступен на этой платформе.');
     }
     state = state.copyWith(
@@ -701,7 +719,7 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
     }
   }
 
-  /// After RuStore Pay returns via `otter://` deep link (or mid-purchase resume).
+  /// After RuStore Pay returns via billing deep link (or mid-purchase resume).
   /// Quiet restore/verify — does not surface "no purchases" on the paywall.
   Future<void> syncAfterBillingReturn() {
     final inflight = _billingReturnSyncFuture;
@@ -724,7 +742,7 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
   }
 
   Future<void> _syncAfterBillingReturnBody() async {
-    if (!isRustoreBillingActive) return;
+    if (!_useRustore) return;
     if (!_ref.read(authStateProvider).isAuthenticated) return;
 
     BillingLogger.info('syncAfterBillingReturn start');
@@ -760,6 +778,29 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
         );
       }
     }
+  }
+
+  /// 40012: RuStore already has the subscription; attach it via verify/restore.
+  Future<void> _activateExistingRustorePurchase(
+    PurchaseResult result,
+    String productId,
+  ) async {
+    final purchaseId = result.purchaseId?.trim() ?? '';
+    if (purchaseId.isNotEmpty) {
+      await _verifyPurchaseResult(result);
+      return;
+    }
+    final billing = _ref.read(rustoreBillingServiceProvider);
+    final active = await billing.restorePurchases();
+    final matching = active.where((p) => p.productId == productId).toList();
+    final toRestore = matching.isNotEmpty ? matching : active;
+    if (toRestore.isNotEmpty) {
+      for (final purchase in toRestore) {
+        await _restoreBillingPurchase(purchase);
+      }
+      return;
+    }
+    await _sendRestore();
   }
 
   Future<void> _verifyPurchaseResult(PurchaseResult result) async {

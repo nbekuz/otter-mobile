@@ -38,7 +38,7 @@ Future<void> main() async {
     debugPrint('[FirebaseBootstrap] init failed: $e\n$st');
   }
   if (defaultTargetPlatform == TargetPlatform.android &&
-      resolvePremiumBillingProvider() == PremiumBillingProvider.rustore) {
+      kAndroidBillingProvider == PremiumBillingProvider.rustore) {
     try {
       await RuStoreBillingService().initialize();
     } catch (e, st) {

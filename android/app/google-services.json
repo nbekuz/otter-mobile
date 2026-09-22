@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "523879790697-has8eskqir8ttcvv1cbdfos97jbspp1r.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.nbekdev.otter",
+            "certificate_hash": "d57037115eddd8272dda94c90388e8cff85b656c"
+          }
+        },
+        {
           "client_id": "523879790697-6k1mjnk4aqsqhns4iu2bv0gvge3hv8p2.apps.googleusercontent.com",
           "client_type": 3
         }

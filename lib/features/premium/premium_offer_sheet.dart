@@ -73,7 +73,7 @@ class _PremiumOfferSheetState extends ConsumerState<PremiumOfferSheet> {
   }
 
   Future<void> _purchasePremium() async {
-    if (isRustoreBillingActive) {
+    if (isRustoreBillingActiveFor(ref.read(authStateProvider).user?.email)) {
       await _purchaseRustore();
       return;
     }
@@ -253,10 +253,13 @@ class _PremiumOfferSheetState extends ConsumerState<PremiumOfferSheet> {
   @override
   Widget build(BuildContext context) {
     final premium = ref.watch(premiumStateProvider);
+    final useRustore = isRustoreBillingActiveFor(
+      ref.watch(authStateProvider.select((s) => s.user?.email)),
+    );
     return PremiumOfferPanel(
       state: premium,
       embeddedInCard: false,
-      useRustore: isRustoreBillingActive,
+      useRustore: useRustore,
       recurringConsent: _recurringConsent,
       onConsentChanged: (v) => setState(() => _recurringConsent = v ?? false),
       onClose: () => Navigator.pop(context),

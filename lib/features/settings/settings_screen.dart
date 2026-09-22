@@ -172,7 +172,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 )
               : PremiumOfferPanel(
                   state: premium,
-                  useRustore: isRustoreBillingActive,
+                  useRustore: isRustoreBillingActiveFor(
+                    ref.watch(authStateProvider.select((s) => s.user?.email)),
+                  ),
                   recurringConsent: _recurringConsent,
                   onConsentChanged: (v) =>
                       setState(() => _recurringConsent = v ?? false),
@@ -589,7 +591,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Новый: 8–20 символов, Aa + цифра + спецсимвол (!, @ …).',
+                    'Новый: 8–20 символов, Aa + цифра.',
                     style: TextStyle(fontSize: 12, color: OtterColors.sberGray),
                   ),
                   const SizedBox(height: 12),
@@ -1131,7 +1133,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _purchasePremium() async {
     if (isAndroidPremiumPurchaseBlocked) return;
-    if (isRustoreBillingActive) {
+    if (isRustoreBillingActiveFor(ref.read(authStateProvider).user?.email)) {
       await _purchaseRustore();
       return;
     }

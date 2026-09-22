@@ -380,8 +380,7 @@ class _ForgotPasswordDialogState extends ConsumerState<_ForgotPasswordDialog> {
           ),
           const SizedBox(height: 8),
           Text(
-            '8–20 символов: заглавная и строчная латинские буквы, '
-            'цифра и один специальный символ.',
+            '8–20 символов: заглавная и строчная латинские буквы и цифра.',
             style: TextStyle(color: muted, fontSize: 12),
           ),
           const SizedBox(height: 16),

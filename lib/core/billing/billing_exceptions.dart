@@ -1,3 +1,5 @@
+import 'rustore_config.dart';
+
 /// Typed billing errors with Russian user-facing messages.
 sealed class BillingException implements Exception {
   const BillingException(this.message);
@@ -92,6 +94,9 @@ String rustorePaymentFailureMessage({
   }
   if (sandbox == true) details.add('тестовая покупка');
 
+  if (errorCode == RuStoreConfig.alreadyPurchasedErrorCode) {
+    return 'Подписка уже оформлена в RuStore. Восстанавливаем…';
+  }
   if (details.isEmpty) {
     return 'Покупка не прошла. Проверьте вход в RuStore и повторите.';
   }

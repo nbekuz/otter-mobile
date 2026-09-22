@@ -126,58 +126,66 @@ class OtpCodeInputState extends State<OtpCodeInput> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            IgnorePointer(
-              child: Row(
-                children: List.generate(widget.length, (index) {
-                  final filled = index < code.length;
-                  final active = _focusNode.hasFocus && index == _activeIndex;
-                  final char = filled ? code[index] : '';
+        // Tap opens keyboard; digits are drawn separately so TextField never
+        // paints/clips over the boxes (Android Material overlay bug).
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            if (widget.enabled) requestFocus();
+          },
+          child: Row(
+            children: List.generate(widget.length, (index) {
+              final filled = index < code.length;
+              final active = _focusNode.hasFocus && index == _activeIndex;
+              final char = filled ? code[index] : '';
 
-                  return Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        left: index == 0 ? 0 : 4,
-                        right: index == widget.length - 1 ? 0 : 4,
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: index == 0 ? 0 : 4,
+                    right: index == widget.length - 1 ? 0 : 4,
+                  ),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    height: 52,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: OtterColors.surfaceAlt(isDark),
+                      borderRadius: BorderRadius.circular(
+                        OtterColors.radiusMd,
                       ),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        height: 52,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: OtterColors.surfaceAlt(isDark),
-                          borderRadius: BorderRadius.circular(
-                            OtterColors.radiusMd,
-                          ),
-                          border: Border.all(
-                            color: hasError
-                                ? Colors.red.shade300
-                                : active
-                                ? OtterColors.sberGreen
-                                : OtterColors.border(isDark),
-                            width: active ? 2 : 1,
-                          ),
-                        ),
-                        child: active && !filled
-                            ? _BlinkingCursor(color: OtterColors.sberGreen)
-                            : Text(
-                                char,
-                                style: TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w600,
-                                  color: OtterColors.text(isDark),
-                                ),
-                              ),
+                      border: Border.all(
+                        color: hasError
+                            ? Colors.red.shade300
+                            : active
+                            ? OtterColors.sberGreen
+                            : OtterColors.border(isDark),
+                        width: 2,
                       ),
                     ),
-                  );
-                }),
-              ),
-            ),
-            // Full-size transparent field — avoids height:0 IME focus loss on Android.
-            TextField(
+                    child: active && !filled
+                        ? _BlinkingCursor(color: OtterColors.sberGreen)
+                        : Text(
+                            char,
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w600,
+                              color: OtterColors.text(isDark),
+                            ),
+                          ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+        // Keep a real-layout TextField for IME, but do not paint it.
+        Offstage(
+          offstage: true,
+          child: SizedBox(
+            width: 1,
+            height: 1,
+            child: TextField(
               controller: _controller,
               focusNode: _focusNode,
               enabled: widget.enabled,
@@ -188,28 +196,17 @@ class OtpCodeInputState extends State<OtpCodeInput> {
               enableSuggestions: false,
               autocorrect: false,
               showCursor: false,
+              scrollPadding: EdgeInsets.zero,
               enableInteractiveSelection: false,
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                counterText: '',
-                contentPadding: EdgeInsets.zero,
-                isDense: true,
-              ),
-              style: const TextStyle(
-                color: Colors.transparent,
-                fontSize: 1,
-                height: 1,
-              ),
+              decoration: const InputDecoration.collapsed(hintText: null),
+              style: const TextStyle(color: Colors.transparent, fontSize: 16),
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
                 LengthLimitingTextInputFormatter(widget.length),
               ],
               onChanged: _onChanged,
-              onTap: () {
-                if (widget.enabled) requestFocus();
-              },
             ),
-          ],
+          ),
         ),
         if (hasError) ...[
           const SizedBox(height: 8),

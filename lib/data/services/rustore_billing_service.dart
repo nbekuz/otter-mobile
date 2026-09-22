@@ -265,6 +265,15 @@ class RuStoreBillingService {
           'productId=${invalidPurchase.productId} '
           'sandbox=${invalidPurchase.sandbox}',
         );
+        if (RuStoreConfig.isAlreadyPurchasedError(
+          errorCode: invalidPurchase.errorCode,
+        )) {
+          return _alreadyOwnedResult(
+            productId: invalidPurchase.productId ?? productId,
+            purchaseId: invalidPurchase.purchaseId,
+            orderId: invalidPurchase.orderId,
+          );
+        }
         return PurchaseResult.failed(
           rustorePaymentFailureMessage(
             errorCode: invalidPurchase.errorCode,
@@ -287,12 +296,66 @@ class RuStoreBillingService {
     } on BillingException {
       rethrow;
     } catch (e, st) {
+      if (RuStoreConfig.isAlreadyPurchasedError(error: e)) {
+        BillingLogger.info('Purchase threw already-owned (40012)');
+        return _alreadyOwnedResult(productId: productId);
+      }
       BillingLogger.error('Purchase failed', e, st);
       final msg = billingErrorMessage(e);
       if (msg == const PurchaseCancelledException().message) {
         return PurchaseResult.cancelled(msg);
       }
       return PurchaseResult.failed(msg);
+    }
+  }
+
+  Future<PurchaseResult> _alreadyOwnedResult({
+    required String productId,
+    String? purchaseId,
+    String? orderId,
+  }) async {
+    BillingLogger.info(
+      '40012 already purchased — resolving purchaseId for $productId',
+    );
+    final fromSdk = purchaseId?.trim();
+    if (fromSdk != null && fromSdk.isNotEmpty) {
+      return PurchaseResult.alreadyOwned(
+        productId: productId,
+        purchaseId: fromSdk,
+        orderId: orderId,
+      );
+    }
+    final match = await _resolveActivePurchase(productId);
+    if (match != null) {
+      return PurchaseResult.alreadyOwned(
+        productId: match.productId ?? productId,
+        purchaseId: match.purchaseId,
+        orderId: match.orderId ?? orderId,
+        subscriptionToken: match.subscriptionToken,
+        purchase: match,
+      );
+    }
+    return PurchaseResult.alreadyOwned(productId: productId);
+  }
+
+  Future<BillingPurchase?> _resolveActivePurchase(String productId) async {
+    try {
+      final purchases = await getPurchases();
+      BillingPurchase? matchForProduct;
+      BillingPurchase? anyActive;
+      for (final p in purchases) {
+        final id = (p.purchaseId ?? '').trim();
+        if (id.isEmpty || !p.isActive) continue;
+        anyActive ??= p;
+        if (p.productId == productId) {
+          matchForProduct = p;
+          break;
+        }
+      }
+      return matchForProduct ?? anyActive;
+    } catch (e, st) {
+      BillingLogger.error('resolve active purchase failed', e, st);
+      return null;
     }
   }
 

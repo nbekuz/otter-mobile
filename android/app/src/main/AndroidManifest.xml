@@ -34,7 +34,14 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- RuStore Billing: return from SBP / SberPay (scheme must match initialize). -->
+            <!-- RuStore Billing: return from SberPay / SBP (scheme must match initialize). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="com.nbekdev.otter.rustore"/>
+            </intent-filter>
+            <!-- Legacy billing return scheme (older APKs). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>

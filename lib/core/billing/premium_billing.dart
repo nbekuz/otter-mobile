@@ -11,25 +11,52 @@ enum PremiumBillingProvider {
   rustore,
 }
 
-/// Single switch for Android store billing.
+/// Single switch for Android store billing capability.
 ///
-/// RuStore Billing is active on Android; Robokassa stays for Windows/desktop.
+/// When [rustore], only [kRustoreBillingAllowlistEmails] use RuStore SDK;
+/// every other Android account pays via Robokassa (same as web).
 const PremiumBillingProvider kAndroidBillingProvider =
     PremiumBillingProvider.rustore;
 
-/// Resolves the active billing provider for this process.
-PremiumBillingProvider resolvePremiumBillingProvider() {
-  if (Platform.isAndroid) {
-    return kAndroidBillingProvider;
-  }
-  // Windows (and any non-Android desktop/mobile target) keeps Robokassa.
-  return PremiumBillingProvider.robokassa;
+/// Android accounts allowed to use RuStore Billing (QA / owner).
+/// Everyone else on Android uses Robokassa checkout like the web app.
+const Set<String> kRustoreBillingAllowlistEmails = {
+  'nbekdev@gmail.com',
+};
+
+bool isEmailAllowedForRustoreBilling(String? email) {
+  final normalized = email?.trim().toLowerCase() ?? '';
+  if (normalized.isEmpty) return false;
+  return kRustoreBillingAllowlistEmails.contains(normalized);
 }
+
+/// Resolves the active billing provider for this process / signed-in user.
+PremiumBillingProvider resolvePremiumBillingProvider({String? userEmail}) {
+  if (!Platform.isAndroid) {
+    // Windows (and any non-Android target) keeps Robokassa.
+    return PremiumBillingProvider.robokassa;
+  }
+
+  switch (kAndroidBillingProvider) {
+    case PremiumBillingProvider.androidComingSoon:
+      return PremiumBillingProvider.androidComingSoon;
+    case PremiumBillingProvider.rustore:
+      if (isEmailAllowedForRustoreBilling(userEmail)) {
+        return PremiumBillingProvider.rustore;
+      }
+      return PremiumBillingProvider.robokassa;
+    case PremiumBillingProvider.robokassa:
+      return PremiumBillingProvider.robokassa;
+  }
+}
+
+bool isRustoreBillingActiveFor(String? userEmail) =>
+    resolvePremiumBillingProvider(userEmail: userEmail) ==
+    PremiumBillingProvider.rustore;
 
 /// True when Android must not show or call any paid-subscription commerce
 /// (tariffs, prices, trial paywall, Robokassa checkout, consent, etc.).
 bool get isAndroidPremiumPurchaseBlocked {
-  final provider = resolvePremiumBillingProvider();
   return Platform.isAndroid &&
-      provider == PremiumBillingProvider.androidComingSoon;
+      kAndroidBillingProvider == PremiumBillingProvider.androidComingSoon;
 }

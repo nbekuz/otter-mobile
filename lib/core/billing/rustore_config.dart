@@ -2,9 +2,16 @@
 abstract final class RuStoreConfig {
   static const packageName = 'com.nbekdev.otter';
 
-  /// Deeplink scheme registered in AndroidManifest (SBP / SberPay return).
-  static const deeplinkScheme = 'otter';
-  static const deeplinkUri = 'otter://iamback';
+  /// Dedicated Pay-return scheme. Must not collide with go_router app routes.
+  /// Manifest `<data android:scheme>` and [deeplinkUri] must share this scheme.
+  static const deeplinkScheme = 'com.nbekdev.otter.rustore';
+  static const deeplinkUri = 'com.nbekdev.otter.rustore://iamback';
+
+  /// Legacy scheme used before the dedicated billing scheme.
+  static const legacyDeeplinkScheme = 'otter';
+
+  /// RuStore: product already purchased (pre_confirmed / confirmed).
+  static const alreadyPurchasedErrorCode = 40012;
 
   static const monthlyProductId = 'otter_month';
   static const yearlyProductId = 'otter_year';
@@ -23,7 +30,19 @@ abstract final class RuStoreConfig {
         _ => monthlyProductId,
       };
 
-  /// RuStore Pay returns e.g. `otter://iamback//ru.rustore.sdk.billingclient.back?...`.
+  static bool isAlreadyPurchasedError({int? errorCode, Object? error}) {
+    if (errorCode == alreadyPurchasedErrorCode) return true;
+    final s = error?.toString().toLowerCase() ?? '';
+    if (s.isEmpty) return false;
+    return s.contains('40012') ||
+        s.contains('уже приобретен') ||
+        s.contains('already purchased') ||
+        s.contains('product_already') ||
+        s.contains('already_owned');
+  }
+
+  /// RuStore Pay returns e.g.
+  /// `com.nbekdev.otter.rustore://iamback//ru.rustore.sdk.billingclient.back?...`.
   /// go_router must not treat these as app routes (Page Not Found).
   static bool isBillingReturnUri(Uri uri) {
     if (uri.scheme == deeplinkScheme) return true;
@@ -32,8 +51,16 @@ abstract final class RuStoreConfig {
 
   static bool isBillingReturnLocation(String location) {
     final s = location.toLowerCase();
-    return s.contains('iamback') ||
+    if (s.contains('iamback') ||
         s.contains('rustore.sdk.billingclient') ||
-        s.startsWith('$deeplinkScheme:');
+        s.contains('paylib_sp=') ||
+        s.startsWith('$deeplinkScheme:')) {
+      return true;
+    }
+    // Old APKs returned via otter://…billingclient.back
+    return s.startsWith('$legacyDeeplinkScheme:') &&
+        (s.contains('billingclient') ||
+            s.contains('iamback') ||
+            s.contains('paylib'));
   }
 }

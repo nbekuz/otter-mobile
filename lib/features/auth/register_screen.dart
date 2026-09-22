@@ -204,7 +204,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             controller: _password,
             focusNode: _passwordFocus,
             label: 'Пароль',
-            hint: 'A-z, 0-9, спец, 8–20 символов',
+            hint: '8–20 символов, Aa + цифра',
             icon: LucideIcons.lock,
             obscure: true,
             obscureVisible: _showPassword,
@@ -218,7 +218,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Пароль: 8–20 символов, латиница (A–z), цифра и спецсимвол (!@#…).',
+            'Пароль: 8–20 символов, латиница (A–z) и минимум одна цифра.',
             style: TextStyle(
               fontSize: 12,
               color: OtterColors.sberGray,

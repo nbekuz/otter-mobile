@@ -2,6 +2,7 @@ const passwordMinLength = 8;
 const passwordMaxLength = 20;
 
 /// Returns an error message or `null` when valid.
+/// Rules: 8–20 chars, ≥1 lowercase, ≥1 uppercase Latin letter, ≥1 digit.
 String? validateNewPassword(String password) {
   if (password.length < passwordMinLength) {
     return 'Пароль должен содержать не менее $passwordMinLength символов';
@@ -17,9 +18,6 @@ String? validateNewPassword(String password) {
   }
   if (!RegExp(r'\d').hasMatch(password)) {
     return 'Пароль должен содержать минимум одну цифру';
-  }
-  if (!RegExp(r'[^A-Za-z0-9]').hasMatch(password)) {
-    return 'Пароль должен содержать минимум один специальный символ (!, @, # и т.п.)';
   }
   return null;
 }

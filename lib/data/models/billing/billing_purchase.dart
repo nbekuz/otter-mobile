@@ -43,7 +43,7 @@ class BillingPurchase {
   }
 }
 
-enum PurchaseResultStatus { success, cancelled, failed }
+enum PurchaseResultStatus { success, cancelled, failed, alreadyOwned }
 
 class PurchaseResult {
   const PurchaseResult({
@@ -66,6 +66,7 @@ class PurchaseResult {
 
   bool get isSuccess => status == PurchaseResultStatus.success;
   bool get isCancelled => status == PurchaseResultStatus.cancelled;
+  bool get isAlreadyOwned => status == PurchaseResultStatus.alreadyOwned;
 
   factory PurchaseResult.success({
     required String productId,
@@ -91,5 +92,21 @@ class PurchaseResult {
   factory PurchaseResult.failed(String message) => PurchaseResult(
         status: PurchaseResultStatus.failed,
         message: message,
+      );
+
+  factory PurchaseResult.alreadyOwned({
+    String? productId,
+    String? purchaseId,
+    String? orderId,
+    String? subscriptionToken,
+    BillingPurchase? purchase,
+  }) =>
+      PurchaseResult(
+        status: PurchaseResultStatus.alreadyOwned,
+        productId: productId,
+        purchaseId: purchaseId,
+        orderId: orderId,
+        subscriptionToken: subscriptionToken,
+        purchase: purchase,
       );
 }

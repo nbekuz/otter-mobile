@@ -140,24 +140,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (mounted) context.go('/app');
     } catch (e) {
       if (!mounted) return;
-      final message = _loginErrorMessage(e);
-      final emailField = getApiFieldError(e, 'email');
-      final passwordField = getApiFieldError(e, 'password');
       setState(() {
-        if (emailField != null && passwordField == null) {
-          _emailError = emailField;
-          _passwordError = null;
-        } else if (passwordField != null && emailField == null) {
-          _emailError = null;
-          _passwordError = passwordField;
-        } else if (message.contains('учётной записи')) {
-          _emailError = message;
-          _passwordError = null;
-        } else {
-          _emailError = message;
-          _passwordError = message;
-        }
+        _emailError = null;
+        _passwordError = null;
       });
+      showAppToast(context, _loginErrorMessage(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
