@@ -1,3 +1,5 @@
+import '../billing/robokassa_sdk_params.dart';
+
 class ApiTask {
   ApiTask({
     required this.id,
@@ -638,16 +640,36 @@ class ApiPremiumCheckoutResponse {
   ApiPremiumCheckoutResponse({
     required this.checkoutUrl,
     required this.provider,
+    this.invoiceId,
+    this.sdk,
   });
 
   final String checkoutUrl;
   final String provider;
+  final int? invoiceId;
+  final RobokassaSdkParams? sdk;
 
-  factory ApiPremiumCheckoutResponse.fromJson(Map<String, dynamic> json) =>
-      ApiPremiumCheckoutResponse(
-        checkoutUrl: json['checkout_url'] as String? ?? '',
-        provider: json['provider'] as String? ?? 'robokassa',
-      );
+  factory ApiPremiumCheckoutResponse.fromJson(Map<String, dynamic> json) {
+    final payment = json['payment'];
+    final paymentMap =
+        payment is Map<String, dynamic> ? payment : null;
+    final sdkRaw = json['sdk'];
+    final invoiceRaw = paymentMap?['invoice_id'] ?? json['invoice_id'];
+    final invoiceId = invoiceRaw is int
+        ? invoiceRaw
+        : int.tryParse('$invoiceRaw');
+    final checkoutFromPayment = paymentMap?['checkout_url'] as String?;
+    return ApiPremiumCheckoutResponse(
+      checkoutUrl: (json['checkout_url'] as String?)?.trim().isNotEmpty == true
+          ? (json['checkout_url'] as String).trim()
+          : (checkoutFromPayment ?? '').trim(),
+      provider: json['provider'] as String? ?? 'robokassa',
+      invoiceId: invoiceId,
+      sdk: sdkRaw is Map<String, dynamic>
+          ? RobokassaSdkParams.fromJson(sdkRaw)
+          : null,
+    );
+  }
 }
 
 class ApiLegalDocument {

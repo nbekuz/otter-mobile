@@ -1133,7 +1133,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _purchasePremium() async {
     if (isAndroidPremiumPurchaseBlocked) return;
-    if (isRustoreBillingActiveFor(ref.read(authStateProvider).user?.email)) {
+    final email = ref.read(authStateProvider).user?.email;
+    if (isRustoreBillingActiveFor(email)) {
       await _purchaseRustore();
       return;
     }
@@ -1148,66 +1149,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
       return;
     }
+
+    await _purchaseRobokassaWeb();
+  }
+
+  Future<void> _purchaseRobokassaWeb() async {
     try {
       final url = await ref
           .read(premiumStateProvider.notifier)
-          .checkout(recurringConsent: _recurringConsent);
+          .launchWebPremiumPay(recurringConsent: _recurringConsent);
       if (!mounted || url.isEmpty) return;
-      final opened = await openExternalUrl(url);
-      if (!mounted) return;
-      if (Platform.isWindows && opened) {
-        final result = await showWindowsPremiumPaymentDialog(context: context);
-        if (!mounted) return;
 
-        switch (result) {
-          case PremiumPaymentPollingResult.success:
-            setState(() => _premiumVisible = false);
-            unawaited(ref.read(appSettingsProvider.notifier).load());
-            unawaited(ref.read(authStateProvider.notifier).refreshProfile());
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Premium успешно активирован')),
-            );
-          case PremiumPaymentPollingResult.cancelled:
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text('Платёж отменён')));
-          case PremiumPaymentPollingResult.timeout:
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Время ожидания истекло. Статус можно обновить вручную.',
-                ),
+      final result = await showWindowsPremiumPaymentDialog(context: context);
+      if (!mounted) return;
+
+      switch (result) {
+        case PremiumPaymentPollingResult.success:
+          setState(() => _premiumVisible = false);
+          unawaited(ref.read(appSettingsProvider.notifier).load());
+          unawaited(ref.read(authStateProvider.notifier).refreshProfile());
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Premium успешно активирован')),
+          );
+        case PremiumPaymentPollingResult.cancelled:
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Платёж отменён')),
+          );
+        case PremiumPaymentPollingResult.timeout:
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Время ожидания истекло. Статус можно обновить вручную.',
               ),
-            );
-          case PremiumPaymentPollingResult.fatalError:
-            final error = ref.read(premiumStateProvider).error;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(error ?? 'Не удалось проверить статус платежа'),
-              ),
-            );
-          case PremiumPaymentPollingResult.stopped:
-          case null:
-            break;
-        }
-        return;
+            ),
+          );
+        case PremiumPaymentPollingResult.fatalError:
+          final error = ref.read(premiumStateProvider).error;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(error ?? 'Не удалось проверить статус платежа'),
+            ),
+          );
+        case PremiumPaymentPollingResult.stopped:
+        case null:
+          break;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            opened
-                ? 'Откройте оплату. После оплаты нажмите «Обновить статус».'
-                : 'Не удалось открыть ссылку. Скопируйте её вручную.',
-          ),
-          duration: const Duration(seconds: 5),
-          action: opened
-              ? null
-              : SnackBarAction(
-                  label: 'Копировать',
-                  onPressed: () => Clipboard.setData(ClipboardData(text: url)),
-                ),
-        ),
-      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(

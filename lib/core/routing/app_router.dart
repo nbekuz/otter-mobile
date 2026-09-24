@@ -44,6 +44,27 @@ void _scheduleBillingReturnSync(Ref ref) {
   });
 }
 
+void _scheduleWebPremiumReturnSync(Ref ref) {
+  Future.microtask(() async {
+    try {
+      await ref
+          .read(premiumStateProvider.notifier)
+          .syncAfterWebPremiumReturn();
+    } catch (e, st) {
+      BillingLogger.error('web premium return sync failed', e, st);
+    }
+  });
+}
+
+bool _isWebPremiumReturn(Uri uri, String raw) {
+  final s = raw.toLowerCase();
+  if (uri.scheme == 'otter' &&
+      (uri.host == 'premium' || uri.path.contains('premium'))) {
+    return true;
+  }
+  return s.contains('otter://premium') || s.contains('premium/return');
+}
+
 String _safeLocationAfterBilling(Ref ref) {
   final auth = ref.read(authStateProvider);
   if (auth.isAuthenticated) return '/app';
@@ -57,6 +78,12 @@ GoRouter createAppRouter(Ref ref, Listenable refreshListenable) {
     refreshListenable: refreshListenable,
     onException: (context, state, router) {
       final raw = state.uri.toString();
+      if (_isWebPremiumReturn(state.uri, raw)) {
+        BillingLogger.info('Web premium return (onException): $raw');
+        _scheduleWebPremiumReturnSync(ref);
+        router.go(_safeLocationAfterBilling(ref));
+        return;
+      }
       if (RuStoreConfig.isBillingReturnUri(state.uri) ||
           RuStoreConfig.isBillingReturnLocation(raw)) {
         BillingLogger.info('RuStore billing deep link (onException): $raw');
@@ -70,6 +97,11 @@ GoRouter createAppRouter(Ref ref, Listenable refreshListenable) {
     redirect: (context, state) {
       // PayLib / SBP / SberPay return — never treat as an app route.
       final raw = state.uri.toString();
+      if (_isWebPremiumReturn(state.uri, raw)) {
+        BillingLogger.info('Web premium return (redirect): $raw');
+        _scheduleWebPremiumReturnSync(ref);
+        return _safeLocationAfterBilling(ref);
+      }
       if (RuStoreConfig.isBillingReturnUri(state.uri) ||
           RuStoreConfig.isBillingReturnLocation(raw) ||
           RuStoreConfig.isBillingReturnLocation(state.matchedLocation)) {

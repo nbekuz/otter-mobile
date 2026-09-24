@@ -4,8 +4,9 @@ import '../../core/network/api_client.dart';
 
 /// Premium API for the Flutter app.
 ///
-/// Android RuStore uses `mobile/premium/...` (see RUSTORE_ANDROID_PREMIUM.md).
-/// Robokassa checkout/trial stay on classic `premium/...` paths.
+/// - Android RuStore (allowlisted): `mobile/premium/rustore/...`
+/// - Android Robokassa: `mobile/premium/checkout/` → `sdk` (native pay UI)
+/// - Windows / web-style: `premium/checkout/` → `checkout_url`
 class PremiumService {
   PremiumService(this._client);
   final ApiClient _client;
@@ -44,6 +45,7 @@ class PremiumService {
     return ApiSubscription.fromJson(data);
   }
 
+  /// Web / Windows: open returned `checkout_url` as-is.
   Future<ApiPremiumCheckoutResponse> checkout({
     required String tariff,
     bool recurringConsent = false,
@@ -51,6 +53,23 @@ class PremiumService {
   }) async {
     final data = await _client.post<Map<String, dynamic>>(
       '$_premium/checkout/',
+      data: {
+        'tariff': tariff,
+        'recurring_consent': recurringConsent,
+        'offer_version': offerVersion,
+      },
+    );
+    return ApiPremiumCheckoutResponse.fromJson(data);
+  }
+
+  /// Android Robokassa SDK path: use `sdk` fields only (never rebuild the URL).
+  Future<ApiPremiumCheckoutResponse> mobileCheckout({
+    required String tariff,
+    bool recurringConsent = false,
+    String offerVersion = '2026-07-01',
+  }) async {
+    final data = await _client.post<Map<String, dynamic>>(
+      '$_mobilePremium/checkout/',
       data: {
         'tariff': tariff,
         'recurring_consent': recurringConsent,

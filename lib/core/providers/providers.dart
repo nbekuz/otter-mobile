@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kDebugMode, listEquals;
 import 'package:flutter/widgets.dart';
@@ -17,6 +18,7 @@ import '../../data/services/pomodoro_service.dart';
 import '../../data/services/settings_service.dart';
 import '../../data/services/premium_service.dart';
 import '../../data/services/rustore_billing_service.dart';
+import '../../data/services/robokassa_billing_service.dart';
 import '../../data/services/reminders_service.dart';
 import '../../data/services/sounds_service.dart';
 import '../../data/services/tasks_service.dart';
@@ -37,7 +39,9 @@ import '../billing/billing_exceptions.dart';
 import '../billing/billing_logger.dart';
 import '../billing/premium_billing.dart';
 import '../billing/rustore_config.dart';
+import '../config/env.dart';
 import '../push/push_notifications.dart';
+import '../utils/open_url.dart';
 import '../utils/premium_tariffs.dart';
 import '../utils/recurrence.dart';
 import '../utils/repeat_weekdays.dart';
@@ -94,6 +98,10 @@ final premiumServiceProvider = Provider<PremiumService>(
 
 final rustoreBillingServiceProvider = Provider<RuStoreBillingService>(
   (ref) => RuStoreBillingService(),
+);
+
+final robokassaBillingServiceProvider = Provider<RobokassaBillingService>(
+  (ref) => RobokassaBillingService(),
 );
 
 /// RuStore SDK path — only allowlisted Android emails (see [premium_billing]).
@@ -554,8 +562,9 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
     }
   }
 
-  Future<String> checkout({bool recurringConsent = false}) async {
-    // Defensive: allowlisted RuStore users must never hit Robokassa checkout.
+  /// Opens otter-app `/premium/pay` (Robokassa in the browser).
+  /// Does not grant Premium — caller must [pollForPayment] after the browser opens.
+  Future<String> launchWebPremiumPay({bool recurringConsent = false}) async {
     if (isAndroidPremiumPurchaseBlocked || _useRustore) {
       throw StateError(
         _useRustore
@@ -563,22 +572,70 @@ class PremiumNotifier extends StateNotifier<PremiumState> {
             : kAndroidPremiumUnavailableMessage,
       );
     }
+
     state = state.copyWith(actionLoading: true, clearError: true);
     try {
-      final response = await _ref
-          .read(premiumServiceProvider)
-          .checkout(
-            tariff: state.selectedTariff?.code ?? state.selectedTariffCode,
-            recurringConsent: recurringConsent,
-          );
+      final access =
+          await _ref.read(tokenStorageProvider).getAccessToken() ?? '';
+      if (access.isEmpty) {
+        throw StateError('Нет активной сессии. Войдите снова.');
+      }
+      final refresh =
+          await _ref.read(tokenStorageProvider).getRefreshToken() ?? '';
+      final tariff =
+          state.selectedTariff?.code ?? state.selectedTariffCode;
+      final source = Platform.isAndroid
+          ? 'android'
+          : (Platform.isWindows ? 'windows' : 'app');
+
+      final uri = Uri.parse('${Env.webAppBaseUrl}/premium/pay').replace(
+        queryParameters: <String, String>{
+          'tariff': tariff,
+          'recurring_consent': recurringConsent ? '1' : '0',
+          'source': source,
+          'access_token': access,
+          if (refresh.isNotEmpty) 'refresh_token': refresh,
+        },
+      );
+
+      final opened = await openExternalUrl(uri.toString());
+      if (!opened) {
+        throw StateError('Не удалось открыть браузер для оплаты.');
+      }
       state = state.copyWith(actionLoading: false);
-      return response.checkoutUrl;
+      return uri.toString();
     } catch (e) {
       state = state.copyWith(
         actionLoading: false,
         error: getApiErrorMessage(e),
       );
       rethrow;
+    }
+  }
+
+  @Deprecated('Use launchWebPremiumPay — Robokassa goes through otter-app web.')
+  Future<String> checkout({bool recurringConsent = false}) =>
+      launchWebPremiumPay(recurringConsent: recurringConsent);
+
+  /// Legacy Android Robokassa SDK path (kept for reference; UI uses web pay).
+  @Deprecated('Use launchWebPremiumPay')
+  Future<RobokassaPayResult> launchRobokassaMobilePay({
+    bool recurringConsent = false,
+  }) async {
+    await launchWebPremiumPay(recurringConsent: recurringConsent);
+    return const RobokassaPayResult(
+      status: RobokassaPayStatus.success,
+      message: 'Открыта веб-оплата',
+    );
+  }
+
+  /// After otter://premium/return or browser resume — refresh + wake poll.
+  Future<void> syncAfterWebPremiumReturn() async {
+    wakePaymentPolling();
+    try {
+      await refreshPremiumStatus();
+    } catch (e, st) {
+      BillingLogger.error('syncAfterWebPremiumReturn', e, st);
     }
   }
 

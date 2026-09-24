@@ -119,4 +119,10 @@ abstract final class Env {
     if (value.isEmpty) return null;
     return value;
   }
+
+  /// Public otter-app origin used for Robokassa web checkout handoff.
+  static String get webAppBaseUrl {
+    final raw = _envOr('WEB_APP_BASE_URL', 'https://ottertime.ru');
+    return raw.endsWith('/') ? raw.substring(0, raw.length - 1) : raw;
+  }
 }

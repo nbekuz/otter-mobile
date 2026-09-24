@@ -14,12 +14,12 @@ enum PremiumBillingProvider {
 /// Single switch for Android store billing capability.
 ///
 /// When [rustore], only [kRustoreBillingAllowlistEmails] use RuStore SDK;
-/// every other Android account pays via Robokassa (same as web).
+/// every other Android account pays via otter-app web Robokassa checkout.
 const PremiumBillingProvider kAndroidBillingProvider =
     PremiumBillingProvider.rustore;
 
 /// Android accounts allowed to use RuStore Billing (QA / owner).
-/// Everyone else on Android uses Robokassa checkout like the web app.
+/// Everyone else on Android uses Robokassa through otter-app `/premium/pay`.
 const Set<String> kRustoreBillingAllowlistEmails = {
   'nbekdev@gmail.com',
 };
@@ -53,6 +53,12 @@ PremiumBillingProvider resolvePremiumBillingProvider({String? userEmail}) {
 bool isRustoreBillingActiveFor(String? userEmail) =>
     resolvePremiumBillingProvider(userEmail: userEmail) ==
     PremiumBillingProvider.rustore;
+
+/// Android Robokassa path — opens otter-app web checkout (not native SDK).
+bool isAndroidRobokassaBillingFor(String? userEmail) =>
+    Platform.isAndroid &&
+    resolvePremiumBillingProvider(userEmail: userEmail) ==
+        PremiumBillingProvider.robokassa;
 
 /// True when Android must not show or call any paid-subscription commerce
 /// (tariffs, prices, trial paywall, Robokassa checkout, consent, etc.).
