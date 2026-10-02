@@ -40,6 +40,9 @@ import '../billing/billing_logger.dart';
 import '../billing/premium_billing.dart';
 import '../billing/rustore_config.dart';
 import '../config/env.dart';
+import '../offline/offline_support.dart';
+import '../offline/task_list_cache.dart';
+import '../offline/task_outbox.dart';
 import '../push/push_notifications.dart';
 import '../utils/open_url.dart';
 import '../utils/premium_tariffs.dart';
@@ -1754,9 +1757,25 @@ class TasksState {
 }
 
 class TasksNotifier extends StateNotifier<TasksState> {
-  TasksNotifier(this._ref) : super(const TasksState());
+  TasksNotifier(this._ref) : super(const TasksState()) {
+    unawaited(_hydrateCache());
+  }
 
   final Ref _ref;
+  var _replaying = false;
+
+  Future<void> _hydrateCache() async {
+    if (state.groups.isNotEmpty) return;
+    final cached = await TaskListCache.load();
+    if (cached == null || cached.isEmpty || state.groups.isNotEmpty) return;
+    state = TasksState(
+      groups: cached,
+      searchQuery: state.searchQuery,
+      searchResults: state.searchResults,
+    );
+  }
+
+  Future<void> _persistGroups() => TaskListCache.save(state.groups);
 
   Future<void> loadGrouped() async {
     state = TasksState(
@@ -1775,10 +1794,17 @@ class TasksNotifier extends StateNotifier<TasksState> {
         searchQuery: state.searchQuery,
         searchResults: state.searchResults,
       );
+      unawaited(_persistGroups());
     } catch (e) {
+      var groups = state.groups;
+      if (groups.isEmpty) {
+        groups = await TaskListCache.load() ?? groups;
+      }
       state = TasksState(
-        groups: state.groups,
-        error: e.toString(),
+        groups: groups,
+        error: isOfflineFailure(e)
+            ? 'Нет сети. Показаны сохранённые задачи.'
+            : e.toString(),
         searchQuery: state.searchQuery,
         searchResults: state.searchResults,
       );
@@ -1917,12 +1943,29 @@ class TasksNotifier extends StateNotifier<TasksState> {
       );
       return;
     }
-    final results = await _ref.read(tasksServiceProvider).searchTasks(query);
-    state = TasksState(
-      groups: state.groups,
-      searchQuery: query,
-      searchResults: results,
-    );
+    try {
+      final results = await _ref.read(tasksServiceProvider).searchTasks(query);
+      state = TasksState(
+        groups: state.groups,
+        searchQuery: query,
+        searchResults: results,
+      );
+    } catch (e) {
+      if (!isOfflineFailure(e)) rethrow;
+      final q = query.trim().toLowerCase();
+      final results = <Task>[
+        for (final list in state.groups.values)
+          for (final task in list)
+            if (task.title.toLowerCase().contains(q) ||
+                (task.description ?? '').toLowerCase().contains(q))
+              task,
+      ];
+      state = TasksState(
+        groups: state.groups,
+        searchQuery: query,
+        searchResults: results,
+      );
+    }
   }
 
   final Set<String> _completeInFlight = {};
@@ -1952,6 +1995,18 @@ class TasksNotifier extends StateNotifier<TasksState> {
     }
 
     try {
+      if (isLocalTaskId(realId)) {
+        await TaskOutbox.enqueue(
+          TaskOutboxItem(
+            op: TaskOutboxOp.complete,
+            id: realId,
+            wasCompleted: existing.completed,
+          ),
+        );
+        unawaited(_persistGroups());
+        notifyTaskOutboxChanged();
+        return;
+      }
       final result = await _ref
           .read(tasksServiceProvider)
           .toggleComplete(realId, wasCompleted: existing.completed);
@@ -2005,6 +2060,18 @@ class TasksNotifier extends StateNotifier<TasksState> {
         unawaited(calendar.load(silent: true));
       }
     } catch (e) {
+      if (isOfflineFailure(e)) {
+        await TaskOutbox.enqueue(
+          TaskOutboxItem(
+            op: TaskOutboxOp.complete,
+            id: realId,
+            wasCompleted: existing.completed,
+          ),
+        );
+        unawaited(_persistGroups());
+        notifyTaskOutboxChanged();
+        return;
+      }
       upsertLocalTask(task.copyWith(id: realId));
       calendar.upsertTask(task.copyWith(id: realId));
       if (task.id != realId) {
@@ -2164,10 +2231,38 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   Future<void> deleteTask(String id, {String? scope}) async {
-    await _ref.read(tasksServiceProvider).deleteTask(id, scope: scope);
+    if (isLocalTaskId(id)) {
+      final items = await TaskOutbox.load();
+      await TaskOutbox.save([
+        for (final item in items)
+          if (item.id != id) item,
+      ]);
+      removeLocalTask(id);
+      _ref.read(calendarStateProvider.notifier).removeTask(id);
+      unawaited(_persistGroups());
+      notifyTaskOutboxChanged();
+      return;
+    }
+    try {
+      await _ref.read(tasksServiceProvider).deleteTask(id, scope: scope);
+    } catch (e) {
+      if (!isOfflineFailure(e)) rethrow;
+      await TaskOutbox.enqueue(
+        TaskOutboxItem(
+          op: TaskOutboxOp.delete,
+          id: id,
+          scope: scope,
+        ),
+      );
+      notifyTaskOutboxChanged();
+    }
     removeLocalTask(id);
     _ref.read(calendarStateProvider.notifier).removeTask(id);
-    await loadGrouped();
+    unawaited(_persistGroups());
+    if (isLocalTaskId(id)) return;
+    try {
+      await loadGrouped();
+    } catch (_) {}
     try {
       await _ref.read(calendarStateProvider.notifier).load(silent: true);
     } catch (_) {}
@@ -2185,26 +2280,43 @@ class TasksNotifier extends StateNotifier<TasksState> {
   Future<Task> addTask(PartialTask partial) async {
     final includeMatrixBlock = _ref.read(premiumStateProvider).isPremium ||
         _ref.read(appSettingsProvider).isPremium;
-    final created = await _ref.read(tasksServiceProvider).createTask(
-          partial,
-          includeMatrixBlock: includeMatrixBlock,
-        );
-    // Prefer the wall-clock we sent — API often echoes UTC (`…Z`).
-    final task = TaskMapper.preferClientSchedule(created, partial);
-    // Web: upsert into main tasks list immediately so calendar pool sees it.
-    upsertLocalTask(task);
-    _ref.read(calendarStateProvider.notifier).upsertTask(task);
     try {
-      await loadGrouped();
-    } catch (_) {}
-    // Re-apply if grouped fetch was briefly stale.
-    upsertLocalTask(task);
-    try {
-      await _ref.read(calendarStateProvider.notifier).load(silent: true);
-    } catch (_) {}
-    // Keep optimistic task if calendar fetch was briefly stale.
-    _ref.read(calendarStateProvider.notifier).upsertTask(task);
-    return task;
+      final created = await _ref.read(tasksServiceProvider).createTask(
+            partial,
+            includeMatrixBlock: includeMatrixBlock,
+          );
+      // Prefer the wall-clock we sent — API often echoes UTC (`…Z`).
+      final task = TaskMapper.preferClientSchedule(created, partial);
+      // Web: upsert into main tasks list immediately so calendar pool sees it.
+      upsertLocalTask(task);
+      _ref.read(calendarStateProvider.notifier).upsertTask(task);
+      try {
+        await loadGrouped();
+      } catch (_) {}
+      // Re-apply if grouped fetch was briefly stale.
+      upsertLocalTask(task);
+      try {
+        await _ref.read(calendarStateProvider.notifier).load(silent: true);
+      } catch (_) {}
+      // Keep optimistic task if calendar fetch was briefly stale.
+      _ref.read(calendarStateProvider.notifier).upsertTask(task);
+      return task;
+    } catch (e) {
+      if (!isOfflineFailure(e)) rethrow;
+      final local = taskFromPartial(partial, newLocalTaskId());
+      upsertLocalTask(local);
+      _ref.read(calendarStateProvider.notifier).upsertTask(local);
+      await TaskOutbox.enqueue(
+        TaskOutboxItem(
+          op: TaskOutboxOp.create,
+          id: local.id,
+          partial: partial,
+        ),
+      );
+      unawaited(_persistGroups());
+      notifyTaskOutboxChanged();
+      return local;
+    }
   }
 
   Task? findTaskById(String id) {
@@ -2254,9 +2366,18 @@ class TasksNotifier extends StateNotifier<TasksState> {
     bool refreshMatrix = true,
   }) async {
     var existing = findTaskById(id);
-    existing ??= await _ref.read(tasksServiceProvider).fetchTask(id);
+    if (existing == null && !isLocalTaskId(id)) {
+      existing = await _ref.read(tasksServiceProvider).fetchTask(id);
+    }
+    if (existing == null) {
+      throw StateError('Задача не найдена');
+    }
 
     final merged = TaskMapper.mergePartial(existing, partial);
+    if (isLocalTaskId(id)) {
+      return _queueOfflineUpdate(existing, merged, id);
+    }
+
     final payload = TaskMapper.uiToApiPayload(merged);
     debugPrint(
       '[Tasks] PATCH tasks/$id/ '
@@ -2267,34 +2388,139 @@ class TasksNotifier extends StateNotifier<TasksState> {
 
     final includeMatrixBlock = _ref.read(premiumStateProvider).isPremium ||
         _ref.read(appSettingsProvider).isPremium;
-    final fromApi = await _ref.read(tasksServiceProvider).updateTask(
-          id,
-          merged,
-          includeMatrixBlock: includeMatrixBlock,
-        );
-    // Prefer client schedule + repeat fields we just wrote (API may lag).
-    final task = TaskMapper.preferClientSchedule(fromApi, partial);
-    upsertLocalTask(task);
-    _ref.read(calendarStateProvider.notifier).upsertTask(task);
-    if (refreshGrouped) {
-      await loadGrouped();
+    try {
+      final fromApi = await _ref.read(tasksServiceProvider).updateTask(
+            id,
+            merged,
+            includeMatrixBlock: includeMatrixBlock,
+          );
+      // Prefer client schedule + repeat fields we just wrote (API may lag).
+      final task = TaskMapper.preferClientSchedule(fromApi, partial);
       upsertLocalTask(task);
-    }
-    // Keep Eisenhower matrix in sync with priority/date changes.
-    if (refreshMatrix) {
-      try {
-        await _ref.read(matrixStateProvider.notifier).load();
-      } catch (_) {}
-    }
-    // Calendar drag/reschedule keeps an optimistic block on screen; a silent
-    // refetch here flashes the old slot until the response is merged back.
-    if (refreshCalendar) {
-      try {
-        await _ref.read(calendarStateProvider.notifier).load(silent: true);
-      } catch (_) {}
       _ref.read(calendarStateProvider.notifier).upsertTask(task);
+      if (refreshGrouped) {
+        await loadGrouped();
+        upsertLocalTask(task);
+      }
+      if (refreshMatrix) {
+        try {
+          await _ref.read(matrixStateProvider.notifier).load();
+        } catch (_) {}
+      }
+      if (refreshCalendar) {
+        try {
+          await _ref.read(calendarStateProvider.notifier).load(silent: true);
+        } catch (_) {}
+        _ref.read(calendarStateProvider.notifier).upsertTask(task);
+      }
+      return task;
+    } catch (e) {
+      if (!isOfflineFailure(e)) rethrow;
+      return _queueOfflineUpdate(existing, merged, id);
     }
-    return task;
+  }
+
+  Future<Task> _queueOfflineUpdate(
+    Task existing,
+    PartialTask merged,
+    String id,
+  ) async {
+    final local = taskFromPartial(merged, id).copyWith(
+      completed: existing.completed,
+      completedAt: existing.completedAt,
+      createdAt: existing.createdAt,
+      imageUrl: existing.imageUrl,
+      attachments: existing.attachments,
+    );
+    upsertLocalTask(local);
+    _ref.read(calendarStateProvider.notifier).upsertTask(local);
+    await TaskOutbox.enqueue(
+      TaskOutboxItem(
+        op: TaskOutboxOp.update,
+        id: id,
+        partial: merged,
+      ),
+    );
+    unawaited(_persistGroups());
+    notifyTaskOutboxChanged();
+    return local;
+  }
+
+  /// Sends queued offline creates/updates/deletes/completes, then reloads.
+  Future<void> replayOutbox() async {
+    if (_replaying) return;
+    _replaying = true;
+    try {
+      final items = await TaskOutbox.load();
+      if (items.isEmpty) return;
+      final remaining = <TaskOutboxItem>[];
+      final idMap = <String, String>{};
+      final service = _ref.read(tasksServiceProvider);
+      final includeMatrixBlock = _ref.read(premiumStateProvider).isPremium ||
+          _ref.read(appSettingsProvider).isPremium;
+
+      for (var i = 0; i < items.length; i++) {
+        final item = items[i];
+        final id = idMap[item.id] ?? item.id;
+        try {
+          switch (item.op) {
+            case TaskOutboxOp.create:
+              final created = await service.createTask(
+                item.partial ?? PartialTask(),
+                includeMatrixBlock: includeMatrixBlock,
+              );
+              idMap[item.id] = created.id;
+              removeLocalTask(item.id);
+              upsertLocalTask(TaskMapper.preferClientSchedule(
+                created,
+                item.partial ?? PartialTask(),
+              ));
+            case TaskOutboxOp.update:
+              if (isLocalTaskId(id) || item.partial == null) {
+                remaining.add(item);
+                continue;
+              }
+              await service.updateTask(
+                id,
+                item.partial!,
+                includeMatrixBlock: includeMatrixBlock,
+              );
+            case TaskOutboxOp.delete:
+              if (isLocalTaskId(id)) continue;
+              await service.deleteTask(id, scope: item.scope);
+            case TaskOutboxOp.complete:
+              if (isLocalTaskId(id)) {
+                remaining.add(
+                  TaskOutboxItem(
+                    op: item.op,
+                    id: id,
+                    wasCompleted: item.wasCompleted,
+                    partial: item.partial,
+                    scope: item.scope,
+                  ),
+                );
+                continue;
+              }
+              await service.toggleComplete(
+                id,
+                wasCompleted: item.wasCompleted ?? false,
+              );
+          }
+        } catch (e) {
+          if (isOfflineFailure(e)) {
+            remaining.addAll(items.skip(i));
+            break;
+          }
+          // Drop a single rejected op so the queue can move on.
+        }
+      }
+      await TaskOutbox.save(remaining);
+      try {
+        await loadGrouped();
+      } catch (_) {}
+    } finally {
+      _replaying = false;
+    }
   }
 }
 
@@ -2487,6 +2713,24 @@ class CalendarNotifier extends StateNotifier<CalendarUiState> {
           collapsedEarlyHours: collapsedEarly,
           collapsedLateHours: collapsedLate,
           premiumBlocked: true,
+        );
+      } else if (isOfflineFailure(e)) {
+        var tasks = state.tasks;
+        if (tasks.isEmpty) {
+          final groups = _ref.read(tasksStateProvider).groups;
+          tasks = [
+            for (final list in groups.values)
+              for (final task in list)
+                if (!task.completed && (task.dueDate?.isNotEmpty ?? false))
+                  task,
+          ];
+        }
+        state = CalendarUiState(
+          view: v,
+          date: d,
+          tasks: tasks,
+          collapsedEarlyHours: collapsedEarly,
+          collapsedLateHours: collapsedLate,
         );
       } else if (!silent) {
         state = CalendarUiState(

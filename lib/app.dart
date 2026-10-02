@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/billing/billing_logger.dart';
 import 'core/billing/premium_billing.dart';
 import 'core/locale/app_languages.dart';
+import 'core/offline/offline_sync.dart';
 import 'core/platform/windows_title_bar.dart';
 import 'core/providers/providers.dart';
 import 'core/routing/app_router.dart';
@@ -34,6 +35,11 @@ class _OtterAppState extends ConsumerState<OtterApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
+    Future.microtask(() async {
+      try {
+        await ref.read(offlineSyncProvider.notifier).refresh();
+      } catch (_) {}
+    });
     if (!isRustoreBillingActiveFor(ref.read(authStateProvider).user?.email)) {
       return;
     }

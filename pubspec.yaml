@@ -39,6 +39,7 @@ dependencies:
   # 11.0.x breaks AGP 9 + android.builtInKotlin=false (FilePickerPlugin missing).
   # 12.x-beta conflicts with share_plus 10 / win32 5. Revisit after share_plus upgrade.
   file_picker: 10.3.10
+  connectivity_plus: ^6.1.4
   permission_handler: ^12.0.3
 
 dev_dependencies:

@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/layout/responsive.dart';
 import '../../core/layout/shell_insets.dart';
+import '../../core/offline/offline_sync.dart';
 import '../../core/premium/premium_required.dart';
 import '../../core/providers/providers.dart';
 import '../../core/theme/otter_colors.dart';
@@ -43,7 +44,11 @@ class AppShell extends ConsumerWidget {
         backgroundColor: bg,
         // Form routes need raw IME viewInsets so footers can pad above the keyboard.
         resizeToAvoidBottomInset: !hideBottomNav,
-        body: wide
+        body: Column(
+          children: [
+            const OfflineStatusBanner(),
+            Expanded(
+              child: wide
             ? Padding(
                 // Match web layout: lg:px-3 lg:py-2 + gap-4 between sidebar and content.
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
@@ -109,6 +114,9 @@ class AppShell extends ConsumerWidget {
                     ),
                 ],
               ),
+            ),
+          ],
+        ),
         bottomNavigationBar: wide || hideBottomNav
             ? null
             : OtterBottomNav(order: settings.bottomNavItems, currentPath: path),

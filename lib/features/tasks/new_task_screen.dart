@@ -213,10 +213,20 @@ class _NewTaskScreenState extends ConsumerState<NewTaskScreen> {
 
   Future<void> _loadTask() async {
     setState(() => _loading = true);
+    Task? task;
     try {
-      final task = await ref
-          .read(tasksServiceProvider)
-          .fetchTask(widget.taskId!);
+      task = await ref.read(tasksServiceProvider).fetchTask(widget.taskId!);
+    } catch (e) {
+      task = ref.read(tasksStateProvider.notifier).findTaskById(widget.taskId!);
+      if (task == null && mounted) {
+        showAppToast(context, getApiErrorMessage(e));
+      }
+    }
+    if (task == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    try {
       _title.text = task.title;
       _description.text = task.description ?? '';
       _priority = task.priority;
