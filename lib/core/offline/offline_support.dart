@@ -1,8 +1,10 @@
 import '../../data/mappers/task_mapper.dart';
 import '../../data/models/ui/ui_models.dart';
+import '../network/api_exception.dart';
 
 /// Connection / timeout failures that should be queued, not treated as API errors.
 bool isOfflineFailure(Object error) {
+  if (error is ApiException && error.networkFailure) return true;
   if (error is! Exception) {
     final raw = error.toString().toLowerCase();
     return _looksOffline(raw);
@@ -33,8 +35,22 @@ bool _looksOffline(String raw) {
       raw.contains('xmlhttprequest') ||
       raw.contains('connection refused') ||
       raw.contains('connection reset') ||
-      raw.contains('no address');
+      raw.contains('no address') ||
+      raw.contains('semaphore') ||
+      raw.contains('no such host') ||
+      raw.contains('errno = 121') ||
+      raw.contains('errno = 1231') ||
+      raw.contains('errno = 10051') ||
+      raw.contains('errno = 10060') ||
+      raw.contains('errno = 10065') ||
+      raw.contains('errno = 11001');
 }
+
+/// Fired when a request proves the API is reachable or not.
+void Function(bool offline)? onNetworkReachabilityChanged;
+
+void notifyNetworkReachability(bool offline) =>
+    onNetworkReachabilityChanged?.call(offline);
 
 /// Fired after a mutation is stored in the outbox (UI banner).
 void Function()? onTaskOutboxChanged;

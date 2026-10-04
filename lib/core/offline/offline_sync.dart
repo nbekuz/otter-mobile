@@ -26,6 +26,10 @@ class OfflineSyncNotifier extends StateNotifier<OfflineSyncState> {
     onTaskOutboxChanged = () {
       unawaited(noteQueued());
     };
+    onNetworkReachabilityChanged = (offline) {
+      state = OfflineSyncState(offline: offline, pending: state.pending);
+      if (!offline) unawaited(refresh());
+    };
     try {
       _sub = Connectivity().onConnectivityChanged.listen((_) {
         unawaited(refresh());
@@ -42,25 +46,46 @@ class OfflineSyncNotifier extends StateNotifier<OfflineSyncState> {
     state = OfflineSyncState(offline: state.offline, pending: pending);
   }
 
+  var _pluginOffline = false;
+
   Future<void> refresh() async {
-    var offline = state.offline;
+    var pluginOffline = false;
+    var pluginKnown = false;
     try {
       final results = await Connectivity().checkConnectivity();
-      offline = results.isEmpty ||
+      pluginKnown = true;
+      pluginOffline = results.isEmpty ||
           results.every((r) => r == ConnectivityResult.none);
     } catch (_) {}
+    final cameOnline = pluginKnown && _pluginOffline && !pluginOffline;
+    if (pluginKnown) _pluginOffline = pluginOffline;
+
     final pending = await TaskOutbox.pendingCount();
-    state = OfflineSyncState(offline: offline, pending: pending);
-    if (!offline && pending > 0) {
+    if (pluginOffline) {
+      state = OfflineSyncState(offline: true, pending: pending);
+      return;
+    }
+    if (pending > 0) {
       await _ref.read(tasksStateProvider.notifier).replayOutbox();
       final left = await TaskOutbox.pendingCount();
-      state = OfflineSyncState(offline: false, pending: left);
+      state = OfflineSyncState(offline: left > 0, pending: left);
+      return;
     }
+    // Windows often keeps the adapter "connected" with no internet.
+    // Only a successful request, or a real offline-to-online change, clears
+    // the banner.
+    state = OfflineSyncState(
+      offline: cameOnline ? false : state.offline,
+      pending: pending,
+    );
   }
 
   @override
   void dispose() {
     if (onTaskOutboxChanged != null) onTaskOutboxChanged = null;
+    if (onNetworkReachabilityChanged != null) {
+      onNetworkReachabilityChanged = null;
+    }
     unawaited(_sub?.cancel());
     super.dispose();
   }

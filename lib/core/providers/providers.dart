@@ -1521,8 +1521,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await _restoreSession().timeout(const Duration(seconds: 12));
       }
     } catch (_) {
-      // Start on the public route when local persistence or the network is
-      // unavailable. A later explicit sign-in can still establish a session.
+      // Windows often hangs until the connect timeout instead of failing fast.
+      // Keep the saved session so cached tasks stay available offline.
+      if (!state.isAuthenticated) {
+        await _markAuthenticatedFromStoredToken();
+      }
     } finally {
       state = state.copyWith(isBootstrapping: false);
     }
@@ -1554,6 +1557,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final names = await _ref.read(tokenStorageProvider).getProfileNames();
     final first = names.first.isNotEmpty ? names.first : profile.firstName;
     final last = names.last.isNotEmpty ? names.last : profile.lastName;
+    await _ref.read(tokenStorageProvider).saveProfileNames(first, last);
     final user = _mapUser(profile, first, last);
     state = AuthState(
       user: user,
@@ -1589,8 +1593,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         email: '',
         name: fullName.isNotEmpty ? fullName : 'Пользователь',
       ),
-      requiresProfileFill:
-          names.first.trim().isEmpty || names.last.trim().isEmpty,
+      // A failed profile fetch is not an empty profile. Only the server
+      // response may send the user to the name form.
+      requiresProfileFill: false,
       isBootstrapping: false,
     );
     // ignore: discarded_futures
@@ -1795,20 +1800,30 @@ class TasksNotifier extends StateNotifier<TasksState> {
         searchResults: state.searchResults,
       );
       unawaited(_persistGroups());
+      notifyNetworkReachability(false);
+      if (!_replaying) unawaited(_replayIfPending());
     } catch (e) {
       var groups = state.groups;
       if (groups.isEmpty) {
         groups = await TaskListCache.load() ?? groups;
       }
+      final offline = isOfflineFailure(e);
+      if (offline) notifyNetworkReachability(true);
       state = TasksState(
         groups: groups,
-        error: isOfflineFailure(e)
+        error: offline
             ? 'Нет сети. Показаны сохранённые задачи.'
             : e.toString(),
         searchQuery: state.searchQuery,
         searchResults: state.searchResults,
       );
     }
+  }
+
+  Future<void> _replayIfPending() async {
+    if (_replaying) return;
+    final pending = await TaskOutbox.pendingCount();
+    if (pending > 0) await replayOutbox();
   }
 
   /// Optimistic insert/update into grouped lists (web `upsertTaskInState`).

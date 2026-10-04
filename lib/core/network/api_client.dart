@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../config/env.dart';
 import '../premium/premium_required.dart';
@@ -13,7 +14,11 @@ class ApiClient {
       BaseOptions(
         baseUrl: Env.apiBaseUrl,
         headers: {'Content-Type': 'application/json'},
-        connectTimeout: const Duration(seconds: 30),
+        // Windows keeps the adapter "up" and hangs on connect. Fail fast so
+        // offline cache and the outbox can take over, same as Android.
+        connectTimeout: defaultTargetPlatform == TargetPlatform.windows
+            ? const Duration(seconds: 8)
+            : const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 30),
       ),
     );
@@ -167,7 +172,40 @@ class ApiClient {
         );
       }
     }
-    return ApiException(e.message ?? 'Ошибка запроса', statusCode: status);
+    final network = _isNetworkFailure(e);
+    return ApiException(
+      e.message ?? (network ? 'Нет сети' : 'Ошибка запроса'),
+      statusCode: status,
+      networkFailure: network,
+    );
+  }
+
+  bool _isNetworkFailure(DioException e) {
+    if (e.response?.statusCode != null) return false;
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.connectionError:
+        return true;
+      case DioExceptionType.unknown:
+        final raw = '${e.message} ${e.error}'.toLowerCase();
+        return raw.contains('socket') ||
+            raw.contains('network') ||
+            raw.contains('connection') ||
+            raw.contains('semaphore') ||
+            raw.contains('host') ||
+            raw.contains('timed out') ||
+            raw.contains('timeout') ||
+            raw.contains('errno = 121') ||
+            raw.contains('errno = 1231') ||
+            raw.contains('errno = 10051') ||
+            raw.contains('errno = 10060') ||
+            raw.contains('errno = 10065') ||
+            raw.contains('errno = 11001');
+      default:
+        return false;
+    }
   }
 
   String _messageForApiCode(String code) => switch (code) {

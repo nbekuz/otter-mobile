@@ -4,11 +4,15 @@ class ApiException implements Exception {
     this.statusCode,
     this.fieldErrors,
     this.code,
+    this.networkFailure = false,
   });
 
   final String message;
   final int? statusCode;
   final Map<String, String>? fieldErrors;
+
+  /// True when the request never reached the server (timeout, DNS, socket).
+  final bool networkFailure;
 
   /// Machine-readable error/success code from the API (e.g. ACTIVE_SUBSCRIPTION_EXISTS).
   final String? code;
