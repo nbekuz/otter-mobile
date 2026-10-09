@@ -1554,9 +1554,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> _loadProfileIntoState() async {
     final profile = await _ref.read(authServiceProvider).fetchProfile();
-    final names = await _ref.read(tokenStorageProvider).getProfileNames();
-    final first = names.first.isNotEmpty ? names.first : profile.firstName;
-    final last = names.last.isNotEmpty ? names.last : profile.lastName;
+    // Server is the source of truth after a successful fetch. The device
+    // cache is only a fallback when this request fails.
+    final first = profile.firstName;
+    final last = profile.lastName;
     await _ref.read(tokenStorageProvider).saveProfileNames(first, last);
     final user = _mapUser(profile, first, last);
     state = AuthState(
