@@ -1917,6 +1917,8 @@ class TasksNotifier extends StateNotifier<TasksState> {
   }
 
   /// Local YYYY-MM-DD bucketing — same rules as web `groupTasksByKey`.
+  static TaskGroupKey groupKeyForTask(Task task) => _groupKeyForTask(task);
+
   static TaskGroupKey _groupKeyForTask(Task task) {
     if (task.completed) return TaskGroupKey.completed;
     final raw = task.dueDate?.trim() ?? '';

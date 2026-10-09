@@ -151,16 +151,21 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     final active = _activeGroup(desktopGroups);
     final selected = _selectedTask(state);
 
-    // Keep selection valid when active group changes.
+    // Web keeps the open task: switch to the group that contains it
+    // instead of dropping the selection (search results live in other groups).
     if (wide &&
         selected != null &&
         active != null &&
         _activeGroupId != _allGroupId &&
         !active.tasks.any((t) => t.id == selected.id)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() => _selectedTaskId = null);
-      });
+      final nextId = _desktopGroupIdFor(selected, settings, desktopGroups);
+      if (nextId != _activeGroupId) {
+        final keepId = selected.id;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _selectedTaskId != keepId) return;
+          setState(() => _activeGroupId = nextId);
+        });
+      }
     }
 
     final overdue = state.groups[TaskGroupKey.overdue]?.length ?? 0;
@@ -460,13 +465,45 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     setState(() => _selectedTaskId = null);
   }
 
-  void _openDetail(Task task) {
+  /// Same ids as web `resolveTaskGroupId` / `findDesktopGroupIdForTask`.
+  String _desktopGroupIdFor(
+    Task task,
+    AppSettings settings,
+    List<_DesktopGroup> groups,
+  ) {
+    for (final group in groups) {
+      if (group.id == _allGroupId) continue;
+      if (group.tasks.any((t) => t.id == task.id)) return group.id;
+    }
+    final key = TasksNotifier.groupKeyForTask(task);
+    final id = key == TaskGroupKey.nodate ? 'nodate' : key.name;
+    if (!settings.visibleGroups.contains(id)) return _allGroupId;
+    return id;
+  }
+
+  /// Web `openTask` on desktop: put the search hit into its group, select it,
+  /// then leave search so the split pane can show the detail.
+  Future<void> _openDesktopFromSearch(Task task) async {
+    final canLeave = await _confirmLeaveDesktopDetail();
+    if (!canLeave || !mounted) return;
+    ref.read(tasksStateProvider.notifier).upsertLocalTask(task);
+    final settings = ref.read(appSettingsProvider);
+    final groups = _desktopGroups(ref.read(tasksStateProvider), settings);
+    final groupId = _desktopGroupIdFor(task, settings, groups);
+    setState(() {
+      _activeGroupId = groupId;
+      _selectedTaskId = task.id;
+    });
     _closeSearch();
+  }
+
+  void _openDetail(Task task) {
     if (Responsive.isWide(context)) {
       // ignore: discarded_futures
-      _selectDesktopTask(task);
+      _openDesktopFromSearch(task);
       return;
     }
+    _closeSearch();
     showTaskDetailSheet(context, task);
   }
 
