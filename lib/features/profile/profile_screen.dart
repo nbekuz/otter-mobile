@@ -55,13 +55,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _saveProfile() async {
     setState(() => _loading = true);
     try {
-      await ref
+      final saved = await ref
           .read(authServiceProvider)
           .updateProfile(
             firstName: _firstName.text.trim(),
             lastName: _lastName.text.trim(),
           );
-      await ref.read(authStateProvider.notifier).refreshProfile();
+      await ref.read(authStateProvider.notifier).applySavedProfile(saved);
       if (mounted) {
         showAppToast(context, 'Профиль сохранён', type: AppToastType.success);
       }
@@ -237,14 +237,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     setState(() => _loading = true);
     try {
-      await ref
+      final saved = await ref
           .read(authServiceProvider)
           .updateProfile(
             firstName: _firstName.text.trim(),
             lastName: _lastName.text.trim(),
             avatarPath: file.path,
           );
-      await ref.read(authStateProvider.notifier).refreshProfile();
+      await ref.read(authStateProvider.notifier).applySavedProfile(saved);
       if (mounted) {
         showAppToast(context, 'Фото обновлено', type: AppToastType.success);
       }

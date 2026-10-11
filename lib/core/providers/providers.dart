@@ -1628,6 +1628,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
   }
 
+  /// Web `updateProfile`: keep the name from the save response itself.
+  /// A follow-up GET can still be stale and would put the old name back.
+  Future<void> applySavedProfile(BackendUser profile) async {
+    final first = profile.firstName;
+    final last = profile.lastName;
+    await _ref.read(tokenStorageProvider).saveProfileNames(first, last);
+    state = AuthState(
+      user: _mapUser(profile, first, last),
+      isAuthenticated: true,
+      requiresProfileFill: first.trim().isEmpty || last.trim().isEmpty,
+      isBootstrapping: false,
+    );
+  }
+
   Future<void> applySession({
     required String access,
     required String refresh,

@@ -536,13 +536,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     label: 'Сохранить',
                     onPressed: () async {
                       try {
-                        await ref.read(authServiceProvider).updateProfile(
+                        final saved = await ref.read(authServiceProvider).updateProfile(
                               firstName: firstCtrl.text.trim(),
                               lastName: lastCtrl.text.trim(),
                             );
                         await ref
                             .read(authStateProvider.notifier)
-                            .refreshProfile();
+                            .applySavedProfile(saved);
                         if (ctx.mounted) Navigator.pop(ctx);
                       } catch (e) {
                         setModal(
@@ -714,12 +714,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (file == null || !mounted) return;
       final user = ref.read(authStateProvider).user;
       final parts = user?.name.trim().split(RegExp(r'\s+')) ?? [];
-      await ref.read(authServiceProvider).updateProfile(
+      final saved = await ref.read(authServiceProvider).updateProfile(
             firstName: parts.isNotEmpty ? parts.first : '',
             lastName: parts.length > 1 ? parts.sublist(1).join(' ') : '',
             avatarPath: file.path,
           );
-      await ref.read(authStateProvider.notifier).refreshProfile();
+      await ref.read(authStateProvider.notifier).applySavedProfile(saved);
       if (mounted) {
         showAppToast(context, 'Аватар обновлён', type: AppToastType.success);
       }
